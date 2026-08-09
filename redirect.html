@@ -1,0 +1,141 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GICH WiFi - Redirecting...</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
+            color: #fff;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            margin: 0;
+            padding: 20px;
+        }
+        .container {
+            text-align: center;
+            max-width: 500px;
+        }
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid rgba(255, 255, 255, 0.1);
+            border-top-color: #00c853;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        h1 {
+            font-size: 28px;
+            background: linear-gradient(45deg, #00c853, #00e676);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        p {
+            color: #aaa;
+            font-size: 16px;
+            margin: 10px 0;
+        }
+        .info-box {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 15px;
+            border-radius: 8px;
+            margin: 20px 0;
+            font-size: 13px;
+            color: #888;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        .info-box span {
+            color: #00c853;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🌐 GICH WIFI</h1>
+        <p>Connecting you to the internet...</p>
+        
+        <div class="spinner"></div>
+        
+        <p style="font-size:14px;color:#888;">Please wait while we redirect you to the payment portal.</p>
+        
+        <div class="info-box">
+            📱 <span id="macDisplay">Loading MAC...</span><br>
+            🌐 IP: <span id="ipDisplay">Loading IP...</span>
+        </div>
+
+        <p style="font-size:12px;color:#555;">If you are not redirected automatically, <a href="#" id="manualLink" style="color:#00c853;">click here</a></p>
+    </div>
+
+    <script>
+        // ============================================================
+        // Get parameters from MikroTik hotspot
+        // ============================================================
+        const urlParams = new URLSearchParams(window.location.search);
+        const mac = urlParams.get('mac') || '';
+        const ip = urlParams.get('ip') || '';
+        const linkLogin = urlParams.get('link-login') || '';
+        const linkOrig = urlParams.get('link-orig') || '';
+        
+        // ============================================================
+        // Display information
+        // ============================================================
+        document.getElementById('macDisplay').textContent = mac || 'Not detected';
+        document.getElementById('ipDisplay').textContent = ip || 'Not detected';
+        
+        console.log('🔗 GICH WiFi Redirect');
+        console.log('   📱 MAC:', mac);
+        console.log('   🌐 IP:', ip);
+        console.log('   🔗 link-login:', linkLogin);
+        console.log('   🔗 link-orig:', linkOrig);
+        
+        // ============================================================
+        // Build the redirect URL with parameters
+        // ============================================================
+        // Dynamically detect if running locally or on Render
+        const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+        const baseUrl = isLocal 
+            ? 'http://localhost:10000/GICH%20wifi.html' 
+            : 'https://' + window.location.hostname + '/GICH%20wifi.html';
+        
+        // Build the full URL with all parameters
+        let redirectUrl = baseUrl;
+        redirectUrl += '?mac=' + encodeURIComponent(mac);
+        redirectUrl += '&ip=' + encodeURIComponent(ip);
+        redirectUrl += '&link-login=' + encodeURIComponent(linkLogin);
+        redirectUrl += '&link-orig=' + encodeURIComponent(linkOrig);
+        
+        // ============================================================
+        // Update manual link
+        // ============================================================
+        document.getElementById('manualLink').href = redirectUrl;
+        
+        // ============================================================
+        // Redirect after a short delay
+        // ============================================================
+        console.log('🔄 Redirecting to:', redirectUrl);
+        console.log('📡 Base URL:', baseUrl);
+        console.log('📍 Hostname:', window.location.hostname);
+        console.log('🏠 Is Local:', isLocal);
+        
+        setTimeout(function() {
+            window.location.href = redirectUrl;
+        }, 2000);
+        
+        // ============================================================
+        // Also redirect on click of the manual link
+        // ============================================================
+        document.getElementById('manualLink').addEventListener('click', function(e) {
+            e.preventDefault();
+            window.location.href = redirectUrl;
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,10 @@
+{
+  "name": "gich-wifi-backend",
+  "version": "2.0.0",
+  "description": "GICH WiFi Hotspot Payment System with M-Pesa Daraja Integration",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "license": "MIT"
+}
