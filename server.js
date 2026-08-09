@@ -21,7 +21,7 @@ const SHORTCODE = process.env.SHORTCODE || '174379';
 const PASSKEY = process.env.PASSKEY || 'bfb279f9aa9bdbcf158e97dd71a467cd2e0c893059b10f78e6b72ada1ed2c919';
 const CONSUMER_KEY = process.env.CONSUMER_KEY || '';
 const CONSUMER_SECRET = process.env.CONSUMER_SECRET || '';
-const CALLBACK_URL = process.env.CALLBACK_URL || 'https://your-app-name.onrender.com/api/mpesa-callback';
+const CALLBACK_URL = process.env.CALLBACK_URL || 'https://billing-system-fm9a.onrender.com/api/mpesa-callback';
 const PORT = process.env.PORT || 10000;
 
 console.log('\n========================================');
@@ -68,6 +68,22 @@ function saveTransactions() {
     } catch (error) {
         console.error('⚠️ Could not save transactions:', error.message);
     }
+}
+
+// ============================================================
+// ===================== PLAN MAPPINGS =====================
+// ============================================================
+
+function getPlanName(planId) {
+    const plans = {
+        '2_Hours': '2 Hours',
+        '5_Hours': '5 Hours',
+        '8_Hours': '8 Hours',
+        '12_Hours': '12 Hours',
+        '24_Hours': '24 Hours',
+        'Free_Trial': 'Free Trial'
+    };
+    return plans[planId] || planId;
 }
 
 // ============================================================
@@ -193,18 +209,6 @@ function normalizePhone(rawPhone) {
     return digits;
 }
 
-function getPlanName(planId) {
-    const plans = {
-        '2_Hours': '2 Hours',
-        '5_Hours': '5 Hours',
-        '8_Hours': '8 Hours',
-        '12_Hours': '12 Hours',
-        '24_Hours': '24 Hours',
-        'Free_Trial': 'Free Trial'
-    };
-    return plans[planId] || planId;
-}
-
 // ============================================================
 // ===================== STK PUSH =====================
 // ============================================================
@@ -303,6 +307,46 @@ function readBody(req) {
 }
 
 // ============================================================
+// ===================== FIND HTML FILE =====================
+// ============================================================
+
+function findHtmlFile(filename) {
+    // Try multiple possible locations
+    const possiblePaths = [
+        path.join(__dirname, filename),
+        path.join(__dirname, '..', filename),
+        path.join(__dirname, 'public', filename),
+        path.join(__dirname, '..', 'public', filename),
+        path.join(__dirname, '..', '..', filename)
+    ];
+    
+    for (const p of possiblePaths) {
+        if (fs.existsSync(p)) {
+            return p;
+        }
+    }
+    return null;
+}
+
+function serveHtmlFile(res, filename) {
+    try {
+        const filePath = findHtmlFile(filename);
+        if (filePath) {
+            const html = fs.readFileSync(filePath, 'utf8');
+            console.log(`📄 Serving ${filename} from: ${filePath}`);
+            sendHtml(res, 200, html);
+            return true;
+        } else {
+            console.log(`❌ ${filename} not found`);
+            return false;
+        }
+    } catch (err) {
+        console.error(`Error serving ${filename}:`, err);
+        return false;
+    }
+}
+
+// ============================================================
 // ===================== CREATE SERVER =====================
 // ============================================================
 
@@ -322,54 +366,59 @@ const server = http.createServer(async (req, res) => {
 
     try {
         // ===== SERVE HTML FILES =====
+        
+        // Root path - serve GICH wifi.html
         if (req.method === 'GET' && url.pathname === '/') {
-            try {
-                const html = fs.readFileSync(path.join(__dirname, 'GICH wifi.html'), 'utf8');
-                sendHtml(res, 200, html);
+            if (serveHtmlFile(res, 'GICH wifi.html')) {
                 return;
-            } catch (err) {
-                sendHtml(res, 200, `
-                    <!DOCTYPE html>
-                    <html>
-                    <head><title>GICH WiFi</title></head>
-                    <body style="font-family:Arial;padding:20px;background:#0f172a;color:white;">
-                        <h1>🌐 GICH WiFi Server</h1>
-                        <p>✅ Server is running!</p>
-                        <hr>
-                        <p>API Endpoint: <a href="/api/health">/api/health</a></p>
-                        <p>Test OAuth: <a href="/api/test-oauth">/api/test-oauth</a></p>
-                    </body>
-                    </html>
-                `);
             }
+            // Fallback if file not found
+            sendHtml(res, 200, `
+                <!DOCTYPE html>
+                <html>
+                <head><title>GICH WiFi</title></head>
+                <body style="font-family:Arial;padding:20px;background:#0f172a;color:white;">
+                    <h1>🌐 GICH WiFi Server</h1>
+                    <p>✅ Server is running!</p>
+                    <hr>
+                    <p>API Endpoint: <a href="/api/health" style="color:#00c853;">/api/health</a></p>
+                    <p>Test OAuth: <a href="/api/test-oauth" style="color:#00c853;">/api/test-oauth</a></p>
+                    <p>Try opening: <a href="/GICH%20wifi.html" style="color:#00c853;">GICH wifi.html</a></p>
+                </body>
+                </html>
+            `);
             return;
         }
 
-        // ===== SERVE GICH wifi.html =====
-        if (req.method === 'GET' && url.pathname === '/GICH%20wifi.html') {
-            try {
-                const html = fs.readFileSync(path.join(__dirname, 'GICH wifi.html'), 'utf8');
-                sendHtml(res, 200, html);
+        // Serve GICH wifi.html
+        if (req.method === 'GET' && (url.pathname === '/GICH%20wifi.html' || url.pathname === '/GICH wifi.html')) {
+            if (serveHtmlFile(res, 'GICH wifi.html')) {
                 return;
-            } catch (err) {
-                sendHtml(res, 200, `<h1>File not found</h1><p>GICH wifi.html not found</p>`);
             }
+            sendHtml(res, 404, `
+                <h1>File not found</h1>
+                <p>GICH wifi.html not found</p>
+                <p><a href="/">Go to home</a></p>
+            `);
             return;
         }
 
-        // ===== SERVE redirect.html =====
-        if (req.method === 'GET' && url.pathname === '/redirect.html') {
-            try {
-                const html = fs.readFileSync(path.join(__dirname, 'redirect.html'), 'utf8');
-                sendHtml(res, 200, html);
+        // Serve redirect.html
+        if (req.method === 'GET' && (url.pathname === '/redirect.html' || url.pathname === '/redirect')) {
+            if (serveHtmlFile(res, 'redirect.html')) {
                 return;
-            } catch (err) {
-                sendHtml(res, 200, `<h1>File not found</h1><p>redirect.html not found</p>`);
             }
+            sendHtml(res, 404, `
+                <h1>File not found</h1>
+                <p>redirect.html not found</p>
+                <p><a href="/">Go to home</a></p>
+            `);
             return;
         }
 
-        // ===== HEALTH =====
+        // ===== API ENDPOINTS =====
+
+        // Health
         if (req.method === 'GET' && url.pathname === '/api/health') {
             return sendJson(res, 200, { 
                 status: 'ok', 
@@ -377,7 +426,7 @@ const server = http.createServer(async (req, res) => {
             });
         }
 
-        // ===== TEST OAUTH =====
+        // Test OAuth
         if (req.method === 'GET' && url.pathname === '/api/test-oauth') {
             try {
                 const token = await getAccessToken();
@@ -393,7 +442,7 @@ const server = http.createServer(async (req, res) => {
             }
         }
 
-        // ===== GET PLANS =====
+        // Get Plans
         if (req.method === 'GET' && url.pathname === '/api/plans') {
             return sendJson(res, 200, {
                 success: true,
@@ -408,7 +457,7 @@ const server = http.createServer(async (req, res) => {
             });
         }
 
-        // ===== GET TRANSACTION =====
+        // Get Transaction
         if (req.method === 'GET' && url.pathname.startsWith('/api/transaction/')) {
             const id = url.pathname.split('/').pop();
             const transaction = transactions.find(t => t.id === id);
@@ -418,7 +467,7 @@ const server = http.createServer(async (req, res) => {
             return sendJson(res, 200, { success: true, data: transaction });
         }
 
-        // ===== GET ALL TRANSACTIONS =====
+        // Get All Transactions
         if (req.method === 'GET' && url.pathname === '/api/transactions') {
             return sendJson(res, 200, {
                 success: true,
@@ -427,7 +476,7 @@ const server = http.createServer(async (req, res) => {
             });
         }
 
-        // ===== INITIATE PAYMENT =====
+        // Initiate Payment
         if (req.method === 'POST' && url.pathname === '/api/payment/initiate') {
             const body = await readBody(req);
             console.log('📥 Payment request:', body);
@@ -516,7 +565,7 @@ const server = http.createServer(async (req, res) => {
             }
         }
 
-        // ===== MPESA CALLBACK =====
+        // M-Pesa Callback
         if (req.method === 'POST' && url.pathname === '/api/mpesa-callback') {
             const callback = await readBody(req);
             console.log('📞 M-Pesa Callback Received:');
@@ -547,7 +596,7 @@ const server = http.createServer(async (req, res) => {
             return sendJson(res, 200, { ResultCode: 0, ResultDesc: 'Success' });
         }
 
-        // ===== SIMULATE PAYMENT =====
+        // Simulate Payment
         if (req.method === 'POST' && url.pathname === '/api/payment/simulate') {
             const body = await readBody(req);
             const { transactionId } = body;
@@ -569,7 +618,7 @@ const server = http.createServer(async (req, res) => {
             });
         }
 
-        // ===== CONNECT WITH MPESA CODE =====
+        // Connect with MPESA Code
         if (req.method === 'POST' && url.pathname === '/api/payment/connect') {
             const body = await readBody(req);
             const { mpesaCode } = body;
@@ -596,7 +645,7 @@ const server = http.createServer(async (req, res) => {
             });
         }
 
-        // ===== GET CREDENTIALS =====
+        // Get Credentials
         if (req.method === 'GET' && url.pathname.startsWith('/api/get-credentials/')) {
             const transactionId = url.pathname.split('/').pop();
             const transaction = transactions.find(t => t.id === transactionId);
@@ -618,7 +667,7 @@ const server = http.createServer(async (req, res) => {
             });
         }
 
-        // ===== API INFO =====
+        // API Info
         if (req.method === 'GET' && url.pathname === '/api') {
             return sendJson(res, 200, {
                 name: 'GICH WiFi API',
