@@ -1,7 +1,10 @@
 /**
  * GICH WiFi - M-Pesa STK Push API
- * Deployable on Render
+ * Deployable on Render with .env support
  */
+
+// Load environment variables from .env file
+require('dotenv').config();
 
 const http = require('http');
 const https = require('https');
@@ -13,16 +16,23 @@ const path = require('path');
 // ===================== CONFIGURATION =====================
 // ============================================================
 
-const SHORTCODE = '174379';
-const PASSKEY = 'bfb279f9aa9bdbcf158e97dd71a467cd2e0c893059b10f78e6b72ada1ed2c919';
-
-// Your working credentials
-const CONSUMER_KEY = '8jAAnvNAIwiBXEbJsAsKNZQZTBOg7QGRIdQzvWN3abVuCMtQ';
-const CONSUMER_SECRET = 'U3jAOtpJRDiOVj7w36Xa63EuuBT3fWGXXrWULxVBkBa22imOUrlA5l5CAuvvkPnn';
-
-// For Render, use a relative callback URL or environment variable
+// Load from .env or use defaults
+const SHORTCODE = process.env.SHORTCODE || '174379';
+const PASSKEY = process.env.PASSKEY || 'bfb279f9aa9bdbcf158e97dd71a467cd2e0c893059b10f78e6b72ada1ed2c919';
+const CONSUMER_KEY = process.env.CONSUMER_KEY || '';
+const CONSUMER_SECRET = process.env.CONSUMER_SECRET || '';
 const CALLBACK_URL = process.env.CALLBACK_URL || 'https://your-app-name.onrender.com/api/mpesa-callback';
 const PORT = process.env.PORT || 10000;
+
+console.log('\n========================================');
+console.log('🌐 GICH WiFi API');
+console.log('========================================');
+console.log('📋 Configuration loaded:');
+console.log(`   Consumer Key: ${CONSUMER_KEY ? CONSUMER_KEY.substring(0, 10) + '...' : 'NOT SET'}`);
+console.log(`   Shortcode: ${SHORTCODE}`);
+console.log(`   Callback URL: ${CALLBACK_URL}`);
+console.log(`   Port: ${PORT}`);
+console.log('========================================\n');
 
 // ============================================================
 // ===================== HTTPS AGENT =====================
@@ -132,6 +142,10 @@ function simpleRequest(method, urlString, headers = {}, jsonBody = null) {
 
 async function getAccessToken() {
     console.log('\n🔑 Getting access token...');
+    
+    if (!CONSUMER_KEY || !CONSUMER_SECRET) {
+        throw new Error('Consumer Key or Secret not configured. Check .env file.');
+    }
     
     const auth = Buffer.from(`${CONSUMER_KEY.trim()}:${CONSUMER_SECRET.trim()}`).toString('base64');
 
