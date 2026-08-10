@@ -22,7 +22,7 @@ const CONSUMER_KEY = process.env.CONSUMER_KEY || '';
 const CONSUMER_SECRET = process.env.CONSUMER_SECRET || '';
 const CALLBACK_URL = process.env.CALLBACK_URL || 'https://billing-system-fm9a.onrender.com/api/mpesa-callback';
 const PORT = process.env.PORT || 10000;
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '1234';
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '126483';
 
 // Increase payload size limit for logo uploads
 const MAX_LOGO_SIZE = 2 * 1024 * 1024; // 2MB
@@ -1073,9 +1073,7 @@ const server = http.createServer(async (req, res) => {
 
         // ===== ADMIN SETTINGS - POST =====
         if (req.method === 'POST' && url.pathname === '/api/admin/settings') {
-            // Check authorization
-            const auth = req.headers.authorization;
-            if (!auth || auth.replace('Bearer ', '') !== ADMIN_PASSWORD) {
+            if (!isAdmin(req)) {
                 return sendJson(res, 401, { success: false, message: 'Unauthorized' });
             }
             
