@@ -22,7 +22,7 @@ const CONSUMER_KEY = process.env.CONSUMER_KEY || '';
 const CONSUMER_SECRET = process.env.CONSUMER_SECRET || '';
 const CALLBACK_URL = process.env.CALLBACK_URL || 'https://billing-system-fm9a.onrender.com/api/mpesa-callback';
 const PORT = process.env.PORT || 10000;
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '1234';
 
 console.log('\n========================================');
 console.log('🌐 GICH WiFi API');
@@ -32,7 +32,7 @@ console.log(`   Consumer Key: ${CONSUMER_KEY ? CONSUMER_KEY.substring(0, 10) + '
 console.log(`   Shortcode: ${SHORTCODE}`);
 console.log(`   Callback URL: ${CALLBACK_URL}`);
 console.log(`   Port: ${PORT}`);
-console.log(`   Admin: ${ADMIN_PASSWORD ? '✅ Configured' : '⚠️ NOT SET'}`);
+console.log(`   Admin PIN: ${ADMIN_PASSWORD ? '✅ Configured' : '⚠️ NOT SET'}`);
 console.log('========================================\n');
 
 // ============================================================
@@ -201,6 +201,22 @@ const DEFAULT_THEMES = [
 ];
 
 // ============================================================
+// ===================== DEFAULT PLANS =====================
+// ============================================================
+
+const DEFAULT_PLANS = [
+    { id: '2_Hours', name: '2 Hours', price: 10, devices: 1, duration_seconds: 7200 },
+    { id: '5_Hours', name: '5 Hours', price: 20, devices: 1, duration_seconds: 18000 },
+    { id: '8_Hours', name: '8 Hours', price: 30, devices: 1, duration_seconds: 28800 },
+    { id: '12_Hours', name: '12 Hours', price: 50, devices: 1, duration_seconds: 43200 },
+    { id: '24_Hours', name: '24 Hours', price: 80, devices: 1, duration_seconds: 86400 },
+    { id: '1_Week_1_Device', name: '1 Week (1 Device)', price: 300, devices: 1, duration_seconds: 604800 },
+    { id: '1_Week_3_Devices', name: '1 Week (3 Devices)', price: 400, devices: 3, duration_seconds: 604800 },
+    { id: '1_Month_1_Device', name: '1 Month (1 Device)', price: 1000, devices: 1, duration_seconds: 2592000 },
+    { id: '1_Month_3_Devices', name: '1 Month (3 Devices)', price: 1200, devices: 3, duration_seconds: 2592000 }
+];
+
+// ============================================================
 // ===================== LOAD DATA =====================
 // ============================================================
 
@@ -319,22 +335,6 @@ function saveThemes() {
         console.error('⚠️ Could not save themes:', error.message);
     }
 }
-
-// ============================================================
-// ===================== DEFAULT PLANS =====================
-// ============================================================
-
-const DEFAULT_PLANS = [
-    { id: '2_Hours', name: '2 Hours', price: 10, devices: 1, duration_seconds: 7200 },
-    { id: '5_Hours', name: '5 Hours', price: 20, devices: 1, duration_seconds: 18000 },
-    { id: '8_Hours', name: '8 Hours', price: 30, devices: 1, duration_seconds: 28800 },
-    { id: '12_Hours', name: '12 Hours', price: 50, devices: 1, duration_seconds: 43200 },
-    { id: '24_Hours', name: '24 Hours', price: 80, devices: 1, duration_seconds: 86400 },
-    { id: '1_Week_1_Device', name: '1 Week (1 Device)', price: 300, devices: 1, duration_seconds: 604800 },
-    { id: '1_Week_3_Devices', name: '1 Week (3 Devices)', price: 400, devices: 3, duration_seconds: 604800 },
-    { id: '1_Month_1_Device', name: '1 Month (1 Device)', price: 1000, devices: 1, duration_seconds: 2592000 },
-    { id: '1_Month_3_Devices', name: '1 Month (3 Devices)', price: 1200, devices: 3, duration_seconds: 2592000 }
-];
 
 // ============================================================
 // ===================== HELPERS =====================
@@ -615,13 +615,24 @@ function serveHtmlFile(res, filename) {
 }
 
 // ============================================================
+// ===================== ADMIN AUTH HELPER =====================
+// ============================================================
+
+function isAdmin(req) {
+    const auth = req.headers.authorization;
+    if (!auth) return false;
+    const token = auth.replace('Bearer ', '');
+    return token === ADMIN_PASSWORD;
+}
+
+// ============================================================
 // ===================== CREATE SERVER =====================
 // ============================================================
 
 const server = http.createServer(async (req, res) => {
     res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'POST, GET, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+    res.setHeader('Access-Control-Allow-Methods', 'POST, GET, DELETE, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
 
     if (req.method === 'OPTIONS') {
         res.writeHead(204);
@@ -676,7 +687,7 @@ const server = http.createServer(async (req, res) => {
             });
         }
 
-        // Get Plans
+        // Get Plans (Public)
         if (req.method === 'GET' && url.pathname === '/api/plans') {
             return sendJson(res, 200, {
                 success: true,
@@ -1017,25 +1028,21 @@ const server = http.createServer(async (req, res) => {
         // ===================== ADMIN ENDPOINTS =====================
         // ============================================================
 
-        // Admin auth check
-        function isAdmin(req) {
-            const auth = req.headers.authorization;
-            if (!auth) return false;
-            const token = auth.replace('Bearer ', '');
-            return token === ADMIN_PASSWORD;
-        }
-
         // ===== ADMIN VERIFICATION =====
         if (req.method === 'POST' && url.pathname === '/api/admin/verify') {
             const body = await readBody(req);
             const { pin } = body;
             
+            console.log('🔐 Admin verification attempt');
+            
             if (pin === ADMIN_PASSWORD) {
+                console.log('✅ Admin verified successfully');
                 return sendJson(res, 200, { 
                     success: true, 
                     message: 'Admin verified' 
                 });
             } else {
+                console.log('❌ Admin verification failed - wrong PIN');
                 return sendJson(res, 401, { 
                     success: false, 
                     message: 'Invalid PIN' 
@@ -1043,17 +1050,19 @@ const server = http.createServer(async (req, res) => {
             }
         }
 
-        // ===== ADMIN SETTINGS =====
+        // ===== ADMIN SETTINGS - GET =====
         if (req.method === 'GET' && url.pathname === '/api/admin/settings') {
             if (!isAdmin(req)) {
                 return sendJson(res, 401, { success: false, message: 'Unauthorized' });
             }
+            
             return sendJson(res, 200, {
                 success: true,
                 data: settings
             });
         }
 
+        // ===== ADMIN SETTINGS - POST =====
         if (req.method === 'POST' && url.pathname === '/api/admin/settings') {
             if (!isAdmin(req)) {
                 return sendJson(res, 401, { success: false, message: 'Unauthorized' });
@@ -1086,7 +1095,7 @@ const server = http.createServer(async (req, res) => {
             });
         }
 
-        // ===== ADMIN THEMES =====
+        // ===== ADMIN THEMES - GET =====
         if (req.method === 'GET' && url.pathname === '/api/admin/themes') {
             if (!isAdmin(req)) {
                 return sendJson(res, 401, { success: false, message: 'Unauthorized' });
@@ -1097,6 +1106,7 @@ const server = http.createServer(async (req, res) => {
             });
         }
 
+        // ===== ADMIN THEMES - ADD =====
         if (req.method === 'POST' && url.pathname === '/api/admin/themes') {
             if (!isAdmin(req)) {
                 return sendJson(res, 401, { success: false, message: 'Unauthorized' });
@@ -1130,6 +1140,7 @@ const server = http.createServer(async (req, res) => {
             });
         }
 
+        // ===== ADMIN THEMES - DELETE =====
         if (req.method === 'DELETE' && url.pathname.startsWith('/api/admin/themes/')) {
             if (!isAdmin(req)) {
                 return sendJson(res, 401, { success: false, message: 'Unauthorized' });
@@ -1156,7 +1167,7 @@ const server = http.createServer(async (req, res) => {
             });
         }
 
-        // ===== ADMIN PLANS =====
+        // ===== ADMIN PLANS - MANAGE =====
         if (req.method === 'POST' && url.pathname === '/api/admin/plans') {
             if (!isAdmin(req)) {
                 return sendJson(res, 401, { success: false, message: 'Unauthorized' });
@@ -1207,7 +1218,7 @@ const server = http.createServer(async (req, res) => {
             return sendJson(res, 400, { success: false, message: 'Invalid action' });
         }
 
-        // Generate Vouchers (Admin)
+        // ===== ADMIN VOUCHERS - GENERATE =====
         if (req.method === 'POST' && url.pathname === '/api/admin/voucher/generate') {
             if (!isAdmin(req)) {
                 return sendJson(res, 401, { success: false, message: 'Unauthorized' });
@@ -1255,7 +1266,7 @@ const server = http.createServer(async (req, res) => {
             });
         }
 
-        // Get All Vouchers (Admin)
+        // ===== ADMIN VOUCHERS - GET =====
         if (req.method === 'GET' && url.pathname === '/api/admin/vouchers') {
             if (!isAdmin(req)) {
                 return sendJson(res, 401, { success: false, message: 'Unauthorized' });
@@ -1270,7 +1281,7 @@ const server = http.createServer(async (req, res) => {
             });
         }
 
-        // Get All Transactions (Admin)
+        // ===== ADMIN TRANSACTIONS - GET =====
         if (req.method === 'GET' && url.pathname === '/api/admin/transactions') {
             if (!isAdmin(req)) {
                 return sendJson(res, 401, { success: false, message: 'Unauthorized' });
