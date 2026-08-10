@@ -486,20 +486,11 @@
 
     <script>
         // ============================================================
-        // CONFIGURATION - DETECT ENVIRONMENT
+        // CONFIGURATION - FIXED FOR RENDER
         // ============================================================
-        // Get the current hostname
-        const currentHost = window.location.hostname;
-        const isLocal = currentHost === 'localhost' || currentHost === '127.0.0.1';
-        
-        // Build the API URL based on the environment
-        let API_URL;
-        if (isLocal) {
-            API_URL = 'http://localhost:10000/api';
-        } else {
-            // For Render, use the same hostname with https
-            API_URL = 'https://' + currentHost + '/api';
-        }
+        // Hardcode your Render URL for reliability
+        const RENDER_URL = 'https://billing-system-fm9a.onrender.com';
+        const API_URL = RENDER_URL + '/api';
         
         // ============================================================
         // HOTSPOT PARAMETERS (passed from MikroTik)
@@ -511,9 +502,7 @@
         const ip = urlParams.get('ip') || '';
 
         console.log('🌐 GICH WiFi System Loaded');
-        console.log('📡 Current Host:', currentHost);
         console.log('📡 API URL:', API_URL);
-        console.log('🏠 Is Local:', isLocal);
         console.log('📱 MAC:', macAddress);
         console.log('🌐 IP:', ip);
 
@@ -528,12 +517,18 @@
         let credentials = null;
 
         // ============================================================
-        // CHECK SERVER STATUS
+        // CHECK SERVER STATUS - FIXED
         // ============================================================
         async function checkServerStatus() {
             const badge = document.getElementById('statusBadge');
+            const urlDisplay = document.getElementById('apiUrlDisplay');
+            
+            // Update the display
+            urlDisplay.textContent = API_URL;
+            
             try {
-                const response = await fetch(API_URL.replace('/api', '') + '/health');
+                // Use the API_URL directly with /health
+                const response = await fetch(API_URL + '/health');
                 if (response.ok) {
                     const data = await response.json();
                     badge.textContent = '✅ Server Online';
@@ -547,7 +542,7 @@
                 badge.textContent = '❌ Server Offline - Check Connection';
                 badge.className = 'status-badge status-offline';
                 console.error('❌ Server connection error:', error);
-                console.error('🔍 API URL used:', API_URL);
+                console.error('🔍 API URL used:', API_URL + '/health');
             }
         }
 
@@ -902,10 +897,6 @@
             displayApiUrl();
             checkServerStatus();
             setInterval(checkServerStatus, 30000);
-            
-            // Log the full URL for debugging
-            console.log('🔗 Full URL:', window.location.href);
-            console.log('📡 API Endpoint:', API_URL);
         });
     </script>
 </body>
