@@ -81,7 +81,8 @@ const DEFAULT_SETTINGS = {
     accentColor: '#0f2027',
     textColor: '#ffffff',
     headerTextColor: '#ffffff',
-    buttonTextColor: '#000000'
+    buttonTextColor: '#000000',
+    bgGradient: 'linear-gradient(135deg, #0f2027, #203a43, #2c5364)'
 };
 
 // ============================================================
@@ -753,6 +754,7 @@ const server = http.createServer(async (req, res) => {
                 textColor: settings.textColor || DEFAULT_SETTINGS.textColor,
                 headerTextColor: settings.headerTextColor || DEFAULT_SETTINGS.headerTextColor,
                 buttonTextColor: settings.buttonTextColor || DEFAULT_SETTINGS.buttonTextColor,
+                bgGradient: settings.bgGradient || DEFAULT_SETTINGS.bgGradient,
                 logo: settings.logo || '',
                 website: settings.website || DEFAULT_SETTINGS.website
             };
@@ -1182,7 +1184,7 @@ const server = http.createServer(async (req, res) => {
             });
         }
 
-        // ===== ADMIN SETTINGS - POST =====
+        // ===== ADMIN SETTINGS - POST (FIXED - AUTO-POPULATES THEME COLORS) =====
         if (req.method === 'POST' && url.pathname === '/api/admin/settings') {
             if (!isAdmin(req)) {
                 return sendJson(res, 401, { success: false, message: 'Unauthorized' });
@@ -1190,13 +1192,39 @@ const server = http.createServer(async (req, res) => {
             
             const body = await readBody(req);
             console.log('⚙️ Updating settings:', body);
+
+            // ===== CRITICAL FIX: AUTO-POPULATE THEME COLORS =====
+            // If a theme ID was selected, update colors from the theme palette
+            if (body.theme) {
+                const selectedTheme = themes.find(t => t.id === body.theme);
+                if (selectedTheme) {
+                    console.log('🎨 Applying theme:', selectedTheme.name);
+                    settings.theme = selectedTheme.id;
+                    settings.primaryColor = selectedTheme.colors.primary;
+                    settings.secondaryColor = selectedTheme.colors.secondary;
+                    settings.accentColor = selectedTheme.colors.accent;
+                    settings.textColor = selectedTheme.colors.text;
+                    settings.headerTextColor = selectedTheme.colors.headerText;
+                    settings.buttonTextColor = selectedTheme.colors.buttonText;
+                    settings.bgGradient = selectedTheme.gradient;
+                }
+            }
             
-            // Update settings - handle logo specially
+            // Allow manual color overrides if provided explicitly (for custom color picker)
+            if (body.primaryColor !== undefined) settings.primaryColor = body.primaryColor;
+            if (body.secondaryColor !== undefined) settings.secondaryColor = body.secondaryColor;
+            if (body.accentColor !== undefined) settings.accentColor = body.accentColor;
+            if (body.textColor !== undefined) settings.textColor = body.textColor;
+            if (body.headerTextColor !== undefined) settings.headerTextColor = body.headerTextColor;
+            if (body.buttonTextColor !== undefined) settings.buttonTextColor = body.buttonTextColor;
+            
+            // Business info & logo updates
             if (body.businessName !== undefined) settings.businessName = body.businessName;
             if (body.businessTagline !== undefined) settings.businessTagline = body.businessTagline;
             if (body.supportPhone !== undefined) settings.supportPhone = body.supportPhone;
             if (body.supportEmail !== undefined) settings.supportEmail = body.supportEmail;
             if (body.website !== undefined) settings.website = body.website;
+            
             if (body.logo !== undefined) {
                 // Validate logo size
                 if (body.logo.length > MAX_LOGO_SIZE) {
@@ -1208,13 +1236,6 @@ const server = http.createServer(async (req, res) => {
                 settings.logo = body.logo;
                 console.log('🖼️ Logo updated (size: ' + body.logo.length + ' chars)');
             }
-            if (body.theme !== undefined) settings.theme = body.theme;
-            if (body.primaryColor !== undefined) settings.primaryColor = body.primaryColor;
-            if (body.secondaryColor !== undefined) settings.secondaryColor = body.secondaryColor;
-            if (body.accentColor !== undefined) settings.accentColor = body.accentColor;
-            if (body.textColor !== undefined) settings.textColor = body.textColor;
-            if (body.headerTextColor !== undefined) settings.headerTextColor = body.headerTextColor;
-            if (body.buttonTextColor !== undefined) settings.buttonTextColor = body.buttonTextColor;
             
             saveSettings();
             
@@ -1532,7 +1553,7 @@ server.listen(PORT, '0.0.0.0', () => {
     console.log('📊 M-Pesa Error Handling: ✅ Enabled');
     console.log('💾 Cache Control: ✅ Enabled');
     console.log('📦 Shared Users: ✅ Per-plan device limits');
-    console.log('🎨 Theme Customizer: ✅ Active');
+    console.log('🎨 Theme Customizer: ✅ Active (Auto-populates colors)');
     console.log('========================================\n');
 });
 
