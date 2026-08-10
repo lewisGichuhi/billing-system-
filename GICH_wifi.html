@@ -372,8 +372,9 @@
             <div class="info-step"><p>2️⃣ Select your package below</p></div>
             <div class="info-step"><p>3️⃣ Enter your phone number (0712345678)</p></div>
             <div class="info-step"><p>4️⃣ Enter M-Pesa PIN when prompted (12345)</p></div>
-            <div class="info-step"><p>5️⃣ Click "Connect to Internet"</p></div>
-            <div class="info-step"><p>6️⃣ Enjoy fast internet! 🎉</p></div>
+            <div class="info-step"><p>5️⃣ Wait for payment confirmation</p></div>
+            <div class="info-step"><p>6️⃣ Click "Connect to Internet"</p></div>
+            <div class="info-step"><p>7️⃣ Enjoy fast internet! 🎉</p></div>
         </div>
 
         <div class="card" id="packages">
@@ -515,6 +516,7 @@
         let currentTransactionId = '';
         let statusCheckInterval = null;
         let credentials = null;
+        let isPaymentCompleted = false;
 
         // ============================================================
         // CHECK SERVER STATUS - FIXED
@@ -557,6 +559,7 @@
             currentAmount = amount;
             currentPlan = planName;
             currentPlanId = planId;
+            isPaymentCompleted = false;
 
             document.getElementById('packages').classList.add('hidden');
             document.getElementById('howToCard').classList.add('hidden');
@@ -584,6 +587,7 @@
                 clearInterval(statusCheckInterval);
                 statusCheckInterval = null;
             }
+            isPaymentCompleted = false;
             document.getElementById('paymentCard').classList.add('hidden');
             document.getElementById('successCard').classList.add('hidden');
             document.getElementById('packages').classList.remove('hidden');
@@ -610,6 +614,7 @@
             loading.classList.remove('hidden');
             resultBox.className = 'result-box';
             resultBox.style.display = 'none';
+            isPaymentCompleted = false;
 
             try {
                 console.log('📤 Sending payment request to:', API_URL + '/payment/initiate');
@@ -642,17 +647,30 @@
                     document.getElementById('successPlan').textContent = currentPlan;
                     document.getElementById('successTransactionId').textContent = 'Transaction ID: ' + data.transactionId;
                     
-                    checkTransactionStatus(data.transactionId);
+                    // Check if it's mock mode
+                    if (data.mock) {
+                        console.log('⚠️ Mock mode activated');
+                        isPaymentCompleted = true;
+                        // Show mock credentials
+                        setTimeout(() => {
+                            fetchCredentials(data.transactionId);
+                        }, 2000);
+                    } else {
+                        // Start polling for real payment
+                        checkTransactionStatus(data.transactionId);
+                    }
                     
                 } else {
                     showResult('resultBox', '❌ Payment failed: ' + (data.message || 'Unknown error'), 'error');
                     document.getElementById('backBtn').classList.remove('hidden');
+                    payBtn.disabled = false;
+                    payBtn.textContent = 'Pay Now';
+                    loading.classList.add('hidden');
                 }
             } catch (error) {
                 console.error('❌ Payment error:', error);
                 showResult('resultBox', '❌ Network error: ' + error.message + '\n\nMake sure the backend is running', 'error');
                 document.getElementById('backBtn').classList.remove('hidden');
-            } finally {
                 payBtn.disabled = false;
                 payBtn.textContent = 'Pay Now';
                 loading.classList.add('hidden');
@@ -660,11 +678,12 @@
         }
 
         // ============================================================
-        // CHECK TRANSACTION STATUS
+        // CHECK TRANSACTION STATUS - IMPROVED POLLING
         // ============================================================
         function checkTransactionStatus(transactionId) {
             let attempts = 0;
-            const maxAttempts = 20;
+            const maxAttempts = 20; // Check for ~60 seconds
+            let isCompleted = false;
             
             console.log('🔄 Checking transaction status for:', transactionId);
             
@@ -683,8 +702,11 @@
                     if (data.success && data.data.status === 'completed') {
                         clearInterval(statusCheckInterval);
                         statusCheckInterval = null;
+                        isCompleted = true;
+                        isPaymentCompleted = true;
                         console.log('✅ Transaction completed!');
                         
+                        // Show credentials
                         if (data.data.mikrotikCreated) {
                             showCredentials(data.data);
                         } else {
@@ -694,21 +716,29 @@
                         document.getElementById('successTransactionId').textContent = 
                             'Transaction ID: ' + transactionId + '\nMPESA Code: ' + (data.data.mpesaCode || 'N/A');
                         
-                    } else if (data.success && data.data.status === 'failed') {
+                    } else if (data.success && (data.data.status === 'failed' || data.data.status === 'cancelled')) {
                         clearInterval(statusCheckInterval);
                         statusCheckInterval = null;
-                        console.log('❌ Transaction failed');
+                        console.log('❌ Transaction failed or cancelled');
                         document.getElementById('successCard').classList.add('hidden');
                         document.getElementById('paymentCard').classList.remove('hidden');
-                        showResult('resultBox', '❌ Payment failed. Please try again.', 'error');
+                        showResult('resultBox', '❌ Payment failed or cancelled. Please try again.', 'error');
                         document.getElementById('backBtn').classList.remove('hidden');
+                        document.getElementById('payBtn').disabled = false;
+                        document.getElementById('payBtn').textContent = 'Pay Now';
+                        document.getElementById('loadingIndicator').classList.add('hidden');
                     }
                     
                     attempts++;
-                    if (attempts >= maxAttempts) {
+                    if (attempts >= maxAttempts && !isCompleted) {
                         clearInterval(statusCheckInterval);
                         statusCheckInterval = null;
-                        console.log('⏱️ Status check timeout');
+                        console.log('⏱️ Status check timeout - still pending');
+                        // Don't show error, just stop polling
+                        // The user can check manually or refresh
+                        document.getElementById('loadingIndicator').classList.add('hidden');
+                        document.getElementById('payBtn').disabled = false;
+                        document.getElementById('payBtn').textContent = 'Pay Now';
                     }
                 } catch (error) {
                     console.error('Status check error:', error);
@@ -727,6 +757,9 @@
                 if (data.success) {
                     credentials = data;
                     showCredentials(data);
+                    document.getElementById('loadingIndicator').classList.add('hidden');
+                    document.getElementById('payBtn').disabled = false;
+                    document.getElementById('payBtn').textContent = 'Pay Now';
                 } else {
                     console.log('⏳ Credentials not ready yet, will retry...');
                     setTimeout(() => fetchCredentials(transactionId), 5000);
@@ -743,6 +776,12 @@
             document.getElementById('credPassword').textContent = data.password || 'N/A';
             document.getElementById('credPlan').textContent = data.plan || 'N/A';
             credentials = data;
+            isPaymentCompleted = true;
+            
+            // Hide loading indicator
+            document.getElementById('loadingIndicator').classList.add('hidden');
+            document.getElementById('payBtn').disabled = false;
+            document.getElementById('payBtn').textContent = 'Pay Now';
         }
 
         // ============================================================
