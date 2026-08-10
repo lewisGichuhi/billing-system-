@@ -1,0 +1,912 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>GICH WIFI HOTSPOT</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
+            color: #fff;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 20px;
+        }
+        .container {
+            max-width: 420px;
+            width: 100%;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .header h1 {
+            font-size: 28px;
+            background: linear-gradient(45deg, #00c853, #00e676);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+        .header p {
+            color: #888;
+            font-size: 14px;
+            margin-top: 5px;
+        }
+        .status-badge {
+            display: inline-block;
+            padding: 6px 16px;
+            border-radius: 20px;
+            font-size: 14px;
+            font-weight: bold;
+            margin-top: 8px;
+        }
+        .status-online {
+            background: #00c853;
+            color: #000;
+        }
+        .status-offline {
+            background: #ff1744;
+            color: #fff;
+        }
+        .status-checking {
+            background: #ffa726;
+            color: #000;
+        }
+        .card {
+            background: rgba(26, 26, 26, 0.95);
+            padding: 20px;
+            border-radius: 12px;
+            margin: 10px 0;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            transition: all 0.3s ease;
+        }
+        .card h2 {
+            text-align: center;
+            margin-bottom: 15px;
+            font-size: 20px;
+            color: #fff;
+        }
+        .card h3 {
+            text-align: center;
+            margin-bottom: 10px;
+            font-size: 16px;
+            color: #aaa;
+        }
+        .info-step {
+            background: rgba(0, 200, 83, 0.1);
+            padding: 10px 15px;
+            border-radius: 8px;
+            margin: 6px 0;
+            border-left: 3px solid #00c853;
+        }
+        .info-step p {
+            margin: 0;
+            font-size: 14px;
+        }
+        .plan {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 12px 15px;
+            border-radius: 8px;
+            margin: 8px 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: all 0.3s ease;
+        }
+        .plan:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+        .plan-name {
+            font-weight: bold;
+        }
+        .plan-price {
+            color: #00c853;
+            font-weight: bold;
+        }
+        .plan button {
+            background: #00c853;
+            border: none;
+            padding: 6px 16px;
+            border-radius: 5px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .plan button:hover {
+            background: #fff;
+            transform: scale(1.05);
+        }
+        .plan button:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .hidden {
+            display: none !important;
+        }
+        input {
+            width: 100%;
+            padding: 12px;
+            margin: 8px 0;
+            border-radius: 6px;
+            border: none;
+            font-size: 15px;
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+        }
+        input::placeholder {
+            color: rgba(255, 255, 255, 0.5);
+        }
+        input:focus {
+            outline: 2px solid #00c853;
+            background: rgba(255, 255, 255, 0.15);
+        }
+        .btn {
+            width: 100%;
+            padding: 12px;
+            background: #00c853;
+            border: none;
+            border-radius: 6px;
+            font-weight: bold;
+            font-size: 16px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            color: #000;
+        }
+        .btn:hover {
+            background: #00e676;
+            transform: scale(1.02);
+        }
+        .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
+        .btn-secondary {
+            background: #333;
+            color: #fff;
+        }
+        .btn-secondary:hover {
+            background: #444;
+        }
+        .footer {
+            text-align: center;
+            margin-top: 20px;
+            color: #00c853;
+            font-size: 14px;
+            opacity: 0.7;
+        }
+        .loading {
+            text-align: center;
+            padding: 10px;
+            color: #00c853;
+        }
+        .divider {
+            border: none;
+            height: 1px;
+            background: linear-gradient(to right, transparent, #00c853, transparent);
+            margin: 20px 0;
+        }
+        .result-box {
+            padding: 12px;
+            border-radius: 8px;
+            margin: 10px 0;
+            border-left: 3px solid #00c853;
+            display: none;
+            white-space: pre-line;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+        .result-box.show {
+            display: block;
+        }
+        .result-box.error {
+            border-left-color: #ff1744;
+            background: rgba(255, 23, 68, 0.1);
+        }
+        .result-box.success {
+            border-left-color: #00c853;
+            background: rgba(0, 200, 83, 0.1);
+        }
+        .result-box.info {
+            border-left-color: #2196f3;
+            background: rgba(33, 150, 243, 0.1);
+        }
+        .success-card {
+            text-align: center;
+            padding: 30px 20px;
+        }
+        .success-card .icon {
+            font-size: 64px;
+            margin-bottom: 15px;
+        }
+        .success-card h2 {
+            color: #00c853;
+            margin-bottom: 10px;
+        }
+        .success-card .details {
+            color: #aaa;
+            font-size: 14px;
+            line-height: 1.8;
+            margin: 15px 0;
+        }
+        .success-card .details span {
+            color: #fff;
+            font-weight: bold;
+        }
+        .transaction-id {
+            background: rgba(0, 200, 83, 0.1);
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            color: #00c853;
+            margin: 10px 0;
+            word-break: break-all;
+        }
+        .spinner {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top-color: #00c853;
+            animation: spin 1s ease-in-out infinite;
+        }
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+        .status-row {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 8px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        .status-row .label {
+            color: #888;
+            font-size: 14px;
+        }
+        .status-row .value {
+            color: #fff;
+            font-weight: bold;
+            font-size: 14px;
+        }
+        .status-row .value.paid {
+            color: #00c853;
+        }
+        .status-row .value.pending {
+            color: #ffa726;
+        }
+        .url-display {
+            background: rgba(0, 200, 83, 0.05);
+            padding: 8px 12px;
+            border-radius: 6px;
+            font-size: 11px;
+            color: #888;
+            margin: 10px 0;
+            word-break: break-all;
+            border: 1px dashed rgba(255, 255, 255, 0.1);
+            text-align: center;
+        }
+        .url-display strong {
+            color: #00c853;
+        }
+        .credentials-box {
+            background: rgba(0, 200, 83, 0.1);
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+            border: 1px solid rgba(0, 200, 83, 0.3);
+        }
+        .credentials-box h4 {
+            color: #00c853;
+            margin-bottom: 10px;
+        }
+        .credentials-box .cred-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 5px 0;
+            font-size: 14px;
+        }
+        .credentials-box .cred-row .label {
+            color: #888;
+        }
+        .credentials-box .cred-row .value {
+            color: #fff;
+            font-family: monospace;
+            background: rgba(0, 0, 0, 0.3);
+            padding: 2px 8px;
+            border-radius: 4px;
+        }
+        .test-info {
+            background: rgba(255, 193, 7, 0.1);
+            padding: 12px;
+            border-radius: 8px;
+            margin: 10px 0;
+            border: 1px solid rgba(255, 193, 7, 0.3);
+            text-align: center;
+        }
+        .test-info p {
+            color: #ffc107;
+            font-size: 13px;
+            margin: 0;
+        }
+        @media (max-width: 480px) {
+            .container {
+                max-width: 100%;
+            }
+            body {
+                padding: 10px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🌐 GICH WIFI</h1>
+            <p>Fast • Secure • Reliable Internet</p>
+            <div id="statusBadge" class="status-badge status-checking">⏳ Connecting...</div>
+            <div id="urlDisplay" class="url-display">📡 API: <strong id="apiUrlDisplay">Loading...</strong></div>
+        </div>
+
+        <div class="card test-info">
+            <p>🧪 SANDBOX TEST MODE</p>
+            <p style="font-size:12px;color:#888;margin-top:5px;">
+                Test Phone: <strong style="color:#00c853;">0712345678</strong><br>
+                Test PIN: <strong style="color:#00c853;">12345</strong>
+            </p>
+        </div>
+
+        <div class="card" id="howToCard">
+            <h2>📶 HOW TO CONNECT</h2>
+            <div class="info-step"><p>1️⃣ Connect to GICH WiFi network</p></div>
+            <div class="info-step"><p>2️⃣ Select your package below</p></div>
+            <div class="info-step"><p>3️⃣ Enter your phone number (0712345678)</p></div>
+            <div class="info-step"><p>4️⃣ Enter M-Pesa PIN when prompted (12345)</p></div>
+            <div class="info-step"><p>5️⃣ Click "Connect to Internet"</p></div>
+            <div class="info-step"><p>6️⃣ Enjoy fast internet! 🎉</p></div>
+        </div>
+
+        <div class="card" id="packages">
+            <h2>📦 WiFi Packages</h2>
+            <div class="plan">
+                <span class="plan-name">🎁 Free Trial</span>
+                <span class="plan-price">5 Hours - FREE</span>
+                <button onclick="selectPlan(0, 'Free Trial', 'Free_Trial')">Get</button>
+            </div>
+            <div class="plan">
+                <span class="plan-name">⏱ 2 Hours</span>
+                <span class="plan-price">KSh 10</span>
+                <button onclick="selectPlan(10, '2 Hours', '2_Hours')">Buy</button>
+            </div>
+            <div class="plan">
+                <span class="plan-name">⏱ 5 Hours</span>
+                <span class="plan-price">KSh 20</span>
+                <button onclick="selectPlan(20, '5 Hours', '5_Hours')">Buy</button>
+            </div>
+            <div class="plan">
+                <span class="plan-name">⏱ 8 Hours</span>
+                <span class="plan-price">KSh 30</span>
+                <button onclick="selectPlan(30, '8 Hours', '8_Hours')">Buy</button>
+            </div>
+            <div class="plan">
+                <span class="plan-name">⏱ 12 Hours</span>
+                <span class="plan-price">KSh 50</span>
+                <button onclick="selectPlan(50, '12 Hours', '12_Hours')">Buy</button>
+            </div>
+            <div class="plan">
+                <span class="plan-name">⏱ 24 Hours</span>
+                <span class="plan-price">KSh 80</span>
+                <button onclick="selectPlan(80, '24 Hours', '24_Hours')">Buy</button>
+            </div>
+        </div>
+
+        <div class="card hidden" id="paymentCard">
+            <h2>💳 M-Pesa Payment</h2>
+            <p id="planDisplay" style="text-align:center;font-size:16px;color:#00c853;margin-bottom:15px;"></p>
+            <input type="tel" id="phoneInput" placeholder="Enter M-Pesa number (e.g., 0712345678)" />
+            <button class="btn" id="payBtn" onclick="makePayment()">Pay Now</button>
+            <p style="text-align:center;font-size:12px;color:#888;margin-top:10px;">📱 You'll receive an M-Pesa prompt to enter your PIN</p>
+            <p style="text-align:center;font-size:11px;color:#ffa726;">Sandbox PIN: 12345</p>
+            <div id="resultBox" class="result-box"></div>
+            <div id="loadingIndicator" class="loading hidden">
+                <span class="spinner"></span> Processing payment...
+            </div>
+            <button class="btn btn-secondary hidden" id="backBtn" onclick="backToPlans()" style="margin-top:10px;">← Back to Plans</button>
+        </div>
+
+        <div class="card hidden" id="successCard">
+            <div class="success-card">
+                <div class="icon">🎉</div>
+                <h2>Payment Successful!</h2>
+                <p style="color:#aaa;margin-bottom:15px;">Thank you for choosing GICH WiFi</p>
+                <div class="details">
+                    <div class="status-row">
+                        <span class="label">📱 Phone</span>
+                        <span class="value" id="successPhone">-</span>
+                    </div>
+                    <div class="status-row">
+                        <span class="label">💰 Amount</span>
+                        <span class="value paid" id="successAmount">-</span>
+                    </div>
+                    <div class="status-row">
+                        <span class="label">📦 Plan</span>
+                        <span class="value" id="successPlan">-</span>
+                    </div>
+                    <div class="status-row">
+                        <span class="label">📋 Status</span>
+                        <span class="value paid">✅ Completed</span>
+                    </div>
+                </div>
+                <div class="transaction-id" id="successTransactionId">Transaction ID: -</div>
+                
+                <div class="credentials-box hidden" id="credentialsBox">
+                    <h4>🔑 Your Login Credentials</h4>
+                    <div class="cred-row">
+                        <span class="label">Username:</span>
+                        <span class="value" id="credUsername">-</span>
+                    </div>
+                    <div class="cred-row">
+                        <span class="label">Password:</span>
+                        <span class="value" id="credPassword">-</span>
+                    </div>
+                    <div class="cred-row">
+                        <span class="label">Plan:</span>
+                        <span class="value" id="credPlan">-</span>
+                    </div>
+                    <p style="font-size:12px;color:#888;margin-top:10px;">Use these credentials to login to the hotspot</p>
+                </div>
+                
+                <button class="btn" id="connectBtn" onclick="connectToInternet()" style="margin-top:10px;">🌐 Connect to Internet</button>
+                <button class="btn btn-secondary" onclick="backToPlans()" style="margin-top:10px;">Back to Plans</button>
+            </div>
+        </div>
+
+        <div class="card" id="connectCard">
+            <h3>🔗 Already Paid?</h3>
+            <p style="text-align:center;font-size:12px;color:#888;margin-bottom:10px;">Enter your M-Pesa confirmation code to connect</p>
+            <input type="text" id="mpesaCodeInput" placeholder="Enter M-Pesa code (e.g., P2A3B4C5)" />
+            <button class="btn" id="connectBtnCode" onclick="connectWithCode()">Connect Now</button>
+            <div id="connectResult" class="result-box"></div>
+        </div>
+
+        <div class="footer">
+            🔒 Secure • ⚡ Fast • 📡 Reliable
+        </div>
+    </div>
+
+    <script>
+        // ============================================================
+        // CONFIGURATION - DETECT ENVIRONMENT
+        // ============================================================
+        // Get the current hostname
+        const currentHost = window.location.hostname;
+        const isLocal = currentHost === 'localhost' || currentHost === '127.0.0.1';
+        
+        // Build the API URL based on the environment
+        let API_URL;
+        if (isLocal) {
+            API_URL = 'http://localhost:10000/api';
+        } else {
+            // For Render, use the same hostname with https
+            API_URL = 'https://' + currentHost + '/api';
+        }
+        
+        // ============================================================
+        // HOTSPOT PARAMETERS (passed from MikroTik)
+        // ============================================================
+        const urlParams = new URLSearchParams(window.location.search);
+        const linkLogin = urlParams.get('link-login') || '';
+        const linkOrig = urlParams.get('link-orig') || '';
+        const macAddress = urlParams.get('mac') || '';
+        const ip = urlParams.get('ip') || '';
+
+        console.log('🌐 GICH WiFi System Loaded');
+        console.log('📡 Current Host:', currentHost);
+        console.log('📡 API URL:', API_URL);
+        console.log('🏠 Is Local:', isLocal);
+        console.log('📱 MAC:', macAddress);
+        console.log('🌐 IP:', ip);
+
+        // ============================================================
+        // STATE
+        // ============================================================
+        let currentAmount = 0;
+        let currentPlan = '';
+        let currentPlanId = '';
+        let currentTransactionId = '';
+        let statusCheckInterval = null;
+        let credentials = null;
+
+        // ============================================================
+        // CHECK SERVER STATUS
+        // ============================================================
+        async function checkServerStatus() {
+            const badge = document.getElementById('statusBadge');
+            try {
+                const response = await fetch(API_URL.replace('/api', '') + '/health');
+                if (response.ok) {
+                    const data = await response.json();
+                    badge.textContent = '✅ Server Online';
+                    badge.className = 'status-badge status-online';
+                    console.log('✅ Server connected:', data);
+                } else {
+                    badge.textContent = '⚠️ Server Error';
+                    badge.className = 'status-badge status-offline';
+                }
+            } catch (error) {
+                badge.textContent = '❌ Server Offline - Check Connection';
+                badge.className = 'status-badge status-offline';
+                console.error('❌ Server connection error:', error);
+                console.error('🔍 API URL used:', API_URL);
+            }
+        }
+
+        function displayApiUrl() {
+            document.getElementById('apiUrlDisplay').textContent = API_URL;
+        }
+
+        // ============================================================
+        // SELECT PLAN
+        // ============================================================
+        function selectPlan(amount, planName, planId) {
+            currentAmount = amount;
+            currentPlan = planName;
+            currentPlanId = planId;
+
+            document.getElementById('packages').classList.add('hidden');
+            document.getElementById('howToCard').classList.add('hidden');
+            document.getElementById('paymentCard').classList.remove('hidden');
+            document.getElementById('successCard').classList.add('hidden');
+
+            const display = document.getElementById('planDisplay');
+            if (amount === 0) {
+                display.textContent = '🎁 ' + planName + ' - FREE Trial';
+            } else {
+                display.textContent = '⏱ ' + planName + ' - KSh ' + amount;
+            }
+
+            document.getElementById('resultBox').className = 'result-box';
+            document.getElementById('resultBox').style.display = 'none';
+            document.getElementById('phoneInput').value = '';
+            document.getElementById('phoneInput').focus();
+            document.getElementById('payBtn').disabled = false;
+            document.getElementById('payBtn').textContent = 'Pay Now';
+            document.getElementById('backBtn').classList.add('hidden');
+        }
+
+        function backToPlans() {
+            if (statusCheckInterval) {
+                clearInterval(statusCheckInterval);
+                statusCheckInterval = null;
+            }
+            document.getElementById('paymentCard').classList.add('hidden');
+            document.getElementById('successCard').classList.add('hidden');
+            document.getElementById('packages').classList.remove('hidden');
+            document.getElementById('howToCard').classList.remove('hidden');
+        }
+
+        // ============================================================
+        // MAKE PAYMENT
+        // ============================================================
+        async function makePayment() {
+            const phone = document.getElementById('phoneInput').value.trim();
+
+            if (phone.length < 10) {
+                showResult('resultBox', '❌ Please enter a valid M-Pesa number (e.g., 0712345678)', 'error');
+                return;
+            }
+
+            const payBtn = document.getElementById('payBtn');
+            const loading = document.getElementById('loadingIndicator');
+            const resultBox = document.getElementById('resultBox');
+
+            payBtn.disabled = true;
+            payBtn.textContent = 'Processing...';
+            loading.classList.remove('hidden');
+            resultBox.className = 'result-box';
+            resultBox.style.display = 'none';
+
+            try {
+                console.log('📤 Sending payment request to:', API_URL + '/payment/initiate');
+                console.log('📤 Data:', { phoneNumber: phone, amount: currentAmount, planId: currentPlanId, macAddress: macAddress });
+
+                const response = await fetch(API_URL + '/payment/initiate', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        phoneNumber: phone,
+                        amount: currentAmount,
+                        planId: currentPlanId,
+                        macAddress: macAddress
+                    })
+                });
+
+                const data = await response.json();
+                console.log('📥 Payment response:', data);
+
+                if (response.ok && data.success) {
+                    currentTransactionId = data.transactionId;
+                    
+                    document.getElementById('paymentCard').classList.add('hidden');
+                    document.getElementById('successCard').classList.remove('hidden');
+                    
+                    document.getElementById('successPhone').textContent = phone;
+                    document.getElementById('successAmount').textContent = 'KSh ' + currentAmount;
+                    document.getElementById('successPlan').textContent = currentPlan;
+                    document.getElementById('successTransactionId').textContent = 'Transaction ID: ' + data.transactionId;
+                    
+                    checkTransactionStatus(data.transactionId);
+                    
+                } else {
+                    showResult('resultBox', '❌ Payment failed: ' + (data.message || 'Unknown error'), 'error');
+                    document.getElementById('backBtn').classList.remove('hidden');
+                }
+            } catch (error) {
+                console.error('❌ Payment error:', error);
+                showResult('resultBox', '❌ Network error: ' + error.message + '\n\nMake sure the backend is running', 'error');
+                document.getElementById('backBtn').classList.remove('hidden');
+            } finally {
+                payBtn.disabled = false;
+                payBtn.textContent = 'Pay Now';
+                loading.classList.add('hidden');
+            }
+        }
+
+        // ============================================================
+        // CHECK TRANSACTION STATUS
+        // ============================================================
+        function checkTransactionStatus(transactionId) {
+            let attempts = 0;
+            const maxAttempts = 20;
+            
+            console.log('🔄 Checking transaction status for:', transactionId);
+            
+            if (statusCheckInterval) {
+                clearInterval(statusCheckInterval);
+                statusCheckInterval = null;
+            }
+            
+            statusCheckInterval = setInterval(async () => {
+                try {
+                    const response = await fetch(`${API_URL}/transaction/${transactionId}`);
+                    const data = await response.json();
+                    
+                    console.log(`📊 Status check ${attempts + 1}:`, data);
+                    
+                    if (data.success && data.data.status === 'completed') {
+                        clearInterval(statusCheckInterval);
+                        statusCheckInterval = null;
+                        console.log('✅ Transaction completed!');
+                        
+                        if (data.data.mikrotikCreated) {
+                            showCredentials(data.data);
+                        } else {
+                            await fetchCredentials(transactionId);
+                        }
+                        
+                        document.getElementById('successTransactionId').textContent = 
+                            'Transaction ID: ' + transactionId + '\nMPESA Code: ' + (data.data.mpesaCode || 'N/A');
+                        
+                    } else if (data.success && data.data.status === 'failed') {
+                        clearInterval(statusCheckInterval);
+                        statusCheckInterval = null;
+                        console.log('❌ Transaction failed');
+                        document.getElementById('successCard').classList.add('hidden');
+                        document.getElementById('paymentCard').classList.remove('hidden');
+                        showResult('resultBox', '❌ Payment failed. Please try again.', 'error');
+                        document.getElementById('backBtn').classList.remove('hidden');
+                    }
+                    
+                    attempts++;
+                    if (attempts >= maxAttempts) {
+                        clearInterval(statusCheckInterval);
+                        statusCheckInterval = null;
+                        console.log('⏱️ Status check timeout');
+                    }
+                } catch (error) {
+                    console.error('Status check error:', error);
+                }
+            }, 3000);
+        }
+
+        // ============================================================
+        // FETCH CREDENTIALS
+        // ============================================================
+        async function fetchCredentials(transactionId) {
+            try {
+                const response = await fetch(`${API_URL}/get-credentials/${transactionId}?linkLogin=${encodeURIComponent(linkLogin)}&linkOrig=${encodeURIComponent(linkOrig)}&mac=${encodeURIComponent(macAddress)}`);
+                const data = await response.json();
+                
+                if (data.success) {
+                    credentials = data;
+                    showCredentials(data);
+                } else {
+                    console.log('⏳ Credentials not ready yet, will retry...');
+                    setTimeout(() => fetchCredentials(transactionId), 5000);
+                }
+            } catch (error) {
+                console.error('Error fetching credentials:', error);
+            }
+        }
+
+        function showCredentials(data) {
+            const box = document.getElementById('credentialsBox');
+            box.classList.remove('hidden');
+            document.getElementById('credUsername').textContent = data.username || 'N/A';
+            document.getElementById('credPassword').textContent = data.password || 'N/A';
+            document.getElementById('credPlan').textContent = data.plan || 'N/A';
+            credentials = data;
+        }
+
+        // ============================================================
+        // CONNECT TO INTERNET (Hotspot Login)
+        // ============================================================
+        function connectToInternet() {
+            if (!credentials) {
+                alert('⏳ Please wait for your credentials to be ready...');
+                return;
+            }
+
+            console.log('🌐 Connecting to internet...');
+            console.log('   👤 Username:', credentials.username);
+            console.log('   🔑 Password:', credentials.password);
+            
+            const loginForm = document.createElement('form');
+            loginForm.method = 'POST';
+            loginForm.action = linkLogin || 'http://' + window.location.hostname + '/login';
+            
+            const fields = {
+                'username': credentials.username,
+                'password': credentials.password,
+                'dst': linkOrig || '',
+                'mac': macAddress || '',
+                'link-login': linkLogin || ''
+            };
+            
+            for (const [key, value] of Object.entries(fields)) {
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = key;
+                input.value = value || '';
+                loginForm.appendChild(input);
+            }
+            
+            document.body.appendChild(loginForm);
+            console.log('📤 Submitting login form to:', loginForm.action);
+            loginForm.submit();
+        }
+
+        // ============================================================
+        // CONNECT WITH MPESA CODE (Fallback)
+        // ============================================================
+        async function connectWithCode() {
+            const mpesaCode = document.getElementById('mpesaCodeInput').value.trim();
+            const resultBox = document.getElementById('connectResult');
+
+            if (!mpesaCode) {
+                showResult('connectResult', '❌ Please enter your M-Pesa confirmation code', 'error');
+                return;
+            }
+
+            const connectBtn = document.getElementById('connectBtnCode');
+            connectBtn.disabled = true;
+            connectBtn.textContent = 'Connecting...';
+            resultBox.className = 'result-box';
+            resultBox.style.display = 'none';
+
+            try {
+                console.log('📤 Sending connect request:', { mpesaCode: mpesaCode });
+
+                const response = await fetch(API_URL + '/payment/connect', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        mpesaCode: mpesaCode,
+                        phoneNumber: '0712345678',
+                        macAddress: macAddress
+                    })
+                });
+
+                const data = await response.json();
+                console.log('📥 Connect response:', data);
+
+                if (data.success && data.data.username) {
+                    showResult('connectResult',
+                        '✅ Found your payment!\n\n' +
+                        '🔑 Username: ' + data.data.username + '\n' +
+                        '🔑 Password: ' + data.data.password + '\n\n' +
+                        '🌐 Connecting to internet...',
+                        'success'
+                    );
+                    
+                    setTimeout(() => {
+                        const loginForm = document.createElement('form');
+                        loginForm.method = 'POST';
+                        loginForm.action = linkLogin || 'http://' + window.location.hostname + '/login';
+                        
+                        const fields = {
+                            'username': data.data.username,
+                            'password': data.data.password,
+                            'dst': linkOrig || '',
+                            'mac': macAddress || ''
+                        };
+                        
+                        for (const [key, value] of Object.entries(fields)) {
+                            const input = document.createElement('input');
+                            input.type = 'hidden';
+                            input.name = key;
+                            input.value = value || '';
+                            loginForm.appendChild(input);
+                        }
+                        
+                        document.body.appendChild(loginForm);
+                        loginForm.submit();
+                    }, 2000);
+                    
+                    document.getElementById('mpesaCodeInput').value = '';
+                    
+                } else {
+                    showResult('connectResult', '❌ ' + (data.message || 'Connection failed'), 'error');
+                }
+            } catch (error) {
+                console.error('❌ Connect error:', error);
+                showResult('connectResult', '❌ Network error: ' + error.message, 'error');
+            } finally {
+                connectBtn.disabled = false;
+                connectBtn.textContent = 'Connect Now';
+            }
+        }
+
+        // ============================================================
+        // SHOW RESULT
+        // ============================================================
+        function showResult(elementId, message, type) {
+            const element = document.getElementById(elementId);
+            element.textContent = message;
+            element.className = 'result-box show ' + type;
+            element.style.display = 'block';
+        }
+
+        // ============================================================
+        // KEYBOARD SUPPORT
+        // ============================================================
+        document.addEventListener('keydown', function(event) {
+            if (event.key === 'Enter') {
+                const activeElement = document.activeElement;
+                if (activeElement && activeElement.id === 'phoneInput') {
+                    makePayment();
+                } else if (activeElement && activeElement.id === 'mpesaCodeInput') {
+                    connectWithCode();
+                }
+            }
+        });
+
+        // ============================================================
+        // INITIALIZE
+        // ============================================================
+        document.addEventListener('DOMContentLoaded', function() {
+            displayApiUrl();
+            checkServerStatus();
+            setInterval(checkServerStatus, 30000);
+            
+            // Log the full URL for debugging
+            console.log('🔗 Full URL:', window.location.href);
+            console.log('📡 API Endpoint:', API_URL);
+        });
+    </script>
+</body>
+</html>
