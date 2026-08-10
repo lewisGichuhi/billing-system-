@@ -638,11 +638,14 @@ function isAdmin(req) {
 // ============================================================
 
 const server = http.createServer(async (req, res) => {
-    // Always set CORS headers
+    // Always set CORS headers - Allow everything for maximum compatibility
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'POST, GET, DELETE, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Origin, X-Requested-With, Accept');
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+    res.setHeader('Access-Control-Max-Age', '86400');
 
+    // Handle preflight requests
     if (req.method === 'OPTIONS') {
         res.writeHead(204);
         res.end();
@@ -1405,6 +1408,7 @@ server.listen(PORT, '0.0.0.0', () => {
     console.log('📱 Test phone: 0712345678');
     console.log('🔑 Test PIN: 12345');
     console.log(`🛡️ Admin PIN: ${ADMIN_PASSWORD ? '✅ Set' : '⚠️ NOT SET'}`);
+    console.log('📋 CORS: ✅ All origins allowed');
     console.log('========================================\n');
 });
 
