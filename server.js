@@ -1,5 +1,5 @@
 /**
- * GICH WiFi - Complete Backend with Voucher System & Admin Verification
+ * GICH WiFi - Complete Backend with Theme Customizer
  * Deployable on Render with .env support
  */
 
@@ -22,7 +22,7 @@ const CONSUMER_KEY = process.env.CONSUMER_KEY || '';
 const CONSUMER_SECRET = process.env.CONSUMER_SECRET || '';
 const CALLBACK_URL = process.env.CALLBACK_URL || 'https://billing-system-fm9a.onrender.com/api/mpesa-callback';
 const PORT = process.env.PORT || 10000;
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123'; // Store this securely!
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
 
 console.log('\n========================================');
 console.log('🌐 GICH WiFi API');
@@ -52,23 +52,157 @@ const agent = new https.Agent({
 const TRANSACTIONS_FILE = path.join(__dirname, 'transactions.json');
 const VOUCHERS_FILE = path.join(__dirname, 'vouchers.json');
 const PLANS_FILE = path.join(__dirname, 'plans.json');
+const SETTINGS_FILE = path.join(__dirname, 'settings.json');
+const THEMES_FILE = path.join(__dirname, 'themes.json');
 
 let transactions = [];
 let vouchers = [];
 let plans = [];
+let settings = {};
+let themes = [];
 
-// Default plans
-const DEFAULT_PLANS = [
-    { id: '2_Hours', name: '2 Hours', price: 10, devices: 1, duration_seconds: 7200 },
-    { id: '5_Hours', name: '5 Hours', price: 20, devices: 1, duration_seconds: 18000 },
-    { id: '8_Hours', name: '8 Hours', price: 30, devices: 1, duration_seconds: 28800 },
-    { id: '12_Hours', name: '12 Hours', price: 50, devices: 1, duration_seconds: 43200 },
-    { id: '24_Hours', name: '24 Hours', price: 80, devices: 1, duration_seconds: 86400 },
-    { id: '1_Week_1_Device', name: '1 Week (1 Device)', price: 300, devices: 1, duration_seconds: 604800 },
-    { id: '1_Week_3_Devices', name: '1 Week (3 Devices)', price: 400, devices: 3, duration_seconds: 604800 },
-    { id: '1_Month_1_Device', name: '1 Month (1 Device)', price: 1000, devices: 1, duration_seconds: 2592000 },
-    { id: '1_Month_3_Devices', name: '1 Month (3 Devices)', price: 1200, devices: 3, duration_seconds: 2592000 }
+// ============================================================
+// ===================== DEFAULT SETTINGS =====================
+// ============================================================
+
+const DEFAULT_SETTINGS = {
+    businessName: 'GICH WIFI',
+    businessTagline: 'Fast • Secure • Reliable',
+    supportPhone: '0796587763',
+    supportEmail: 'support@gichwifi.co.ke',
+    website: 'https://gichwifi.co.ke',
+    logo: '', // Base64 or URL
+    theme: 'default',
+    primaryColor: '#00c853',
+    secondaryColor: '#00e676',
+    accentColor: '#0f2027',
+    textColor: '#ffffff',
+    headerTextColor: '#ffffff',
+    buttonTextColor: '#000000'
+};
+
+// ============================================================
+// ===================== DEFAULT THEMES =====================
+// ============================================================
+
+const DEFAULT_THEMES = [
+    {
+        id: 'default',
+        name: 'Default Green',
+        preview: '🌿',
+        colors: {
+            primary: '#00c853',
+            secondary: '#00e676',
+            accent: '#0f2027',
+            text: '#ffffff',
+            headerText: '#ffffff',
+            buttonText: '#000000'
+        },
+        gradient: 'linear-gradient(135deg, #0f2027, #203a43, #2c5364)'
+    },
+    {
+        id: 'ocean',
+        name: 'Ocean Blue',
+        preview: '🌊',
+        colors: {
+            primary: '#0077be',
+            secondary: '#00b4d8',
+            accent: '#03045e',
+            text: '#ffffff',
+            headerText: '#ffffff',
+            buttonText: '#000000'
+        },
+        gradient: 'linear-gradient(135deg, #03045e, #0077be, #00b4d8)'
+    },
+    {
+        id: 'sunset',
+        name: 'Sunset Orange',
+        preview: '🌅',
+        colors: {
+            primary: '#ff6b35',
+            secondary: '#ff9a56',
+            accent: '#1a0a00',
+            text: '#ffffff',
+            headerText: '#ffffff',
+            buttonText: '#000000'
+        },
+        gradient: 'linear-gradient(135deg, #1a0a00, #ff6b35, #ff9a56)'
+    },
+    {
+        id: 'midnight',
+        name: 'Midnight Purple',
+        preview: '🌙',
+        colors: {
+            primary: '#7c3aed',
+            secondary: '#a78bfa',
+            accent: '#0c0a1a',
+            text: '#ffffff',
+            headerText: '#ffffff',
+            buttonText: '#000000'
+        },
+        gradient: 'linear-gradient(135deg, #0c0a1a, #4c1d95, #7c3aed)'
+    },
+    {
+        id: 'forest',
+        name: 'Forest Green',
+        preview: '🌲',
+        colors: {
+            primary: '#2d6a4f',
+            secondary: '#40916c',
+            accent: '#081c15',
+            text: '#ffffff',
+            headerText: '#ffffff',
+            buttonText: '#000000'
+        },
+        gradient: 'linear-gradient(135deg, #081c15, #2d6a4f, #40916c)'
+    },
+    {
+        id: 'rose',
+        name: 'Rose Pink',
+        preview: '🌹',
+        colors: {
+            primary: '#e91e63',
+            secondary: '#f06292',
+            accent: '#1a0a12',
+            text: '#ffffff',
+            headerText: '#ffffff',
+            buttonText: '#000000'
+        },
+        gradient: 'linear-gradient(135deg, #1a0a12, #c2185b, #e91e63)'
+    },
+    {
+        id: 'gold',
+        name: 'Gold Premium',
+        preview: '✨',
+        colors: {
+            primary: '#f9a825',
+            secondary: '#fdd835',
+            accent: '#1a1500',
+            text: '#ffffff',
+            headerText: '#ffffff',
+            buttonText: '#000000'
+        },
+        gradient: 'linear-gradient(135deg, #1a1500, #f9a825, #fdd835)'
+    },
+    {
+        id: 'nebula',
+        name: 'Nebula Cosmic',
+        preview: '🌌',
+        colors: {
+            primary: '#e040fb',
+            secondary: '#7c4dff',
+            accent: '#0a0a1a',
+            text: '#ffffff',
+            headerText: '#ffffff',
+            buttonText: '#000000'
+        },
+        gradient: 'linear-gradient(135deg, #0a0a1a, #7c4dff, #e040fb)'
+    }
 ];
+
+// ============================================================
+// ===================== LOAD DATA =====================
+// ============================================================
 
 // Load transactions
 if (fs.existsSync(TRANSACTIONS_FILE)) {
@@ -107,6 +241,40 @@ if (fs.existsSync(PLANS_FILE)) {
     savePlans();
 }
 
+// Load settings
+if (fs.existsSync(SETTINGS_FILE)) {
+    try {
+        const data = fs.readFileSync(SETTINGS_FILE, 'utf8');
+        settings = JSON.parse(data);
+        console.log(`⚙️ Loaded settings`);
+    } catch (error) {
+        console.error('Error loading settings:', error);
+        settings = DEFAULT_SETTINGS;
+    }
+} else {
+    settings = DEFAULT_SETTINGS;
+    saveSettings();
+}
+
+// Load themes
+if (fs.existsSync(THEMES_FILE)) {
+    try {
+        const data = fs.readFileSync(THEMES_FILE, 'utf8');
+        themes = JSON.parse(data);
+        console.log(`🎨 Loaded ${themes.length} themes`);
+    } catch (error) {
+        console.error('Error loading themes:', error);
+        themes = DEFAULT_THEMES;
+    }
+} else {
+    themes = DEFAULT_THEMES;
+    saveThemes();
+}
+
+// ============================================================
+// ===================== SAVE FUNCTIONS =====================
+// ============================================================
+
 function saveTransactions() {
     try {
         fs.writeFileSync(TRANSACTIONS_FILE, JSON.stringify(transactions, null, 2));
@@ -133,6 +301,40 @@ function savePlans() {
         console.error('⚠️ Could not save plans:', error.message);
     }
 }
+
+function saveSettings() {
+    try {
+        fs.writeFileSync(SETTINGS_FILE, JSON.stringify(settings, null, 2));
+        console.log('💾 Settings saved');
+    } catch (error) {
+        console.error('⚠️ Could not save settings:', error.message);
+    }
+}
+
+function saveThemes() {
+    try {
+        fs.writeFileSync(THEMES_FILE, JSON.stringify(themes, null, 2));
+        console.log('💾 Themes saved');
+    } catch (error) {
+        console.error('⚠️ Could not save themes:', error.message);
+    }
+}
+
+// ============================================================
+// ===================== DEFAULT PLANS =====================
+// ============================================================
+
+const DEFAULT_PLANS = [
+    { id: '2_Hours', name: '2 Hours', price: 10, devices: 1, duration_seconds: 7200 },
+    { id: '5_Hours', name: '5 Hours', price: 20, devices: 1, duration_seconds: 18000 },
+    { id: '8_Hours', name: '8 Hours', price: 30, devices: 1, duration_seconds: 28800 },
+    { id: '12_Hours', name: '12 Hours', price: 50, devices: 1, duration_seconds: 43200 },
+    { id: '24_Hours', name: '24 Hours', price: 80, devices: 1, duration_seconds: 86400 },
+    { id: '1_Week_1_Device', name: '1 Week (1 Device)', price: 300, devices: 1, duration_seconds: 604800 },
+    { id: '1_Week_3_Devices', name: '1 Week (3 Devices)', price: 400, devices: 3, duration_seconds: 604800 },
+    { id: '1_Month_1_Device', name: '1 Month (1 Device)', price: 1000, devices: 1, duration_seconds: 2592000 },
+    { id: '1_Month_3_Devices', name: '1 Month (3 Devices)', price: 1200, devices: 3, duration_seconds: 2592000 }
+];
 
 // ============================================================
 // ===================== HELPERS =====================
@@ -482,6 +684,29 @@ const server = http.createServer(async (req, res) => {
             });
         }
 
+        // Get Settings (Public)
+        if (req.method === 'GET' && url.pathname === '/api/settings') {
+            return sendJson(res, 200, {
+                success: true,
+                data: {
+                    businessName: settings.businessName,
+                    businessTagline: settings.businessTagline,
+                    supportPhone: settings.supportPhone,
+                    supportEmail: settings.supportEmail,
+                    theme: settings.theme,
+                    primaryColor: settings.primaryColor
+                }
+            });
+        }
+
+        // Get Themes (Public)
+        if (req.method === 'GET' && url.pathname === '/api/themes') {
+            return sendJson(res, 200, {
+                success: true,
+                data: themes
+            });
+        }
+
         // Get Transaction
         if (req.method === 'GET' && url.pathname.startsWith('/api/transaction/')) {
             const id = url.pathname.split('/').pop();
@@ -800,7 +1025,7 @@ const server = http.createServer(async (req, res) => {
             return token === ADMIN_PASSWORD;
         }
 
-        // ===== ADMIN VERIFICATION (Frontend calls this) =====
+        // ===== ADMIN VERIFICATION =====
         if (req.method === 'POST' && url.pathname === '/api/admin/verify') {
             const body = await readBody(req);
             const { pin } = body;
@@ -816,6 +1041,170 @@ const server = http.createServer(async (req, res) => {
                     message: 'Invalid PIN' 
                 });
             }
+        }
+
+        // ===== ADMIN SETTINGS =====
+        if (req.method === 'GET' && url.pathname === '/api/admin/settings') {
+            if (!isAdmin(req)) {
+                return sendJson(res, 401, { success: false, message: 'Unauthorized' });
+            }
+            return sendJson(res, 200, {
+                success: true,
+                data: settings
+            });
+        }
+
+        if (req.method === 'POST' && url.pathname === '/api/admin/settings') {
+            if (!isAdmin(req)) {
+                return sendJson(res, 401, { success: false, message: 'Unauthorized' });
+            }
+            
+            const body = await readBody(req);
+            console.log('⚙️ Updating settings:', body);
+            
+            // Update settings
+            if (body.businessName !== undefined) settings.businessName = body.businessName;
+            if (body.businessTagline !== undefined) settings.businessTagline = body.businessTagline;
+            if (body.supportPhone !== undefined) settings.supportPhone = body.supportPhone;
+            if (body.supportEmail !== undefined) settings.supportEmail = body.supportEmail;
+            if (body.website !== undefined) settings.website = body.website;
+            if (body.logo !== undefined) settings.logo = body.logo;
+            if (body.theme !== undefined) settings.theme = body.theme;
+            if (body.primaryColor !== undefined) settings.primaryColor = body.primaryColor;
+            if (body.secondaryColor !== undefined) settings.secondaryColor = body.secondaryColor;
+            if (body.accentColor !== undefined) settings.accentColor = body.accentColor;
+            if (body.textColor !== undefined) settings.textColor = body.textColor;
+            if (body.headerTextColor !== undefined) settings.headerTextColor = body.headerTextColor;
+            if (body.buttonTextColor !== undefined) settings.buttonTextColor = body.buttonTextColor;
+            
+            saveSettings();
+            
+            return sendJson(res, 200, {
+                success: true,
+                message: 'Settings updated successfully',
+                data: settings
+            });
+        }
+
+        // ===== ADMIN THEMES =====
+        if (req.method === 'GET' && url.pathname === '/api/admin/themes') {
+            if (!isAdmin(req)) {
+                return sendJson(res, 401, { success: false, message: 'Unauthorized' });
+            }
+            return sendJson(res, 200, {
+                success: true,
+                data: themes
+            });
+        }
+
+        if (req.method === 'POST' && url.pathname === '/api/admin/themes') {
+            if (!isAdmin(req)) {
+                return sendJson(res, 401, { success: false, message: 'Unauthorized' });
+            }
+            
+            const body = await readBody(req);
+            console.log('🎨 Adding new theme:', body);
+            
+            const newTheme = {
+                id: body.id || 'theme_' + Date.now(),
+                name: body.name || 'Custom Theme',
+                preview: body.preview || '🎨',
+                colors: body.colors || {
+                    primary: '#00c853',
+                    secondary: '#00e676',
+                    accent: '#0f2027',
+                    text: '#ffffff',
+                    headerText: '#ffffff',
+                    buttonText: '#000000'
+                },
+                gradient: body.gradient || 'linear-gradient(135deg, #0f2027, #203a43, #2c5364)'
+            };
+            
+            themes.push(newTheme);
+            saveThemes();
+            
+            return sendJson(res, 200, {
+                success: true,
+                message: 'Theme added successfully',
+                data: newTheme
+            });
+        }
+
+        if (req.method === 'DELETE' && url.pathname.startsWith('/api/admin/themes/')) {
+            if (!isAdmin(req)) {
+                return sendJson(res, 401, { success: false, message: 'Unauthorized' });
+            }
+            
+            const themeId = url.pathname.split('/').pop();
+            const index = themes.findIndex(t => t.id === themeId);
+            
+            if (index === -1) {
+                return sendJson(res, 404, { success: false, message: 'Theme not found' });
+            }
+            
+            // Don't allow deleting default theme
+            if (themeId === 'default') {
+                return sendJson(res, 400, { success: false, message: 'Cannot delete default theme' });
+            }
+            
+            themes.splice(index, 1);
+            saveThemes();
+            
+            return sendJson(res, 200, {
+                success: true,
+                message: 'Theme deleted successfully'
+            });
+        }
+
+        // ===== ADMIN PLANS =====
+        if (req.method === 'POST' && url.pathname === '/api/admin/plans') {
+            if (!isAdmin(req)) {
+                return sendJson(res, 401, { success: false, message: 'Unauthorized' });
+            }
+            
+            const body = await readBody(req);
+            const { action } = body;
+            
+            if (action === 'add') {
+                const { id, name, price, devices, duration_seconds } = body;
+                if (!id || !name || price === undefined) {
+                    return sendJson(res, 400, { success: false, message: 'Missing required fields' });
+                }
+                if (plans.find(p => p.id === id)) {
+                    return sendJson(res, 400, { success: false, message: 'Plan ID already exists' });
+                }
+                const newPlan = { id, name, price, devices: devices || 1, duration_seconds: duration_seconds || 3600 };
+                plans.push(newPlan);
+                savePlans();
+                return sendJson(res, 200, { success: true, message: 'Plan added', data: newPlan });
+            }
+            
+            if (action === 'update') {
+                const { id, name, price, devices, duration_seconds } = body;
+                const plan = plans.find(p => p.id === id);
+                if (!plan) {
+                    return sendJson(res, 404, { success: false, message: 'Plan not found' });
+                }
+                if (name) plan.name = name;
+                if (price !== undefined) plan.price = price;
+                if (devices !== undefined) plan.devices = devices;
+                if (duration_seconds !== undefined) plan.duration_seconds = duration_seconds;
+                savePlans();
+                return sendJson(res, 200, { success: true, message: 'Plan updated', data: plan });
+            }
+            
+            if (action === 'delete') {
+                const { id } = body;
+                const index = plans.findIndex(p => p.id === id);
+                if (index === -1) {
+                    return sendJson(res, 404, { success: false, message: 'Plan not found' });
+                }
+                plans.splice(index, 1);
+                savePlans();
+                return sendJson(res, 200, { success: true, message: 'Plan deleted' });
+            }
+            
+            return sendJson(res, 400, { success: false, message: 'Invalid action' });
         }
 
         // Generate Vouchers (Admin)
@@ -903,57 +1292,6 @@ const server = http.createServer(async (req, res) => {
             });
         }
 
-        // Manage Plans (Admin)
-        if (req.method === 'POST' && url.pathname === '/api/admin/plans') {
-            if (!isAdmin(req)) {
-                return sendJson(res, 401, { success: false, message: 'Unauthorized' });
-            }
-            
-            const body = await readBody(req);
-            const { action } = body;
-            
-            if (action === 'add') {
-                const { id, name, price, devices, duration_seconds } = body;
-                if (!id || !name || price === undefined) {
-                    return sendJson(res, 400, { success: false, message: 'Missing required fields' });
-                }
-                if (plans.find(p => p.id === id)) {
-                    return sendJson(res, 400, { success: false, message: 'Plan ID already exists' });
-                }
-                const newPlan = { id, name, price, devices: devices || 1, duration_seconds: duration_seconds || 3600 };
-                plans.push(newPlan);
-                savePlans();
-                return sendJson(res, 200, { success: true, message: 'Plan added', data: newPlan });
-            }
-            
-            if (action === 'update') {
-                const { id, name, price, devices, duration_seconds } = body;
-                const plan = plans.find(p => p.id === id);
-                if (!plan) {
-                    return sendJson(res, 404, { success: false, message: 'Plan not found' });
-                }
-                if (name) plan.name = name;
-                if (price !== undefined) plan.price = price;
-                if (devices !== undefined) plan.devices = devices;
-                if (duration_seconds !== undefined) plan.duration_seconds = duration_seconds;
-                savePlans();
-                return sendJson(res, 200, { success: true, message: 'Plan updated', data: plan });
-            }
-            
-            if (action === 'delete') {
-                const { id } = body;
-                const index = plans.findIndex(p => p.id === id);
-                if (index === -1) {
-                    return sendJson(res, 404, { success: false, message: 'Plan not found' });
-                }
-                plans.splice(index, 1);
-                savePlans();
-                return sendJson(res, 200, { success: true, message: 'Plan deleted' });
-            }
-            
-            return sendJson(res, 400, { success: false, message: 'Invalid action' });
-        }
-
         // ===== GET CREDENTIALS =====
         if (req.method === 'GET' && url.pathname.startsWith('/api/get-credentials/')) {
             const transactionId = url.pathname.split('/').pop();
@@ -986,6 +1324,8 @@ const server = http.createServer(async (req, res) => {
                     public: {
                         health: 'GET /api/health',
                         plans: 'GET /api/plans',
+                        settings: 'GET /api/settings',
+                        themes: 'GET /api/themes',
                         payment: 'POST /api/payment/initiate',
                         transaction: 'GET /api/transaction/:id',
                         transactions: 'GET /api/transactions',
@@ -996,10 +1336,14 @@ const server = http.createServer(async (req, res) => {
                     },
                     admin: {
                         verify: 'POST /api/admin/verify',
+                        settings: 'GET/POST /api/admin/settings',
+                        themes: 'GET /api/admin/themes',
+                        add_theme: 'POST /api/admin/themes',
+                        delete_theme: 'DELETE /api/admin/themes/:id',
+                        plans: 'POST /api/admin/plans',
                         generate_voucher: 'POST /api/admin/voucher/generate',
                         vouchers: 'GET /api/admin/vouchers',
-                        transactions: 'GET /api/admin/transactions',
-                        plans_manage: 'POST /api/admin/plans'
+                        transactions: 'GET /api/admin/transactions'
                     }
                 },
                 statistics: {
