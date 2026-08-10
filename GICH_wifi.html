@@ -6,7 +6,7 @@
     <title id="pageTitle">GICH WIFI HOTSPOT</title>
     <style>
         /* ============================================================
-           DYNAMIC THEME VARIABLES
+           CSS VARIABLES - These will be dynamically updated
            ============================================================ */
         :root {
             --brand-primary: #00c853;
@@ -20,8 +20,15 @@
             --card-bg: rgba(26, 26, 26, 0.95);
             --border-color: rgba(255, 255, 255, 0.05);
             --input-bg: rgba(255, 255, 255, 0.08);
+            --button-text: #000000;
+            --header-text: #ffffff;
+            --status-online-bg: #00c853;
+            --status-online-text: #000000;
         }
         
+        /* ============================================================
+           RESET & BASE
+           ============================================================ */
         * {
             margin: 0;
             padding: 0;
@@ -37,7 +44,7 @@
             align-items: center;
             justify-content: center;
             padding: 20px;
-            transition: background 0.5s ease;
+            transition: background 0.5s ease, color 0.5s ease;
         }
         .container {
             max-width: 550px;
@@ -51,6 +58,9 @@
             transition: all 0.4s ease;
         }
 
+        /* ============================================================
+           HEADER
+           ============================================================ */
         .header {
             display: flex;
             align-items: center;
@@ -155,11 +165,22 @@
             border-radius: 20px;
             font-size: 11px;
             font-weight: bold;
+            background: var(--status-online-bg);
+            color: var(--status-online-text);
+            transition: background 0.4s ease, color 0.4s ease;
         }
-        .status-online { background: var(--brand-primary); color: #000; }
-        .status-offline { background: #ff1744; color: #fff; }
-        .status-checking { background: #ffa726; color: #000; }
+        .status-offline { 
+            background: #ff1744; 
+            color: #fff; 
+        }
+        .status-checking { 
+            background: #ffa726; 
+            color: #000; 
+        }
 
+        /* ============================================================
+           CARDS
+           ============================================================ */
         .card {
             background: rgba(255, 255, 255, 0.03);
             padding: 15px;
@@ -175,14 +196,19 @@
             color: var(--text-primary);
             font-weight: 600;
             letter-spacing: 0.3px;
+            transition: color 0.4s ease;
         }
         .card h3 {
             font-size: 15px;
             margin-bottom: 8px;
             color: var(--text-secondary);
             font-weight: 500;
+            transition: color 0.4s ease;
         }
 
+        /* ============================================================
+           PLANS
+           ============================================================ */
         .plan {
             background: rgba(255, 255, 255, 0.05);
             padding: 10px 12px;
@@ -203,10 +229,23 @@
             border-color: var(--brand-primary);
             background: rgba(0, 200, 83, 0.08);
         }
-        .plan-name { font-weight: bold; font-size: 14px; }
-        .plan-price { color: var(--brand-primary); font-weight: bold; transition: color 0.4s ease; }
-        .plan-devices { font-size: 12px; color: var(--text-secondary); }
+        .plan-name { 
+            font-weight: bold; 
+            font-size: 14px; 
+        }
+        .plan-price { 
+            color: var(--brand-primary); 
+            font-weight: bold; 
+            transition: color 0.4s ease; 
+        }
+        .plan-devices { 
+            font-size: 12px; 
+            color: var(--text-secondary); 
+        }
 
+        /* ============================================================
+           BUTTONS
+           ============================================================ */
         .btn {
             width: 100%;
             padding: 12px;
@@ -216,16 +255,31 @@
             font-weight: bold;
             font-size: 16px;
             cursor: pointer;
-            transition: 0.2s;
-            color: #000;
+            transition: all 0.3s ease;
+            color: var(--button-text);
             margin-top: 6px;
             letter-spacing: 0.3px;
         }
-        .btn:hover { transform: scale(1.02); opacity: 0.9; }
-        .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
-        .btn-secondary { background: #333; color: #fff; }
-        .btn-secondary:hover { background: #444; }
+        .btn:hover { 
+            transform: scale(1.02); 
+            opacity: 0.9; 
+        }
+        .btn:disabled { 
+            opacity: 0.5; 
+            cursor: not-allowed; 
+            transform: none; 
+        }
+        .btn-secondary { 
+            background: #333; 
+            color: #fff; 
+        }
+        .btn-secondary:hover { 
+            background: #444; 
+        }
 
+        /* ============================================================
+           INPUTS
+           ============================================================ */
         input, select {
             width: 100%;
             padding: 10px 12px;
@@ -244,6 +298,9 @@
         }
         select option { background: #1a1a2e; color: var(--text-primary); }
 
+        /* ============================================================
+           MODAL
+           ============================================================ */
         .modal-overlay {
             position: fixed;
             top: 0;
@@ -287,6 +344,7 @@
             color: var(--text-primary);
             text-align: center;
             margin-bottom: 10px;
+            transition: color 0.4s ease;
         }
         .modal .plan-detail {
             text-align: center;
@@ -294,8 +352,12 @@
             color: var(--brand-primary);
             margin-bottom: 15px;
             font-weight: bold;
+            transition: color 0.4s ease;
         }
 
+        /* ============================================================
+           LOADING OVERLAY
+           ============================================================ */
         .loading-overlay {
             position: absolute;
             top: 0;
@@ -326,6 +388,9 @@
             font-size: 14px;
         }
 
+        /* ============================================================
+           COUNTDOWN
+           ============================================================ */
         .countdown {
             text-align: center;
             padding: 15px;
@@ -339,9 +404,16 @@
             font-weight: bold;
             color: var(--brand-primary);
             font-family: monospace;
+            transition: color 0.4s ease;
         }
-        .countdown .label { color: var(--text-secondary); font-size: 13px; }
+        .countdown .label { 
+            color: var(--text-secondary); 
+            font-size: 13px; 
+        }
 
+        /* ============================================================
+           CREDENTIALS
+           ============================================================ */
         .cred-box {
             background: rgba(0, 200, 83, 0.05);
             padding: 12px;
@@ -359,6 +431,9 @@
         .cred-row .label { color: var(--text-secondary); }
         .cred-row .value { color: var(--text-primary); }
 
+        /* ============================================================
+           ADMIN PANEL
+           ============================================================ */
         #adminPanel {
             display: none;
         }
@@ -387,6 +462,9 @@
             min-width: 120px;
         }
 
+        /* ============================================================
+           THEME PICKER
+           ============================================================ */
         .theme-grid {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
@@ -420,6 +498,9 @@
             color: var(--text-secondary);
         }
 
+        /* ============================================================
+           LOGO UPLOAD
+           ============================================================ */
         .logo-upload-area {
             border: 2px dashed var(--border-color);
             border-radius: 10px;
@@ -440,6 +521,9 @@
             margin-bottom: 8px;
         }
 
+        /* ============================================================
+           ADMIN TABLES
+           ============================================================ */
         .admin-table {
             width: 100%;
             border-collapse: collapse;
@@ -471,6 +555,9 @@
         .unused { color: var(--brand-primary); }
         .back-to-user { margin-top: 10px; }
 
+        /* ============================================================
+           FOOTER
+           ============================================================ */
         .footer {
             text-align: center;
             margin-top: 20px;
@@ -478,8 +565,15 @@
             font-size: 12px;
             letter-spacing: 0.5px;
         }
-        .footer .brand { color: var(--brand-primary); font-weight: bold; }
+        .footer .brand { 
+            color: var(--brand-primary); 
+            font-weight: bold; 
+            transition: color 0.4s ease;
+        }
 
+        /* ============================================================
+           RESPONSIVE
+           ============================================================ */
         @media (max-width: 480px) {
             .container { padding: 18px 12px; }
             .theme-grid { grid-template-columns: repeat(auto-fill, minmax(65px, 1fr)); }
@@ -674,7 +768,6 @@
     const currentHost = window.location.hostname;
     const isLocal = currentHost === 'localhost' || currentHost === '127.0.0.1' || currentHost === '' || window.location.protocol === 'file:';
 
-    // API URL - Add timestamp for cache busting
     let API_URL;
     if (isLocal) {
         API_URL = RENDER_URL + '/api';
@@ -696,7 +789,6 @@
     let currentThemes = [];
     let currentPlans = [];
     let adminToken = null;
-    let logoCacheBuster = Date.now(); // For cache busting
 
     // ============================================================
     // GET URL PARAMETERS
@@ -785,18 +877,19 @@
     // ============================================================
     async function loadSettings() {
         try {
-            // Add cache-busting parameter
             const cacheBuster = Date.now();
             const res = await fetch(API_URL + '/settings?t=' + cacheBuster);
             const data = await res.json();
             if (data.success) {
                 currentSettings = data.data;
-                applySettings(data.data);
+                applyThemeSettings(data.data);
                 console.log('✅ Settings loaded:', data.data);
+                return data.data;
             }
         } catch (e) { 
             console.error('Error loading settings:', e); 
         }
+        return null;
     }
 
     async function loadThemes() {
@@ -825,67 +918,88 @@
     }
 
     // ============================================================
-    // APPLY SETTINGS TO UI - WITH CACHE BUSTING
+    // APPLY THEME SETTINGS TO CSS VARIABLES
     // ============================================================
-    function applySettings(settings) {
-        console.log('🎨 Applying settings:', settings);
+    function applyThemeSettings(settings) {
+        console.log('🎨 Applying theme settings:', settings);
         
-        // Update text
-        businessNameEl.textContent = settings.businessName || 'GICH WIFI';
-        businessTaglineEl.textContent = settings.businessTagline || 'Fast • Secure • Reliable';
-        pageTitle.textContent = settings.businessName + ' HOTSPOT';
-        supportInfo.textContent = '📞 ' + (settings.supportPhone || '') + ' • ✉️ ' + (settings.supportEmail || '');
-
-        // Update logo with cache busting
+        const root = document.documentElement;
+        
+        // Apply colors to CSS variables
+        if (settings.primaryColor) {
+            root.style.setProperty('--brand-primary', settings.primaryColor);
+            root.style.setProperty('--status-online-bg', settings.primaryColor);
+            customColorPicker.value = settings.primaryColor;
+        }
+        if (settings.secondaryColor) {
+            root.style.setProperty('--brand-secondary', settings.secondaryColor);
+        }
+        if (settings.accentColor) {
+            root.style.setProperty('--brand-accent', settings.accentColor);
+        }
+        if (settings.textColor) {
+            root.style.setProperty('--text-primary', settings.textColor);
+        }
+        if (settings.headerTextColor) {
+            root.style.setProperty('--header-text', settings.headerTextColor);
+        }
+        if (settings.buttonTextColor) {
+            root.style.setProperty('--button-text', settings.buttonTextColor);
+        }
+        
+        // Update gradient
+        const primary = settings.primaryColor || '#00c853';
+        const secondary = settings.secondaryColor || '#00e676';
+        root.style.setProperty('--brand-gradient', 'linear-gradient(45deg, ' + primary + ', ' + secondary + ')');
+        
+        // Update background gradient based on theme
+        if (settings.theme) {
+            const theme = currentThemes.find(t => t.id === settings.theme);
+            if (theme) {
+                root.style.setProperty('--bg-gradient', theme.gradient);
+                document.body.style.background = theme.gradient;
+            }
+        }
+        
+        // Update text content
+        if (settings.businessName) {
+            businessNameEl.textContent = settings.businessName;
+            pageTitle.textContent = settings.businessName + ' HOTSPOT';
+        }
+        if (settings.businessTagline) {
+            businessTaglineEl.textContent = settings.businessTagline;
+        }
+        if (settings.supportPhone) {
+            supportInfo.textContent = '📞 ' + settings.supportPhone + ' • ✉️ ' + (settings.supportEmail || '');
+        }
+        if (settings.supportEmail) {
+            supportInfo.textContent = '📞 ' + (settings.supportPhone || '') + ' • ✉️ ' + settings.supportEmail;
+        }
+        
+        // Update logo
         if (settings.logo && settings.logo.startsWith('data:image')) {
-            // Add cache buster to logo URL
-            const logoWithCache = settings.logo + '?t=' + Date.now();
-            logoImage.src = logoWithCache;
+            const logoCacheBuster = Date.now() + Math.random().toString(36).substring(7);
+            logoImage.src = settings.logo + '?t=' + logoCacheBuster;
             logoImage.style.display = 'block';
             logoEmoji.style.display = 'none';
-            console.log('🖼️ Logo applied with cache busting');
+            console.log('🖼️ Logo applied');
         } else {
             logoImage.style.display = 'none';
             logoEmoji.style.display = 'block';
         }
-
+        
         // Update admin fields
         editBusinessName.value = settings.businessName || '';
         editTagline.value = settings.businessTagline || '';
         editPhone.value = settings.supportPhone || '';
         editEmail.value = settings.supportEmail || '';
-
-        // Apply colors
-        if (settings.primaryColor) {
-            document.documentElement.style.setProperty('--brand-primary', settings.primaryColor);
-            customColorPicker.value = settings.primaryColor;
-        }
-        if (settings.secondaryColor) {
-            document.documentElement.style.setProperty('--brand-secondary', settings.secondaryColor);
-        }
-        if (settings.accentColor) {
-            document.documentElement.style.setProperty('--brand-accent', settings.accentColor);
-        }
-        if (settings.textColor) {
-            document.documentElement.style.setProperty('--text-primary', settings.textColor);
-        }
-        if (settings.headerTextColor) {
-            document.documentElement.style.setProperty('--header-text', settings.headerTextColor);
-        }
-        if (settings.buttonTextColor) {
-            document.documentElement.style.setProperty('--button-text', settings.buttonTextColor);
-        }
-
-        // Apply gradient if theme is set
-        const theme = currentThemes.find(t => t.id === settings.theme);
-        if (theme) {
-            document.body.style.background = theme.gradient;
-        }
         
-        // Force a reflow to apply changes
+        // Force reflow
         document.body.style.display = 'none';
-        document.body.offsetHeight; // Trigger reflow
+        document.body.offsetHeight;
         document.body.style.display = '';
+        
+        console.log('✅ Theme settings applied');
     }
 
     // ============================================================
@@ -918,13 +1032,19 @@
         const theme = currentThemes.find(t => t.id === themeId);
         if (!theme) return;
 
-        // Apply immediately
+        const root = document.documentElement;
+        
+        // Apply theme colors immediately
+        root.style.setProperty('--brand-primary', theme.colors.primary);
+        root.style.setProperty('--brand-secondary', theme.colors.secondary);
+        root.style.setProperty('--brand-accent', theme.colors.accent);
+        root.style.setProperty('--text-primary', theme.colors.text);
+        root.style.setProperty('--header-text', theme.colors.headerText);
+        root.style.setProperty('--button-text', theme.colors.buttonText);
+        root.style.setProperty('--status-online-bg', theme.colors.primary);
+        root.style.setProperty('--brand-gradient', 'linear-gradient(45deg, ' + theme.colors.primary + ', ' + theme.colors.secondary + ')');
+        root.style.setProperty('--bg-gradient', theme.gradient);
         document.body.style.background = theme.gradient;
-        document.documentElement.style.setProperty('--brand-primary', theme.colors.primary);
-        document.documentElement.style.setProperty('--brand-secondary', theme.colors.secondary);
-        document.documentElement.style.setProperty('--brand-accent', theme.colors.accent);
-        document.documentElement.style.setProperty('--text-primary', theme.colors.text);
-        document.documentElement.style.setProperty('--header-text', theme.colors.headerText);
 
         // Update active state
         document.querySelectorAll('.theme-option').forEach(el => el.classList.remove('active'));
@@ -933,7 +1053,11 @@
                 el.classList.add('active');
             }
         });
+        
+        // Update color picker
+        customColorPicker.value = theme.colors.primary;
 
+        // Save to server
         await saveThemeToServer(themeId);
     }
 
@@ -956,14 +1080,13 @@
                 currentSettings.theme = themeId;
                 console.log('✅ Theme saved:', themeId);
                 showToast('✅ Theme applied!');
-                // Reload settings to ensure consistency
                 await loadSettings();
             }
         } catch (e) { console.error('Error saving theme:', e); }
     }
 
     // ============================================================
-    // LOGO UPLOAD - WITH CACHE BUSTING
+    // LOGO UPLOAD
     // ============================================================
     function handleLogoUpload(event) {
         const file = event.target.files[0];
@@ -974,18 +1097,23 @@
             return;
         }
 
-        // Validate file size (max 2MB)
         if (file.size > 2 * 1024 * 1024) {
             showToast('❌ Logo too large! Max 2MB');
             return;
         }
 
         const reader = new FileReader();
-        reader.onload = async function(e) {
+        reader.onload = function(e) {
             const base64 = e.target.result;
             logoPreview.src = base64;
             logoPreview.style.display = 'block';
+        };
+        reader.readAsDataURL(file);
 
+        const reader2 = new FileReader();
+        reader2.onload = async function(e) {
+            const base64 = e.target.result;
+            
             try {
                 const res = await fetch(API_URL + '/admin/settings', {
                     method: 'POST',
@@ -997,14 +1125,12 @@
                 });
                 const data = await res.json();
                 if (data.success) {
-                    // Apply logo immediately with cache busting
-                    const logoWithCache = base64 + '?t=' + Date.now();
-                    logoImage.src = logoWithCache;
+                    const logoCacheBuster = Date.now() + Math.random().toString(36).substring(7);
+                    logoImage.src = base64 + '?t=' + logoCacheBuster;
                     logoImage.style.display = 'block';
                     logoEmoji.style.display = 'none';
                     logoPreview.style.display = 'none';
                     showToast('✅ Logo uploaded successfully!');
-                    // Reload settings to update cache
                     await loadSettings();
                 } else {
                     showToast('❌ Error uploading logo: ' + (data.message || 'Unknown error'));
@@ -1014,7 +1140,7 @@
                 showToast('❌ Error uploading logo');
             }
         };
-        reader.readAsDataURL(file);
+        reader2.readAsDataURL(file);
     }
 
     // ============================================================
@@ -1044,9 +1170,7 @@
             });
             const result = await res.json();
             if (result.success) {
-                applySettings({ ...currentSettings, ...data });
                 showToast('✅ Branding saved successfully!');
-                // Reload settings to ensure consistency
                 await loadSettings();
             } else {
                 showToast('❌ Error saving branding: ' + (result.message || 'Unknown error'));
@@ -1058,7 +1182,7 @@
     }
 
     // ============================================================
-    // RENDER PLANS (User View)
+    // RENDER PLANS
     // ============================================================
     function renderPlans(plans) {
         plansContainer.innerHTML = '';
@@ -1079,7 +1203,7 @@
     }
 
     // ============================================================
-    // RENDER PLAN MANAGER (Admin)
+    // RENDER PLAN MANAGER
     // ============================================================
     function renderPlanManager(plans) {
         const container = $('planManagerList');
@@ -1376,7 +1500,7 @@
             const res = await fetch(API_URL + '/health');
             if (res.ok) {
                 statusBadge.textContent = '✅';
-                statusBadge.className = 'status-badge status-online';
+                statusBadge.className = 'status-badge';
             } else {
                 statusBadge.textContent = '⚠️';
                 statusBadge.className = 'status-badge status-offline';
@@ -1528,7 +1652,7 @@
     }
 
     // ============================================================
-    // CONNECT TO INTERNET - WITH AUTO-CLOSE
+    // CONNECT TO INTERNET
     // ============================================================
     function connectToInternet() {
         if (!credentials) {
@@ -1743,11 +1867,18 @@
         console.log('🌐 GICH WiFi System Initialized');
         console.log('📡 API URL:', API_URL);
         
-        // Load settings first
+        // Load settings first - this applies colors and logo
         await loadSettings();
         await loadThemes();
         await loadPlans();
         checkServerStatus();
+        
+        // Re-apply settings after everything loads (for safety)
+        setTimeout(() => {
+            if (currentSettings && Object.keys(currentSettings).length > 0) {
+                applyThemeSettings(currentSettings);
+            }
+        }, 500);
         
         setInterval(checkServerStatus, 30000);
         console.log('📍 Environment:', window.location.hostname || 'local');
