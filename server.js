@@ -24,6 +24,9 @@ const CALLBACK_URL = process.env.CALLBACK_URL || 'https://billing-system-fm9a.on
 const PORT = process.env.PORT || 10000;
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '1234';
 
+// Increase payload size limit for logo uploads
+const MAX_LOGO_SIZE = 2 * 1024 * 1024; // 2MB
+
 console.log('\n========================================');
 console.log('🌐 GICH WiFi API');
 console.log('========================================');
@@ -552,8 +555,8 @@ function sendJson(res, statusCode, obj) {
     res.writeHead(statusCode, { 
         'Content-Type': 'application/json',
         'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type'
+        'Access-Control-Allow-Methods': 'POST, GET, DELETE, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization'
     });
     res.end(JSON.stringify(obj, null, 2));
 }
@@ -620,9 +623,14 @@ function serveHtmlFile(res, filename) {
 
 function isAdmin(req) {
     const auth = req.headers.authorization;
-    if (!auth) return false;
+    if (!auth) {
+        console.log('🔐 No authorization header');
+        return false;
+    }
     const token = auth.replace('Bearer ', '');
-    return token === ADMIN_PASSWORD;
+    const isValid = token === ADMIN_PASSWORD;
+    console.log(`🔐 Auth check: ${isValid ? '✅ Valid' : '❌ Invalid'}`);
+    return isValid;
 }
 
 // ============================================================
@@ -630,6 +638,7 @@ function isAdmin(req) {
 // ============================================================
 
 const server = http.createServer(async (req, res) => {
+    // Always set CORS headers
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'POST, GET, DELETE, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
@@ -1064,20 +1073,31 @@ const server = http.createServer(async (req, res) => {
 
         // ===== ADMIN SETTINGS - POST =====
         if (req.method === 'POST' && url.pathname === '/api/admin/settings') {
-            if (!isAdmin(req)) {
+            // Check authorization
+            const auth = req.headers.authorization;
+            if (!auth || auth.replace('Bearer ', '') !== ADMIN_PASSWORD) {
                 return sendJson(res, 401, { success: false, message: 'Unauthorized' });
             }
             
             const body = await readBody(req);
             console.log('⚙️ Updating settings:', body);
             
-            // Update settings
+            // Update settings - handle logo specially
             if (body.businessName !== undefined) settings.businessName = body.businessName;
             if (body.businessTagline !== undefined) settings.businessTagline = body.businessTagline;
             if (body.supportPhone !== undefined) settings.supportPhone = body.supportPhone;
             if (body.supportEmail !== undefined) settings.supportEmail = body.supportEmail;
             if (body.website !== undefined) settings.website = body.website;
-            if (body.logo !== undefined) settings.logo = body.logo;
+            if (body.logo !== undefined) {
+                // Validate logo size
+                if (body.logo.length > MAX_LOGO_SIZE) {
+                    return sendJson(res, 400, { 
+                        success: false, 
+                        message: 'Logo image is too large. Please use an image under 2MB.' 
+                    });
+                }
+                settings.logo = body.logo;
+            }
             if (body.theme !== undefined) settings.theme = body.theme;
             if (body.primaryColor !== undefined) settings.primaryColor = body.primaryColor;
             if (body.secondaryColor !== undefined) settings.secondaryColor = body.secondaryColor;
