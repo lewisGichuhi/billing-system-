@@ -311,7 +311,6 @@ function readBody(req) {
 // ============================================================
 
 function findHtmlFile(filename) {
-    // Try multiple possible locations
     const possiblePaths = [
         path.join(__dirname, filename),
         path.join(__dirname, '..', filename),
@@ -366,13 +365,10 @@ const server = http.createServer(async (req, res) => {
 
     try {
         // ===== SERVE HTML FILES =====
-        
-        // Root path
         if (req.method === 'GET' && url.pathname === '/') {
             if (serveHtmlFile(res, 'GICH_wifi.html')) {
                 return;
             }
-            // Fallback
             sendHtml(res, 200, `
                 <!DOCTYPE html>
                 <html>
@@ -544,7 +540,6 @@ const server = http.createServer(async (req, res) => {
                         testPin: '12345'
                     });
                 } else {
-                    // If STK Push fails, use mock mode as fallback
                     console.log('⚠️ STK Push failed, using mock mode as fallback...');
                     transaction.status = 'completed';
                     transaction.mpesaCode = 'MOCK' + Date.now();
@@ -594,7 +589,6 @@ const server = http.createServer(async (req, res) => {
             
             if (!transaction) {
                 console.log('❌ Transaction not found for CheckoutRequestID:', checkoutId);
-                // Try to find by the checkout ID in mpesaResponse
                 transaction = transactions.find(t => t.mpesaResponse?.CheckoutRequestID === checkoutId);
                 if (transaction) {
                     console.log('✅ Found transaction by mpesaResponse.CheckoutRequestID');
@@ -610,7 +604,6 @@ const server = http.createServer(async (req, res) => {
             }
             
             if (resultCode === 0) {
-                // Payment successful
                 transaction.status = 'completed';
                 transaction.mpesaCode = receipt || 'MPESA' + Date.now();
                 transaction.completedAt = new Date().toISOString();
@@ -620,11 +613,9 @@ const server = http.createServer(async (req, res) => {
                 
                 console.log('✅ Payment completed for transaction:', transaction.id);
                 
-                // ===== CREATE HOTSPOT USER =====
+                // Create hotspot user
                 try {
                     console.log('👤 Creating hotspot user...');
-                    // In production, this would create a user on MikroTik
-                    // For now, we'll just mark it as created
                     transaction.mikrotikCreated = true;
                     transaction.mikrotikUsername = 'user_' + (transaction.mpesaCode || transaction.id);
                     transaction.mikrotikPassword = 'pass_' + Date.now();
@@ -639,7 +630,6 @@ const server = http.createServer(async (req, res) => {
                     ResultDesc: 'Success' 
                 });
             } else {
-                // Payment failed or cancelled
                 transaction.status = 'failed';
                 transaction.error = callback.Body?.stkCallback?.ResultDesc || 'Payment failed';
                 transaction.errorCode = resultCode;
