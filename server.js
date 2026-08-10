@@ -1,5 +1,5 @@
 /**
- * GICH WiFi - Complete Backend with Voucher System
+ * GICH WiFi - Complete Backend with Voucher System & Admin Verification
  * Deployable on Render with .env support
  */
 
@@ -22,7 +22,7 @@ const CONSUMER_KEY = process.env.CONSUMER_KEY || '';
 const CONSUMER_SECRET = process.env.CONSUMER_SECRET || '';
 const CALLBACK_URL = process.env.CALLBACK_URL || 'https://billing-system-fm9a.onrender.com/api/mpesa-callback';
 const PORT = process.env.PORT || 10000;
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123'; // Store this securely!
 
 console.log('\n========================================');
 console.log('🌐 GICH WiFi API');
@@ -32,6 +32,7 @@ console.log(`   Consumer Key: ${CONSUMER_KEY ? CONSUMER_KEY.substring(0, 10) + '
 console.log(`   Shortcode: ${SHORTCODE}`);
 console.log(`   Callback URL: ${CALLBACK_URL}`);
 console.log(`   Port: ${PORT}`);
+console.log(`   Admin: ${ADMIN_PASSWORD ? '✅ Configured' : '⚠️ NOT SET'}`);
 console.log('========================================\n');
 
 // ============================================================
@@ -799,6 +800,24 @@ const server = http.createServer(async (req, res) => {
             return token === ADMIN_PASSWORD;
         }
 
+        // ===== ADMIN VERIFICATION (Frontend calls this) =====
+        if (req.method === 'POST' && url.pathname === '/api/admin/verify') {
+            const body = await readBody(req);
+            const { pin } = body;
+            
+            if (pin === ADMIN_PASSWORD) {
+                return sendJson(res, 200, { 
+                    success: true, 
+                    message: 'Admin verified' 
+                });
+            } else {
+                return sendJson(res, 401, { 
+                    success: false, 
+                    message: 'Invalid PIN' 
+                });
+            }
+        }
+
         // Generate Vouchers (Admin)
         if (req.method === 'POST' && url.pathname === '/api/admin/voucher/generate') {
             if (!isAdmin(req)) {
@@ -976,6 +995,7 @@ const server = http.createServer(async (req, res) => {
                         callback: 'POST /api/mpesa-callback'
                     },
                     admin: {
+                        verify: 'POST /api/admin/verify',
                         generate_voucher: 'POST /api/admin/voucher/generate',
                         vouchers: 'GET /api/admin/vouchers',
                         transactions: 'GET /api/admin/transactions',
@@ -1011,7 +1031,7 @@ server.listen(PORT, '0.0.0.0', () => {
     console.log('========================================');
     console.log('📱 Test phone: 0712345678');
     console.log('🔑 Test PIN: 12345');
-    console.log('🛡️ Admin Password: admin123 (set ADMIN_PASSWORD env var)');
+    console.log(`🛡️ Admin PIN: ${ADMIN_PASSWORD ? '✅ Set' : '⚠️ NOT SET'}`);
     console.log('========================================\n');
 });
 
