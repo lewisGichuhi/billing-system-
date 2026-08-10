@@ -1,1388 +1,1633 @@
-/**
- * GICH WiFi - Complete Backend with Theme Customizer
- * Deployable on Render with .env support
- */
-
-// Load environment variables from .env file
-require('dotenv').config();
-
-const http = require('http');
-const https = require('https');
-const { URL } = require('url');
-const fs = require('fs');
-const path = require('path');
-
-// ============================================================
-// ===================== CONFIGURATION =====================
-// ============================================================
-
-const SHORTCODE = process.env.SHORTCODE || '174379';
-const PASSKEY = process.env.PASSKEY || 'bfb279f9aa9bdbcf158e97dd71a467cd2e0c893059b10f78e6b72ada1ed2c919';
-const CONSUMER_KEY = process.env.CONSUMER_KEY || '';
-const CONSUMER_SECRET = process.env.CONSUMER_SECRET || '';
-const CALLBACK_URL = process.env.CALLBACK_URL || 'https://billing-system-fm9a.onrender.com/api/mpesa-callback';
-const PORT = process.env.PORT || 10000;
-const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
-
-console.log('\n========================================');
-console.log('🌐 GICH WiFi API');
-console.log('========================================');
-console.log('📋 Configuration loaded:');
-console.log(`   Consumer Key: ${CONSUMER_KEY ? CONSUMER_KEY.substring(0, 10) + '...' : 'NOT SET'}`);
-console.log(`   Shortcode: ${SHORTCODE}`);
-console.log(`   Callback URL: ${CALLBACK_URL}`);
-console.log(`   Port: ${PORT}`);
-console.log(`   Admin: ${ADMIN_PASSWORD ? '✅ Configured' : '⚠️ NOT SET'}`);
-console.log('========================================\n');
-
-// ============================================================
-// ===================== HTTPS AGENT =====================
-// ============================================================
-
-const agent = new https.Agent({
-    rejectUnauthorized: false,
-    keepAlive: true,
-    timeout: 60000
-});
-
-// ============================================================
-// ===================== DATA STORAGE =====================
-// ============================================================
-
-const TRANSACTIONS_FILE = path.join(__dirname, 'transactions.json');
-const VOUCHERS_FILE = path.join(__dirname, 'vouchers.json');
-const PLANS_FILE = path.join(__dirname, 'plans.json');
-const SETTINGS_FILE = path.join(__dirname, 'settings.json');
-const THEMES_FILE = path.join(__dirname, 'themes.json');
-
-let transactions = [];
-let vouchers = [];
-let plans = [];
-let settings = {};
-let themes = [];
-
-// ============================================================
-// ===================== DEFAULT SETTINGS =====================
-// ============================================================
-
-const DEFAULT_SETTINGS = {
-    businessName: 'GICH WIFI',
-    businessTagline: 'Fast • Secure • Reliable',
-    supportPhone: '0796587763',
-    supportEmail: 'support@gichwifi.co.ke',
-    website: 'https://gichwifi.co.ke',
-    logo: '', // Base64 or URL
-    theme: 'default',
-    primaryColor: '#00c853',
-    secondaryColor: '#00e676',
-    accentColor: '#0f2027',
-    textColor: '#ffffff',
-    headerTextColor: '#ffffff',
-    buttonTextColor: '#000000'
-};
-
-// ============================================================
-// ===================== DEFAULT THEMES =====================
-// ============================================================
-
-const DEFAULT_THEMES = [
-    {
-        id: 'default',
-        name: 'Default Green',
-        preview: '🌿',
-        colors: {
-            primary: '#00c853',
-            secondary: '#00e676',
-            accent: '#0f2027',
-            text: '#ffffff',
-            headerText: '#ffffff',
-            buttonText: '#000000'
-        },
-        gradient: 'linear-gradient(135deg, #0f2027, #203a43, #2c5364)'
-    },
-    {
-        id: 'ocean',
-        name: 'Ocean Blue',
-        preview: '🌊',
-        colors: {
-            primary: '#0077be',
-            secondary: '#00b4d8',
-            accent: '#03045e',
-            text: '#ffffff',
-            headerText: '#ffffff',
-            buttonText: '#000000'
-        },
-        gradient: 'linear-gradient(135deg, #03045e, #0077be, #00b4d8)'
-    },
-    {
-        id: 'sunset',
-        name: 'Sunset Orange',
-        preview: '🌅',
-        colors: {
-            primary: '#ff6b35',
-            secondary: '#ff9a56',
-            accent: '#1a0a00',
-            text: '#ffffff',
-            headerText: '#ffffff',
-            buttonText: '#000000'
-        },
-        gradient: 'linear-gradient(135deg, #1a0a00, #ff6b35, #ff9a56)'
-    },
-    {
-        id: 'midnight',
-        name: 'Midnight Purple',
-        preview: '🌙',
-        colors: {
-            primary: '#7c3aed',
-            secondary: '#a78bfa',
-            accent: '#0c0a1a',
-            text: '#ffffff',
-            headerText: '#ffffff',
-            buttonText: '#000000'
-        },
-        gradient: 'linear-gradient(135deg, #0c0a1a, #4c1d95, #7c3aed)'
-    },
-    {
-        id: 'forest',
-        name: 'Forest Green',
-        preview: '🌲',
-        colors: {
-            primary: '#2d6a4f',
-            secondary: '#40916c',
-            accent: '#081c15',
-            text: '#ffffff',
-            headerText: '#ffffff',
-            buttonText: '#000000'
-        },
-        gradient: 'linear-gradient(135deg, #081c15, #2d6a4f, #40916c)'
-    },
-    {
-        id: 'rose',
-        name: 'Rose Pink',
-        preview: '🌹',
-        colors: {
-            primary: '#e91e63',
-            secondary: '#f06292',
-            accent: '#1a0a12',
-            text: '#ffffff',
-            headerText: '#ffffff',
-            buttonText: '#000000'
-        },
-        gradient: 'linear-gradient(135deg, #1a0a12, #c2185b, #e91e63)'
-    },
-    {
-        id: 'gold',
-        name: 'Gold Premium',
-        preview: '✨',
-        colors: {
-            primary: '#f9a825',
-            secondary: '#fdd835',
-            accent: '#1a1500',
-            text: '#ffffff',
-            headerText: '#ffffff',
-            buttonText: '#000000'
-        },
-        gradient: 'linear-gradient(135deg, #1a1500, #f9a825, #fdd835)'
-    },
-    {
-        id: 'nebula',
-        name: 'Nebula Cosmic',
-        preview: '🌌',
-        colors: {
-            primary: '#e040fb',
-            secondary: '#7c4dff',
-            accent: '#0a0a1a',
-            text: '#ffffff',
-            headerText: '#ffffff',
-            buttonText: '#000000'
-        },
-        gradient: 'linear-gradient(135deg, #0a0a1a, #7c4dff, #e040fb)'
-    }
-];
-
-// ============================================================
-// ===================== LOAD DATA =====================
-// ============================================================
-
-// Load transactions
-if (fs.existsSync(TRANSACTIONS_FILE)) {
-    try {
-        const data = fs.readFileSync(TRANSACTIONS_FILE, 'utf8');
-        transactions = JSON.parse(data);
-        console.log(`📂 Loaded ${transactions.length} transactions`);
-    } catch (error) {
-        console.error('Error loading transactions:', error);
-    }
-}
-
-// Load vouchers
-if (fs.existsSync(VOUCHERS_FILE)) {
-    try {
-        const data = fs.readFileSync(VOUCHERS_FILE, 'utf8');
-        vouchers = JSON.parse(data);
-        console.log(`🎟️ Loaded ${vouchers.length} vouchers`);
-    } catch (error) {
-        console.error('Error loading vouchers:', error);
-    }
-}
-
-// Load plans
-if (fs.existsSync(PLANS_FILE)) {
-    try {
-        const data = fs.readFileSync(PLANS_FILE, 'utf8');
-        plans = JSON.parse(data);
-        console.log(`📦 Loaded ${plans.length} plans`);
-    } catch (error) {
-        console.error('Error loading plans:', error);
-        plans = DEFAULT_PLANS;
-    }
-} else {
-    plans = DEFAULT_PLANS;
-    savePlans();
-}
-
-// Load settings
-if (fs.existsSync(SETTINGS_FILE)) {
-    try {
-        const data = fs.readFileSync(SETTINGS_FILE, 'utf8');
-        settings = JSON.parse(data);
-        console.log(`⚙️ Loaded settings`);
-    } catch (error) {
-        console.error('Error loading settings:', error);
-        settings = DEFAULT_SETTINGS;
-    }
-} else {
-    settings = DEFAULT_SETTINGS;
-    saveSettings();
-}
-
-// Load themes
-if (fs.existsSync(THEMES_FILE)) {
-    try {
-        const data = fs.readFileSync(THEMES_FILE, 'utf8');
-        themes = JSON.parse(data);
-        console.log(`🎨 Loaded ${themes.length} themes`);
-    } catch (error) {
-        console.error('Error loading themes:', error);
-        themes = DEFAULT_THEMES;
-    }
-} else {
-    themes = DEFAULT_THEMES;
-    saveThemes();
-}
-
-// ============================================================
-// ===================== SAVE FUNCTIONS =====================
-// ============================================================
-
-function saveTransactions() {
-    try {
-        fs.writeFileSync(TRANSACTIONS_FILE, JSON.stringify(transactions, null, 2));
-        console.log('💾 Transactions saved');
-    } catch (error) {
-        console.error('⚠️ Could not save transactions:', error.message);
-    }
-}
-
-function saveVouchers() {
-    try {
-        fs.writeFileSync(VOUCHERS_FILE, JSON.stringify(vouchers, null, 2));
-        console.log('💾 Vouchers saved');
-    } catch (error) {
-        console.error('⚠️ Could not save vouchers:', error.message);
-    }
-}
-
-function savePlans() {
-    try {
-        fs.writeFileSync(PLANS_FILE, JSON.stringify(plans, null, 2));
-        console.log('💾 Plans saved');
-    } catch (error) {
-        console.error('⚠️ Could not save plans:', error.message);
-    }
-}
-
-function saveSettings() {
-    try {
-        fs.writeFileSync(SETTINGS_FILE, JSON.stringify(settings, null, 2));
-        console.log('💾 Settings saved');
-    } catch (error) {
-        console.error('⚠️ Could not save settings:', error.message);
-    }
-}
-
-function saveThemes() {
-    try {
-        fs.writeFileSync(THEMES_FILE, JSON.stringify(themes, null, 2));
-        console.log('💾 Themes saved');
-    } catch (error) {
-        console.error('⚠️ Could not save themes:', error.message);
-    }
-}
-
-// ============================================================
-// ===================== DEFAULT PLANS =====================
-// ============================================================
-
-const DEFAULT_PLANS = [
-    { id: '2_Hours', name: '2 Hours', price: 10, devices: 1, duration_seconds: 7200 },
-    { id: '5_Hours', name: '5 Hours', price: 20, devices: 1, duration_seconds: 18000 },
-    { id: '8_Hours', name: '8 Hours', price: 30, devices: 1, duration_seconds: 28800 },
-    { id: '12_Hours', name: '12 Hours', price: 50, devices: 1, duration_seconds: 43200 },
-    { id: '24_Hours', name: '24 Hours', price: 80, devices: 1, duration_seconds: 86400 },
-    { id: '1_Week_1_Device', name: '1 Week (1 Device)', price: 300, devices: 1, duration_seconds: 604800 },
-    { id: '1_Week_3_Devices', name: '1 Week (3 Devices)', price: 400, devices: 3, duration_seconds: 604800 },
-    { id: '1_Month_1_Device', name: '1 Month (1 Device)', price: 1000, devices: 1, duration_seconds: 2592000 },
-    { id: '1_Month_3_Devices', name: '1 Month (3 Devices)', price: 1200, devices: 3, duration_seconds: 2592000 }
-];
-
-// ============================================================
-// ===================== HELPERS =====================
-// ============================================================
-
-function getPlanName(planId) {
-    const plan = plans.find(p => p.id === planId);
-    return plan ? plan.name : planId;
-}
-
-function getPlanDuration(planId) {
-    const plan = plans.find(p => p.id === planId);
-    return plan ? plan.duration_seconds : 3600;
-}
-
-function generateVoucherCode() {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-    let code = '';
-    for (let i = 0; i < 10; i++) {
-        code += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return code;
-}
-
-function normalizePhone(rawPhone) {
-    if (!rawPhone) return null;
-    let digits = String(rawPhone).trim().replace(/[^0-9+]/g, '');
-    digits = digits.replace(/^\+/, '');
-    
-    if (digits.startsWith('0')) digits = digits.substring(1);
-    if (digits.length === 9 && digits.startsWith('7')) return `254${digits}`;
-    if (digits.length === 10 && digits.startsWith('7')) return `254${digits}`;
-    if (digits.startsWith('254')) return digits;
-    
-    return digits;
-}
-
-function timestampNow() {
-    const now = new Date();
-    const pad = (n) => String(n).padStart(2, '0');
-    return `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
-}
-
-// ============================================================
-// ===================== REQUEST HELPER =====================
-// ============================================================
-
-function simpleRequest(method, urlString, headers = {}, jsonBody = null) {
-    return new Promise((resolve, reject) => {
-        const url = new URL(urlString);
-        const payload = jsonBody ? JSON.stringify(jsonBody) : null;
-
-        console.log(`\n[REQUEST] ${method} ${urlString}`);
-
-        const options = {
-            hostname: url.hostname,
-            port: url.port || 443,
-            path: url.pathname + url.search,
-            method: method.toUpperCase(),
-            headers: {
-                ...headers,
-                ...(payload ? { 'Content-Length': Buffer.byteLength(payload) } : {}),
-                'Connection': 'keep-alive'
-            },
-            timeout: 60000,
-            agent: agent,
-            family: 4
-        };
-
-        const req = https.request(options, (res) => {
-            let chunks = [];
-            res.on('data', (chunk) => chunks.push(chunk));
-            res.on('end', () => {
-                const bodyText = Buffer.concat(chunks).toString('utf8');
-                let bodyJson = null;
-                try { bodyJson = JSON.parse(bodyText); } catch (_) {}
-                
-                console.log(`[RESPONSE] Status: ${res.statusCode}`);
-                if (bodyText && bodyText.length < 500) {
-                    console.log(`[RESPONSE] Body: ${bodyText}`);
-                }
-                
-                resolve({
-                    statusCode: res.statusCode,
-                    statusMessage: res.statusMessage,
-                    bodyText,
-                    bodyJson
-                });
-            });
-        });
-
-        req.on('error', (err) => {
-            console.error('[REQUEST ERROR]', err.message);
-            reject(new Error(`Request failed: ${err.message}`));
-        });
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title id="pageTitle">GICH WIFI HOTSPOT</title>
+    <style>
+        /* ============================================================
+           DYNAMIC THEME VARIABLES - Applied via JavaScript
+           ============================================================ */
+        :root {
+            --brand-primary: #00c853;
+            --brand-secondary: #00e676;
+            --brand-accent: #0f2027;
+            --brand-gradient: linear-gradient(45deg, #00c853, #00e676);
+            --bg-gradient: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
+            --text-primary: #ffffff;
+            --text-secondary: #aaaaaa;
+            --text-muted: #666666;
+            --card-bg: rgba(26, 26, 26, 0.95);
+            --border-color: rgba(255, 255, 255, 0.05);
+            --input-bg: rgba(255, 255, 255, 0.08);
+        }
         
-        req.on('timeout', () => {
-            console.error('[REQUEST TIMEOUT]');
-            req.destroy();
-            reject(new Error('Request timed out'));
-        });
-
-        if (payload) {
-            req.write(payload);
+        /* ============================================================
+           RESET & BASE
+           ============================================================ */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
         }
-        req.end();
-    });
-}
-
-// ============================================================
-// ===================== OAUTH =====================
-// ============================================================
-
-async function getAccessToken() {
-    console.log('\n🔑 Getting access token...');
-    
-    if (!CONSUMER_KEY || !CONSUMER_SECRET) {
-        throw new Error('Consumer Key or Secret not configured. Check .env file.');
-    }
-    
-    const auth = Buffer.from(`${CONSUMER_KEY.trim()}:${CONSUMER_SECRET.trim()}`).toString('base64');
-
-    const res = await simpleRequest(
-        'GET',
-        'https://sandbox.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials',
-        {
-            'Authorization': `Basic ${auth}`,
-            'Accept': 'application/json'
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: var(--bg-gradient);
+            color: var(--text-primary);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+            transition: background 0.5s ease;
         }
-    );
+        .container {
+            max-width: 550px;
+            width: 100%;
+            background: var(--card-bg);
+            padding: 25px 20px;
+            border-radius: 16px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+            border: 1px solid var(--border-color);
+            position: relative;
+            transition: all 0.4s ease;
+        }
 
-    if (res.statusCode !== 200) {
-        throw new Error(`OAuth failed (${res.statusCode}): ${res.bodyText}`);
-    }
+        /* ============================================================
+           HEADER WITH CUSTOM LOGO
+           ============================================================ */
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 20px;
+            position: relative;
+        }
+        .header-title {
+            flex: 1;
+            text-align: center;
+        }
+        .header-title .logo-container {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+        }
+        .header-title .logo-img {
+            max-height: 50px;
+            max-width: 60px;
+            object-fit: contain;
+            border-radius: 8px;
+        }
+        .header-title .logo-emoji {
+            font-size: 32px;
+        }
+        .header-title h1 {
+            font-size: 24px;
+            background: var(--brand-gradient);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: 1px;
+            transition: background 0.4s ease;
+        }
+        .header-title .tagline {
+            color: var(--text-secondary);
+            font-size: 12px;
+            margin-top: 2px;
+            letter-spacing: 0.5px;
+            transition: color 0.4s ease;
+        }
 
-    if (!res.bodyJson || !res.bodyJson.access_token) {
-        throw new Error('No access token in response');
-    }
+        /* ============================================================
+           MENU BUTTON
+           ============================================================ */
+        .menu-btn {
+            background: none;
+            border: none;
+            color: var(--text-primary);
+            font-size: 26px;
+            cursor: pointer;
+            padding: 5px 10px;
+            border-radius: 8px;
+            transition: 0.2s;
+            z-index: 10;
+            position: relative;
+        }
+        .menu-btn:hover {
+            background: rgba(255, 255, 255, 0.05);
+        }
 
-    console.log('✅ Access token obtained');
-    return res.bodyJson.access_token;
-}
+        .dropdown {
+            position: absolute;
+            top: 50px;
+            left: 0;
+            background: #1a1a2e;
+            border-radius: 12px;
+            padding: 8px 0;
+            min-width: 190px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+            border: 1px solid var(--border-color);
+            display: none;
+            z-index: 20;
+        }
+        .dropdown.active {
+            display: block;
+        }
+        .dropdown-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 18px;
+            color: #ccc;
+            font-size: 14px;
+            cursor: pointer;
+            transition: 0.2s;
+            border: none;
+            background: none;
+            width: 100%;
+            text-align: left;
+        }
+        .dropdown-item:hover {
+            background: rgba(255, 255, 255, 0.05);
+            color: #fff;
+        }
+        .dropdown-item .icon { font-size: 18px; }
+        .dropdown-divider {
+            border-top: 1px solid var(--border-color);
+            margin: 4px 12px;
+        }
 
-// ============================================================
-// ===================== STK PUSH =====================
-// ============================================================
+        .status-badge {
+            display: inline-block;
+            padding: 3px 12px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: bold;
+        }
+        .status-online { background: var(--brand-primary); color: #000; }
+        .status-offline { background: #ff1744; color: #fff; }
+        .status-checking { background: #ffa726; color: #000; }
 
-async function stkPush({ phone, amount, accountReference }) {
-    console.log('\n💳 Starting STK Push...');
-    console.log(`📱 Phone: ${phone}`);
-    console.log(`💰 Amount: ${amount}`);
+        /* ============================================================
+           CARDS
+           ============================================================ */
+        .card {
+            background: rgba(255, 255, 255, 0.03);
+            padding: 15px;
+            border-radius: 10px;
+            margin: 10px 0;
+            border: 1px solid var(--border-color);
+            transition: border-color 0.4s ease;
+        }
+        .card h2 {
+            font-size: 18px;
+            margin-bottom: 12px;
+            text-align: center;
+            color: var(--text-primary);
+            font-weight: 600;
+            letter-spacing: 0.3px;
+        }
+        .card h3 {
+            font-size: 15px;
+            margin-bottom: 8px;
+            color: var(--text-secondary);
+            font-weight: 500;
+        }
 
-    const numericAmount = Math.round(Number(amount));
-    if (isNaN(numericAmount) || numericAmount < 1) {
-        throw new Error('Invalid amount');
-    }
+        /* ============================================================
+           PLANS
+           ============================================================ */
+        .plan {
+            background: rgba(255, 255, 255, 0.05);
+            padding: 10px 12px;
+            border-radius: 8px;
+            margin: 6px 0;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            transition: 0.2s;
+            cursor: pointer;
+            border: 1px solid transparent;
+        }
+        .plan:hover {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: rgba(255, 255, 255, 0.1);
+        }
+        .plan.selected {
+            border-color: var(--brand-primary);
+            background: rgba(0, 200, 83, 0.08);
+        }
+        .plan-name { font-weight: bold; font-size: 14px; }
+        .plan-price { color: var(--brand-primary); font-weight: bold; transition: color 0.4s ease; }
+        .plan-devices { font-size: 12px; color: var(--text-secondary); }
 
-    const formattedPhone = normalizePhone(phone);
-    if (!formattedPhone || formattedPhone.length < 10) {
-        throw new Error(`Invalid phone: ${phone}`);
-    }
+        /* ============================================================
+           BUTTONS & INPUTS
+           ============================================================ */
+        .btn {
+            width: 100%;
+            padding: 12px;
+            background: var(--brand-primary);
+            border: none;
+            border-radius: 6px;
+            font-weight: bold;
+            font-size: 16px;
+            cursor: pointer;
+            transition: 0.2s;
+            color: #000;
+            margin-top: 6px;
+            letter-spacing: 0.3px;
+        }
+        .btn:hover { transform: scale(1.02); opacity: 0.9; }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+        .btn-secondary { background: #333; color: #fff; }
+        .btn-secondary:hover { background: #444; }
 
-    const token = await getAccessToken();
-    const timestamp = timestampNow();
-    const password = Buffer.from(`${SHORTCODE}${PASSKEY}${timestamp}`).toString('base64');
+        input, select {
+            width: 100%;
+            padding: 10px 12px;
+            margin: 6px 0;
+            border-radius: 6px;
+            border: none;
+            font-size: 14px;
+            background: var(--input-bg);
+            color: var(--text-primary);
+            transition: all 0.3s ease;
+        }
+        input::placeholder { color: rgba(255, 255, 255, 0.4); }
+        input:focus, select:focus {
+            outline: 2px solid var(--brand-primary);
+            background: rgba(255, 255, 255, 0.12);
+        }
+        select option { background: #1a1a2e; color: var(--text-primary); }
 
-    const payload = {
-        BusinessShortCode: SHORTCODE,
-        Password: password,
-        Timestamp: timestamp,
-        TransactionType: 'CustomerPayBillOnline',
-        Amount: numericAmount,
-        PartyA: formattedPhone,
-        PartyB: SHORTCODE,
-        PhoneNumber: formattedPhone,
-        CallBackURL: CALLBACK_URL,
-        AccountReference: accountReference || 'GICH-WIFI',
-        TransactionDesc: 'GICH WiFi Payment'
-    };
+        /* ============================================================
+           MODAL
+           ============================================================ */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.8);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+            padding: 20px;
+        }
+        .modal-overlay.active { display: flex; }
+        .modal {
+            background: #1a1a2e;
+            padding: 25px 20px;
+            border-radius: 16px;
+            max-width: 400px;
+            width: 100%;
+            border: 1px solid var(--border-color);
+            position: relative;
+            animation: fadeIn 0.3s ease;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: scale(0.9); }
+            to { opacity: 1; transform: scale(1); }
+        }
+        .modal-close {
+            position: absolute;
+            top: 10px;
+            right: 14px;
+            background: none;
+            border: none;
+            color: #888;
+            font-size: 22px;
+            cursor: pointer;
+        }
+        .modal-close:hover { color: var(--text-primary); }
+        .modal h2 {
+            color: var(--text-primary);
+            text-align: center;
+            margin-bottom: 10px;
+        }
+        .modal .plan-detail {
+            text-align: center;
+            font-size: 18px;
+            color: var(--brand-primary);
+            margin-bottom: 15px;
+            font-weight: bold;
+        }
 
-    console.log('📤 Sending STK Push to Safaricom...');
-    
-    const res = await simpleRequest(
-        'POST',
-        'https://sandbox.safaricom.co.ke/mpesa/stkpush/v1/processrequest',
-        {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-        },
-        payload
-    );
+        /* ============================================================
+           LOADING
+           ============================================================ */
+        .loading-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.85);
+            border-radius: 16px;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 50;
+        }
+        .loading-overlay.active { display: flex; }
+        .spinner {
+            width: 45px;
+            height: 45px;
+            border: 4px solid rgba(255, 255, 255, 0.1);
+            border-top-color: var(--brand-primary);
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .loading-text {
+            color: var(--text-secondary);
+            margin-top: 15px;
+            font-size: 14px;
+        }
 
-    if (!res.bodyJson) {
-        throw new Error('Invalid response from Safaricom');
-    }
+        /* ============================================================
+           COUNTDOWN
+           ============================================================ */
+        .countdown {
+            text-align: center;
+            padding: 15px;
+            background: rgba(0, 200, 83, 0.08);
+            border-radius: 8px;
+            border: 1px solid rgba(0, 200, 83, 0.2);
+            margin: 10px 0;
+        }
+        .countdown .time {
+            font-size: 32px;
+            font-weight: bold;
+            color: var(--brand-primary);
+            font-family: monospace;
+        }
+        .countdown .label { color: var(--text-secondary); font-size: 13px; }
 
-    if (res.bodyJson.ResponseCode === '0') {
-        console.log('✅ STK Push successful!');
-        return {
-            success: true,
-            data: res.bodyJson,
-            checkoutId: res.bodyJson.CheckoutRequestID,
-            message: res.bodyJson.CustomerMessage || 'STK Push sent'
-        };
-    } else {
-        throw new Error(res.bodyJson.ResponseDescription || 'STK Push failed');
-    }
-}
+        .cred-box {
+            background: rgba(0, 200, 83, 0.05);
+            padding: 12px;
+            border-radius: 6px;
+            border: 1px solid rgba(0, 200, 83, 0.15);
+            margin: 10px 0;
+        }
+        .cred-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 4px 0;
+            font-size: 14px;
+            font-family: monospace;
+        }
+        .cred-row .label { color: var(--text-secondary); }
+        .cred-row .value { color: var(--text-primary); }
 
-// ============================================================
-// ===================== SERVER FUNCTIONS =====================
-// ============================================================
+        /* ============================================================
+           ADMIN PANEL
+           ============================================================ */
+        #adminPanel {
+            display: none;
+        }
+        #adminPanel.active { display: block; }
 
-function sendJson(res, statusCode, obj) {
-    res.writeHead(statusCode, { 
-        'Content-Type': 'application/json',
-        'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'POST, GET, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type'
-    });
-    res.end(JSON.stringify(obj, null, 2));
-}
+        .admin-section {
+            background: rgba(255, 255, 255, 0.03);
+            padding: 15px;
+            border-radius: 10px;
+            margin: 10px 0;
+            border: 1px solid var(--border-color);
+        }
+        .admin-section h2 {
+            font-size: 16px;
+            color: var(--brand-primary);
+            margin-bottom: 10px;
+            transition: color 0.4s ease;
+        }
+        .admin-section .row {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .admin-section .row > * {
+            flex: 1;
+            min-width: 120px;
+        }
 
-function sendHtml(res, statusCode, html) {
-    res.writeHead(statusCode, { 'Content-Type': 'text/html' });
-    res.end(html);
-}
+        /* ============================================================
+           THEME PICKER
+           ============================================================ */
+        .theme-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
+            gap: 10px;
+            margin: 10px 0;
+        }
+        .theme-option {
+            background: rgba(255, 255, 255, 0.05);
+            border: 2px solid transparent;
+            border-radius: 12px;
+            padding: 10px 8px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .theme-option:hover {
+            transform: scale(1.05);
+            border-color: rgba(255, 255, 255, 0.2);
+        }
+        .theme-option.active {
+            border-color: var(--brand-primary);
+            background: rgba(0, 200, 83, 0.1);
+        }
+        .theme-option .preview {
+            font-size: 32px;
+            display: block;
+            margin-bottom: 4px;
+        }
+        .theme-option .name {
+            font-size: 11px;
+            color: var(--text-secondary);
+        }
 
-function readBody(req) {
-    return new Promise((resolve, reject) => {
-        let raw = '';
-        req.on('data', (chunk) => raw += chunk);
-        req.on('end', () => {
-            try { resolve(raw ? JSON.parse(raw) : {}); } 
-            catch (e) { reject(new Error('Invalid JSON')); }
-        });
-        req.on('error', reject);
-    });
-}
+        /* ============================================================
+           LOGO UPLOAD
+           ============================================================ */
+        .logo-upload-area {
+            border: 2px dashed var(--border-color);
+            border-radius: 10px;
+            padding: 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            margin: 8px 0;
+        }
+        .logo-upload-area:hover {
+            border-color: var(--brand-primary);
+            background: rgba(255, 255, 255, 0.03);
+        }
+        .logo-upload-area .preview-logo {
+            max-height: 60px;
+            max-width: 100px;
+            object-fit: contain;
+            margin-bottom: 8px;
+        }
 
-// ============================================================
-// ===================== FIND HTML FILE =====================
-// ============================================================
+        /* ============================================================
+           ADMIN TABLES
+           ============================================================ */
+        .admin-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+            margin-top: 8px;
+        }
+        .admin-table th, .admin-table td {
+            padding: 6px 8px;
+            text-align: left;
+            border-bottom: 1px solid var(--border-color);
+        }
+        .admin-table th { color: var(--text-secondary); font-weight: normal; }
+        .voucher-code {
+            font-family: monospace;
+            background: rgba(0,0,0,0.3);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 11px;
+        }
+        .status-badge-sm {
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 10px;
+        }
+        .status-completed { background: var(--brand-primary); color: #000; }
+        .status-pending { background: #ffa726; color: #000; }
+        .status-failed { background: #ff1744; color: #fff; }
+        .used { color: #ff6b6b; }
+        .unused { color: var(--brand-primary); }
+        .back-to-user { margin-top: 10px; }
 
-function findHtmlFile(filename) {
-    const possiblePaths = [
-        path.join(__dirname, filename),
-        path.join(__dirname, '..', filename),
-        path.join(__dirname, 'public', filename),
-        path.join(__dirname, '..', 'public', filename),
-        path.join(__dirname, '..', '..', filename)
+        /* ============================================================
+           FOOTER
+           ============================================================ */
+        .footer {
+            text-align: center;
+            margin-top: 20px;
+            color: var(--text-muted);
+            font-size: 12px;
+            letter-spacing: 0.5px;
+        }
+        .footer .brand { color: var(--brand-primary); font-weight: bold; }
+
+        /* ============================================================
+           RESPONSIVE
+           ============================================================ */
+        @media (max-width: 480px) {
+            .container { padding: 18px 12px; }
+            .theme-grid { grid-template-columns: repeat(auto-fill, minmax(65px, 1fr)); }
+            .plan { flex-wrap: wrap; gap: 4px; }
+            .modal { padding: 18px 12px; }
+            .admin-section .row { flex-direction: column; }
+        }
+    </style>
+</head>
+<body>
+
+<div class="container" id="app">
+
+    <!-- ============================================================
+    HEADER
+    ============================================================ -->
+    <div class="header">
+        <div style="position:relative;">
+            <button class="menu-btn" onclick="toggleMenu()" aria-label="Menu">☰</button>
+            <div class="dropdown" id="dropdownMenu">
+                <button class="dropdown-item" onclick="goHome()"><span class="icon">🏠</span> Home</button>
+                <button class="dropdown-item" onclick="openAdmin()"><span class="icon">🔧</span> Admin</button>
+                <div class="dropdown-divider"></div>
+                <button class="dropdown-item" onclick="toggleMenu()" style="color:#888;"><span class="icon">✕</span> Close</button>
+            </div>
+        </div>
+        <div class="header-title">
+            <div class="logo-container">
+                <img id="logoImage" src="" alt="Logo" class="logo-img" style="display:none;">
+                <span id="logoEmoji" class="logo-emoji">🌐</span>
+            </div>
+            <h1 id="businessName">GICH WIFI</h1>
+            <p class="tagline" id="businessTagline">Fast • Secure • Reliable</p>
+        </div>
+        <div id="statusBadge" class="status-badge status-checking">⏳</div>
+    </div>
+
+    <!-- ============================================================
+    LOADING OVERLAY
+    ============================================================ -->
+    <div id="loadingOverlay" class="loading-overlay">
+        <div class="spinner"></div>
+        <div class="loading-text">⏳ Processing your request...</div>
+        <div style="font-size:12px;color:#666;margin-top:8px;">This may take up to 50 seconds</div>
+    </div>
+
+    <!-- ============================================================
+    USER VIEW
+    ============================================================ -->
+    <div id="userView">
+
+        <div id="stepPlans">
+            <div class="card">
+                <h2>📦 Select Your Plan</h2>
+                <div id="plansContainer"></div>
+            </div>
+
+            <div class="card check-paid-section">
+                <p style="font-size:13px;color:var(--text-secondary);text-align:center;">Already paid? Check your status</p>
+                <input type="tel" id="checkPhoneInput" placeholder="Enter your phone number" />
+                <button class="btn btn-secondary" onclick="checkExistingPlan()">Check Status</button>
+                <div id="checkResult" style="margin-top:8px;font-size:13px;color:var(--text-secondary);"></div>
+            </div>
+
+            <div class="card voucher-section">
+                <h3>🎟️ Have a Voucher?</h3>
+                <input type="text" id="voucherInput" placeholder="Enter voucher code" />
+                <button class="btn" onclick="redeemVoucher()">Redeem Voucher</button>
+                <div id="voucherResult" style="margin-top:8px;font-size:13px;color:var(--text-secondary);"></div>
+            </div>
+        </div>
+
+        <div id="stepConnected" class="hidden">
+            <div class="card" style="text-align:center;">
+                <div style="font-size:48px;">🎉</div>
+                <h2 style="color:var(--brand-primary);">Connected!</h2>
+                <p style="color:var(--text-secondary);">You are now online.</p>
+            </div>
+            <div class="countdown">
+                <div class="label">⏱ Time Remaining</div>
+                <div class="time" id="countdownDisplay">--:--:--</div>
+            </div>
+            <div class="cred-box">
+                <div class="cred-row"><span class="label">Username</span><span class="value" id="credUser">-</span></div>
+                <div class="cred-row"><span class="label">Password</span><span class="value" id="credPass">-</span></div>
+                <div class="cred-row"><span class="label">Plan</span><span class="value" id="credPlanName">-</span></div>
+            </div>
+            <button class="btn btn-secondary" onclick="resetApp()">Disconnect / Back</button>
+        </div>
+    </div>
+
+    <!-- ============================================================
+    ADMIN PANEL
+    ============================================================ -->
+    <div id="adminPanel">
+        <div class="card" style="border-color:var(--brand-primary);">
+            <h2 style="color:var(--brand-primary);">🔧 Admin Panel</h2>
+            <button class="btn btn-secondary back-to-user" onclick="closeAdmin()">← Back to User View</button>
+        </div>
+
+        <!-- ===== THEME CUSTOMIZER ===== -->
+        <div class="admin-section">
+            <h2>🎨 Theme Customizer</h2>
+            <p style="font-size:13px;color:var(--text-secondary);margin-bottom:10px;">Pick a theme to change the look and feel</p>
+            <div class="theme-grid" id="themeGrid"></div>
+            <div style="margin-top:10px;">
+                <label style="font-size:13px;color:var(--text-secondary);">Custom Primary Color</label>
+                <input type="color" id="customColorPicker" value="#00c853" style="height:40px;padding:4px;cursor:pointer;">
+            </div>
+        </div>
+
+        <!-- ===== LOGO & BRANDING ===== -->
+        <div class="admin-section">
+            <h2>🏷️ Branding</h2>
+            <div class="logo-upload-area" onclick="document.getElementById('logoUpload').click()">
+                <p style="color:var(--text-secondary);font-size:13px;">Click to upload logo</p>
+                <img id="logoPreview" src="" alt="Logo preview" class="preview-logo" style="display:none;">
+                <input type="file" id="logoUpload" accept="image/*" style="display:none;" onchange="handleLogoUpload(event)">
+                <p style="font-size:11px;color:var(--text-muted);margin-top:5px;">Supported: PNG, JPG, SVG (Max 2MB)</p>
+            </div>
+            <div class="row">
+                <div style="flex:2;">
+                    <label style="font-size:13px;color:var(--text-secondary);">Business Name</label>
+                    <input type="text" id="editBusinessName" placeholder="Business Name" />
+                </div>
+                <div style="flex:2;">
+                    <label style="font-size:13px;color:var(--text-secondary);">Tagline</label>
+                    <input type="text" id="editTagline" placeholder="Tagline" />
+                </div>
+            </div>
+            <div class="row">
+                <div style="flex:1;">
+                    <label style="font-size:13px;color:var(--text-secondary);">Support Phone</label>
+                    <input type="text" id="editPhone" placeholder="Phone number" />
+                </div>
+                <div style="flex:2;">
+                    <label style="font-size:13px;color:var(--text-secondary);">Support Email</label>
+                    <input type="text" id="editEmail" placeholder="Email address" />
+                </div>
+            </div>
+            <button class="btn" onclick="saveBranding()" style="margin-top:10px;">💾 Save Branding</button>
+            <div id="brandingResult" style="margin-top:8px;font-size:13px;color:var(--text-secondary);"></div>
+        </div>
+
+        <!-- ===== PLAN MANAGER ===== -->
+        <div class="admin-section">
+            <h2>📦 Plan Manager</h2>
+            <p style="font-size:13px;color:var(--text-secondary);margin-bottom:8px;">Update plan prices</p>
+            <div id="planManagerList"></div>
+            <button class="btn" onclick="savePlans()">💾 Save Plans</button>
+            <div id="planManagerResult" style="margin-top:8px;font-size:13px;color:var(--text-secondary);"></div>
+        </div>
+
+        <!-- ===== VOUCHER GENERATOR ===== -->
+        <div class="admin-section">
+            <h2>🎟️ Generate Vouchers</h2>
+            <div class="row">
+                <select id="voucherPlanSelect"></select>
+                <input type="number" id="voucherCount" placeholder="Count" value="5" min="1" max="100">
+                <button class="btn" onclick="generateVouchers()">Generate</button>
+            </div>
+            <div id="voucherGenerateResult" style="margin-top:8px;font-size:13px;color:var(--text-secondary);"></div>
+        </div>
+
+        <!-- ===== VOUCHERS LIST ===== -->
+        <div class="admin-section">
+            <h2>🎟️ Vouchers</h2>
+            <button class="btn btn-secondary" onclick="loadVouchers()" style="width:auto;padding:6px 16px;font-size:13px;">Refresh</button>
+            <div id="vouchersList" style="margin-top:8px;overflow-x:auto;"><p style="color:var(--text-secondary);font-size:13px;">Loading vouchers...</p></div>
+        </div>
+
+        <!-- ===== TRANSACTIONS ===== -->
+        <div class="admin-section">
+            <h2>📊 Transactions</h2>
+            <button class="btn btn-secondary" onclick="loadTransactions()" style="width:auto;padding:6px 16px;font-size:13px;">Refresh</button>
+            <div id="transactionsList" style="margin-top:8px;overflow-x:auto;"><p style="color:var(--text-secondary);font-size:13px;">Loading transactions...</p></div>
+        </div>
+    </div>
+
+    <!-- ===== FOOTER ===== -->
+    <div class="footer">
+        Powered by <span class="brand">GICH WiFi</span> • Secure • Fast • Reliable
+        <br><span id="supportInfo" style="font-size:11px;color:var(--text-muted);"></span>
+    </div>
+</div>
+
+<!-- ============================================================
+MODAL
+============================================================ -->
+<div id="paymentModal" class="modal-overlay">
+    <div class="modal">
+        <button class="modal-close" onclick="closeModal()">✕</button>
+        <h2>💳 M-Pesa Payment</h2>
+        <div class="plan-detail" id="modalPlanDetail">2 Hours - KSh 10</div>
+        <p>Enter your M-Pesa number to receive the payment prompt</p>
+        <input type="tel" id="modalPhoneInput" placeholder="Enter M-Pesa number (e.g., 0712345678)" />
+        <button class="btn" id="modalPayBtn" onclick="modalPay()">Pay Now</button>
+        <p style="text-align:center;font-size:11px;color:#666;margin-top:8px;">📱 You'll receive an M-Pesa prompt</p>
+        <p style="text-align:center;font-size:10px;color:#555;">Sandbox PIN: 12345</p>
+        <div id="modalResult" style="margin-top:8px;font-size:13px;color:var(--text-secondary);text-align:center;"></div>
+    </div>
+</div>
+
+<script>
+    // ============================================================
+    // CONFIGURATION
+    // ============================================================
+    const RENDER_URL = 'https://billing-system-fm9a.onrender.com';
+    const API_URL = RENDER_URL + '/api';
+    const ADMIN_PIN = '1234'; // Change this in production
+
+    // ============================================================
+    // STATE
+    // ============================================================
+    let selectedPlan = null;
+    let selectedPlanId = null;
+    let transactionId = null;
+    let countdownInterval = null;
+    let credentials = null;
+    let currentSettings = {};
+    let currentThemes = [];
+    let currentPlans = [];
+
+    // ============================================================
+    // DOM REFS
+    // ============================================================
+    const $ = id => document.getElementById(id);
+    const statusBadge = $('statusBadge');
+    const plansContainer = $('plansContainer');
+    const stepPlans = $('stepPlans');
+    const stepConnected = $('stepConnected');
+    const loadingOverlay = $('loadingOverlay');
+    const countdownDisplay = $('countdownDisplay');
+    const credUser = $('credUser');
+    const credPass = $('credPass');
+    const credPlanName = $('credPlanName');
+    const checkPhoneInput = $('checkPhoneInput');
+    const checkResult = $('checkResult');
+    const voucherInput = $('voucherInput');
+    const voucherResult = $('voucherResult');
+    const dropdownMenu = $('dropdownMenu');
+    const adminPanel = $('adminPanel');
+    const userView = $('userView');
+    const paymentModal = $('paymentModal');
+    const modalPlanDetail = $('modalPlanDetail');
+    const modalPhoneInput = $('modalPhoneInput');
+    const modalPayBtn = $('modalPayBtn');
+    const modalResult = $('modalResult');
+
+    // Branding elements
+    const businessNameEl = $('businessName');
+    const businessTaglineEl = $('businessTagline');
+    const logoImage = $('logoImage');
+    const logoEmoji = $('logoEmoji');
+    const supportInfo = $('supportInfo');
+    const pageTitle = $('pageTitle');
+
+    // Admin inputs
+    const editBusinessName = $('editBusinessName');
+    const editTagline = $('editTagline');
+    const editPhone = $('editPhone');
+    const editEmail = $('editEmail');
+    const logoPreview = $('logoPreview');
+    const logoUpload = $('logoUpload');
+    const themeGrid = $('themeGrid');
+    const customColorPicker = $('customColorPicker');
+
+    // ============================================================
+    // DEFAULT PLANS
+    // ============================================================
+    const DEFAULT_PLANS = [
+        { id: '2_Hours', name: '2 Hours', price: 10, devices: 1, duration_seconds: 7200 },
+        { id: '5_Hours', name: '5 Hours', price: 20, devices: 1, duration_seconds: 18000 },
+        { id: '8_Hours', name: '8 Hours', price: 30, devices: 1, duration_seconds: 28800 },
+        { id: '12_Hours', name: '12 Hours', price: 50, devices: 1, duration_seconds: 43200 },
+        { id: '24_Hours', name: '24 Hours', price: 80, devices: 1, duration_seconds: 86400 },
+        { id: '1_Week_1_Device', name: '1 Week (1 Device)', price: 300, devices: 1, duration_seconds: 604800 },
+        { id: '1_Week_3_Devices', name: '1 Week (3 Devices)', price: 400, devices: 3, duration_seconds: 604800 },
+        { id: '1_Month_1_Device', name: '1 Month (1 Device)', price: 1000, devices: 1, duration_seconds: 2592000 },
+        { id: '1_Month_3_Devices', name: '1 Month (3 Devices)', price: 1200, devices: 3, duration_seconds: 2592000 }
     ];
-    
-    for (const p of possiblePaths) {
-        if (fs.existsSync(p)) {
-            return p;
-        }
-    }
-    return null;
-}
 
-function serveHtmlFile(res, filename) {
-    try {
-        const filePath = findHtmlFile(filename);
-        if (filePath) {
-            const html = fs.readFileSync(filePath, 'utf8');
-            console.log(`📄 Serving ${filename} from: ${filePath}`);
-            sendHtml(res, 200, html);
-            return true;
+    // ============================================================
+    // DEFAULT THEMES
+    // ============================================================
+    const DEFAULT_THEMES = [
+        { id: 'default', name: 'Default Green', preview: '🌿', colors: { primary: '#00c853', secondary: '#00e676', accent: '#0f2027', text: '#ffffff', headerText: '#ffffff', buttonText: '#000000' }, gradient: 'linear-gradient(135deg, #0f2027, #203a43, #2c5364)' },
+        { id: 'ocean', name: 'Ocean Blue', preview: '🌊', colors: { primary: '#0077be', secondary: '#00b4d8', accent: '#03045e', text: '#ffffff', headerText: '#ffffff', buttonText: '#000000' }, gradient: 'linear-gradient(135deg, #03045e, #0077be, #00b4d8)' },
+        { id: 'sunset', name: 'Sunset Orange', preview: '🌅', colors: { primary: '#ff6b35', secondary: '#ff9a56', accent: '#1a0a00', text: '#ffffff', headerText: '#ffffff', buttonText: '#000000' }, gradient: 'linear-gradient(135deg, #1a0a00, #ff6b35, #ff9a56)' },
+        { id: 'midnight', name: 'Midnight Purple', preview: '🌙', colors: { primary: '#7c3aed', secondary: '#a78bfa', accent: '#0c0a1a', text: '#ffffff', headerText: '#ffffff', buttonText: '#000000' }, gradient: 'linear-gradient(135deg, #0c0a1a, #4c1d95, #7c3aed)' },
+        { id: 'forest', name: 'Forest Green', preview: '🌲', colors: { primary: '#2d6a4f', secondary: '#40916c', accent: '#081c15', text: '#ffffff', headerText: '#ffffff', buttonText: '#000000' }, gradient: 'linear-gradient(135deg, #081c15, #2d6a4f, #40916c)' },
+        { id: 'rose', name: 'Rose Pink', preview: '🌹', colors: { primary: '#e91e63', secondary: '#f06292', accent: '#1a0a12', text: '#ffffff', headerText: '#ffffff', buttonText: '#000000' }, gradient: 'linear-gradient(135deg, #1a0a12, #c2185b, #e91e63)' },
+        { id: 'gold', name: 'Gold Premium', preview: '✨', colors: { primary: '#f9a825', secondary: '#fdd835', accent: '#1a1500', text: '#ffffff', headerText: '#ffffff', buttonText: '#000000' }, gradient: 'linear-gradient(135deg, #1a1500, #f9a825, #fdd835)' },
+        { id: 'nebula', name: 'Nebula Cosmic', preview: '🌌', colors: { primary: '#e040fb', secondary: '#7c4dff', accent: '#0a0a1a', text: '#ffffff', headerText: '#ffffff', buttonText: '#000000' }, gradient: 'linear-gradient(135deg, #0a0a1a, #7c4dff, #e040fb)' }
+    ];
+
+    // ============================================================
+    // LOAD SETTINGS & THEMES
+    // ============================================================
+    async function loadSettings() {
+        try {
+            const res = await fetch(API_URL + '/settings');
+            const data = await res.json();
+            if (data.success) {
+                currentSettings = data.data;
+                applySettings(data.data);
+            }
+        } catch (e) { console.error('Error loading settings:', e); }
+    }
+
+    async function loadThemes() {
+        try {
+            const res = await fetch(API_URL + '/themes');
+            const data = await res.json();
+            if (data.success) {
+                currentThemes = data.data;
+                renderThemes(data.data);
+            }
+        } catch (e) { console.error('Error loading themes:', e); }
+    }
+
+    async function loadPlans() {
+        try {
+            const res = await fetch(API_URL + '/plans');
+            const data = await res.json();
+            if (data.success) {
+                currentPlans = data.data;
+                renderPlans(data.data);
+                renderPlanManager(data.data);
+                populateVoucherPlanSelect(data.data);
+            }
+        } catch (e) { console.error('Error loading plans:', e); }
+    }
+
+    // ============================================================
+    // APPLY SETTINGS TO UI
+    // ============================================================
+    function applySettings(settings) {
+        // Update text
+        businessNameEl.textContent = settings.businessName || 'GICH WIFI';
+        businessTaglineEl.textContent = settings.businessTagline || 'Fast • Secure • Reliable';
+        pageTitle.textContent = settings.businessName + ' HOTSPOT';
+
+        // Update support info
+        supportInfo.textContent = '📞 ' + (settings.supportPhone || '') + ' • ✉️ ' + (settings.supportEmail || '');
+
+        // Update logo
+        if (settings.logo && settings.logo.startsWith('data:image')) {
+            logoImage.src = settings.logo;
+            logoImage.style.display = 'block';
+            logoEmoji.style.display = 'none';
         } else {
-            console.log(`❌ ${filename} not found`);
-            return false;
+            logoImage.style.display = 'none';
+            logoEmoji.style.display = 'block';
         }
-    } catch (err) {
-        console.error(`Error serving ${filename}:`, err);
-        return false;
+
+        // Update admin fields
+        editBusinessName.value = settings.businessName || '';
+        editTagline.value = settings.businessTagline || '';
+        editPhone.value = settings.supportPhone || '';
+        editEmail.value = settings.supportEmail || '';
+
+        // Apply colors
+        if (settings.primaryColor) {
+            document.documentElement.style.setProperty('--brand-primary', settings.primaryColor);
+            customColorPicker.value = settings.primaryColor;
+        }
+        if (settings.secondaryColor) {
+            document.documentElement.style.setProperty('--brand-secondary', settings.secondaryColor);
+        }
+        if (settings.accentColor) {
+            document.documentElement.style.setProperty('--brand-accent', settings.accentColor);
+        }
+        if (settings.textColor) {
+            document.documentElement.style.setProperty('--text-primary', settings.textColor);
+        }
+        if (settings.headerTextColor) {
+            document.documentElement.style.setProperty('--header-text', settings.headerTextColor);
+        }
+        if (settings.buttonTextColor) {
+            document.documentElement.style.setProperty('--button-text', settings.buttonTextColor);
+        }
+
+        // Apply gradient if theme is set
+        const theme = currentThemes.find(t => t.id === settings.theme);
+        if (theme) {
+            document.body.style.background = theme.gradient;
+        }
     }
-}
 
-// ============================================================
-// ===================== CREATE SERVER =====================
-// ============================================================
-
-const server = http.createServer(async (req, res) => {
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'POST, GET, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
-
-    if (req.method === 'OPTIONS') {
-        res.writeHead(204);
-        res.end();
-        return;
+    // ============================================================
+    // RENDER THEMES
+    // ============================================================
+    function renderThemes(themes) {
+        themeGrid.innerHTML = '';
+        themes.forEach(theme => {
+            const div = document.createElement('div');
+            div.className = 'theme-option' + (currentSettings.theme === theme.id ? ' active' : '');
+            div.innerHTML = `
+                <span class="preview">${theme.preview || '🎨'}</span>
+                <span class="name">${theme.name}</span>
+            `;
+            div.onclick = () => applyTheme(theme.id);
+            themeGrid.appendChild(div);
+        });
     }
 
-    const url = new URL(req.url, `http://${req.headers.host}`);
-    console.log(`📥 ${req.method} ${url.pathname}`);
+    async function applyTheme(themeId) {
+        const theme = currentThemes.find(t => t.id === themeId);
+        if (!theme) return;
 
-    try {
-        // ===== SERVE HTML FILES =====
-        if (req.method === 'GET' && url.pathname === '/') {
-            if (serveHtmlFile(res, 'GICH_wifi.html')) {
-                return;
-            }
-            sendHtml(res, 200, `
-                <!DOCTYPE html>
-                <html>
-                <head><title>GICH WiFi</title></head>
-                <body style="font-family:Arial;padding:20px;background:#0f172a;color:white;">
-                    <h1>🌐 GICH WiFi Server</h1>
-                    <p>✅ Server is running!</p>
-                    <hr>
-                    <p><a href="/api/health">API Health</a></p>
-                    <p><a href="/api/plans">Plans</a></p>
-                    <p><a href="/api/admin/transactions">Transactions (Admin)</a></p>
-                </body>
-                </html>
-            `);
-            return;
-        }
+        // Update UI
+        document.body.style.background = theme.gradient;
+        document.documentElement.style.setProperty('--brand-primary', theme.colors.primary);
+        document.documentElement.style.setProperty('--brand-secondary', theme.colors.secondary);
+        document.documentElement.style.setProperty('--brand-accent', theme.colors.accent);
+        document.documentElement.style.setProperty('--text-primary', theme.colors.text);
+        document.documentElement.style.setProperty('--header-text', theme.colors.headerText);
 
-        // Serve GICH_wifi.html
-        if (req.method === 'GET' && (url.pathname === '/GICH_wifi.html' || url.pathname === '/GICH%20wifi.html')) {
-            if (serveHtmlFile(res, 'GICH_wifi.html')) {
-                return;
-            }
-            sendHtml(res, 404, `<h1>File not found</h1><p>GICH_wifi.html not found</p>`);
-            return;
-        }
+        // Update active state
+        document.querySelectorAll('.theme-option').forEach(el => el.classList.remove('active'));
+        const themeEl = document.querySelector(`.theme-option .name:contains("${theme.name}")`);
+        if (themeEl) themeEl.closest('.theme-option').classList.add('active');
 
-        // ============================================================
-        // ===================== PUBLIC API ENDPOINTS =====================
-        // ============================================================
+        // Save theme to settings
+        await saveThemeToServer(themeId);
+    }
 
-        // Health
-        if (req.method === 'GET' && url.pathname === '/api/health') {
-            return sendJson(res, 200, { 
-                status: 'ok', 
-                timestamp: new Date().toISOString()
+    async function saveThemeToServer(themeId) {
+        try {
+            const res = await fetch(API_URL + '/admin/settings', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${ADMIN_PIN}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ theme: themeId })
             });
-        }
-
-        // Get Plans
-        if (req.method === 'GET' && url.pathname === '/api/plans') {
-            return sendJson(res, 200, {
-                success: true,
-                data: plans
-            });
-        }
-
-        // Get Settings (Public)
-        if (req.method === 'GET' && url.pathname === '/api/settings') {
-            return sendJson(res, 200, {
-                success: true,
-                data: {
-                    businessName: settings.businessName,
-                    businessTagline: settings.businessTagline,
-                    supportPhone: settings.supportPhone,
-                    supportEmail: settings.supportEmail,
-                    theme: settings.theme,
-                    primaryColor: settings.primaryColor
-                }
-            });
-        }
-
-        // Get Themes (Public)
-        if (req.method === 'GET' && url.pathname === '/api/themes') {
-            return sendJson(res, 200, {
-                success: true,
-                data: themes
-            });
-        }
-
-        // Get Transaction
-        if (req.method === 'GET' && url.pathname.startsWith('/api/transaction/')) {
-            const id = url.pathname.split('/').pop();
-            const transaction = transactions.find(t => t.id === id);
-            if (!transaction) {
-                return sendJson(res, 404, { success: false, message: 'Transaction not found' });
+            const data = await res.json();
+            if (data.success) {
+                currentSettings.theme = themeId;
+                console.log('✅ Theme saved:', themeId);
             }
-            return sendJson(res, 200, { success: true, data: transaction });
-        }
+        } catch (e) { console.error('Error saving theme:', e); }
+    }
 
-        // Get All Transactions (with phone filter)
-        if (req.method === 'GET' && url.pathname === '/api/transactions') {
-            const phone = url.searchParams.get('phone');
-            let filtered = transactions;
-            if (phone) {
-                filtered = transactions.filter(t => t.phoneNumber === phone);
-            }
-            return sendJson(res, 200, {
-                success: true,
-                data: filtered,
-                count: filtered.length
-            });
-        }
+    // ============================================================
+    // LOGO UPLOAD
+    // ============================================================
+    function handleLogoUpload(event) {
+        const file = event.target.files[0];
+        if (!file) return;
 
-        // ===== CHECK EXISTING PLAN =====
-        if (req.method === 'GET' && url.pathname === '/api/check-active') {
-            const phone = url.searchParams.get('phone');
-            if (!phone) {
-                return sendJson(res, 400, { success: false, message: 'Phone number required' });
-            }
-            
-            const active = transactions.find(t =>
-                t.phoneNumber === phone &&
-                t.status === 'completed' &&
-                t.mikrotikCreated &&
-                (!t.expiresAt || new Date(t.expiresAt) > new Date())
-            );
-            
-            if (active) {
-                return sendJson(res, 200, {
-                    success: true,
-                    active: true,
-                    data: {
-                        id: active.id,
-                        planName: active.planName,
-                        expiresAt: active.expiresAt,
-                        username: active.mikrotikUsername,
-                        password: active.mikrotikPassword,
-                        mpesaCode: active.mpesaCode
-                    }
-                });
-            } else {
-                return sendJson(res, 200, { success: true, active: false });
-            }
-        }
+        const reader = new FileReader();
+        reader.onload = async function(e) {
+            const base64 = e.target.result;
+            logoPreview.src = base64;
+            logoPreview.style.display = 'block';
 
-        // ============================================================
-        // ===================== PAYMENT =====================
-        // ============================================================
-
-        // Initiate Payment
-        if (req.method === 'POST' && url.pathname === '/api/payment/initiate') {
-            const body = await readBody(req);
-            console.log('📥 Payment request:', body);
-            
-            const { phoneNumber, amount, planId, macAddress } = body;
-            
-            if (!phoneNumber || phoneNumber.length < 10) {
-                return sendJson(res, 400, { 
-                    success: false, 
-                    message: 'Invalid phone number. Use 0712345678 for testing.'
-                });
-            }
-            
+            // Save logo to server
             try {
-                const transactionId = 'GICH' + Date.now() + Math.random().toString(36).substring(7);
-                const accountRef = 'GICH' + Date.now().toString().slice(-8);
-                const duration = getPlanDuration(planId);
-                const planName = getPlanName(planId);
-                
-                const transaction = {
-                    id: transactionId,
-                    phoneNumber,
-                    amount,
-                    planId,
-                    planName: planName,
-                    status: 'pending',
-                    timestamp: new Date().toISOString(),
-                    macAddress: macAddress || null,
-                    mpesaCode: null,
-                    checkoutId: null,
-                    expiresAt: new Date(Date.now() + duration * 1000).toISOString(),
-                    mikrotikUsername: null,
-                    mikrotikPassword: null,
-                    mikrotikCreated: false,
-                    deviceCount: plans.find(p => p.id === planId)?.devices || 1
-                };
-                transactions.push(transaction);
-                saveTransactions();
-                
-                // For free plans (amount 0), skip STK Push
-                if (amount === 0) {
-                    transaction.status = 'completed';
-                    transaction.mpesaCode = 'FREE' + Date.now();
-                    transaction.completedAt = new Date().toISOString();
-                    transaction.mikrotikUsername = 'user_' + transaction.id.substring(0, 12);
-                    transaction.mikrotikPassword = 'pass_' + Date.now().toString(36);
-                    transaction.mikrotikCreated = true;
-                    saveTransactions();
-                    
-                    return sendJson(res, 200, {
-                        success: true,
-                        message: '✅ Free plan activated!',
-                        transactionId: transactionId,
-                        isFree: true
-                    });
-                }
-                
-                const result = await stkPush({
-                    phone: phoneNumber,
-                    amount: amount,
-                    accountReference: accountRef
-                });
-                
-                if (result.success) {
-                    transaction.checkoutId = result.checkoutId;
-                    transaction.mpesaResponse = result.data;
-                    saveTransactions();
-                    
-                    return sendJson(res, 200, {
-                        success: true,
-                        message: '✅ STK Push sent! Check your phone.',
-                        transactionId: transactionId,
-                        checkoutId: result.checkoutId,
-                        testPin: '12345'
-                    });
-                } else {
-                    // Mock mode fallback
-                    console.log('⚠️ STK Push failed, using mock mode as fallback...');
-                    transaction.status = 'completed';
-                    transaction.mpesaCode = 'MOCK' + Date.now();
-                    transaction.completedAt = new Date().toISOString();
-                    transaction.isMock = true;
-                    transaction.mikrotikUsername = 'user_' + transaction.id.substring(0, 12);
-                    transaction.mikrotikPassword = 'pass_' + Date.now().toString(36);
-                    transaction.mikrotikCreated = true;
-                    saveTransactions();
-                    
-                    return sendJson(res, 200, {
-                        success: true,
-                        message: '✅ MOCK MODE: Payment simulated.',
-                        transactionId: transactionId,
-                        mock: true
-                    });
-                }
-                
-            } catch (error) {
-                console.error('❌ Payment error:', error.message);
-                return sendJson(res, 502, {
-                    success: false,
-                    message: 'Payment failed: ' + error.message
-                });
-            }
-        }
-
-        // ===== MPESA CALLBACK =====
-        if (req.method === 'POST' && url.pathname === '/api/mpesa-callback') {
-            const callback = await readBody(req);
-            console.log('📞 M-Pesa Callback Received:');
-            console.log(JSON.stringify(callback, null, 2));
-            
-            const resultCode = callback.Body?.stkCallback?.ResultCode;
-            const checkoutId = callback.Body?.stkCallback?.CheckoutRequestID;
-            const receipt = callback.Body?.stkCallback?.CallbackMetadata?.Item?.find(
-                item => item.Name === 'MpesaReceiptNumber'
-            )?.Value;
-            const amount = callback.Body?.stkCallback?.CallbackMetadata?.Item?.find(
-                item => item.Name === 'Amount'
-            )?.Value;
-            const phoneNumber = callback.Body?.stkCallback?.CallbackMetadata?.Item?.find(
-                item => item.Name === 'PhoneNumber'
-            )?.Value;
-            
-            console.log(`📊 Callback: ID=${checkoutId}, Code=${resultCode}, Receipt=${receipt}`);
-            
-            let transaction = transactions.find(t => t.checkoutId === checkoutId);
-            
-            if (!transaction) {
-                transaction = transactions.find(t => t.mpesaResponse?.CheckoutRequestID === checkoutId);
-                if (transaction) {
-                    console.log('✅ Found transaction by mpesaResponse.CheckoutRequestID');
-                }
-            }
-            
-            if (!transaction) {
-                console.log('❌ Transaction not found for CheckoutRequestID:', checkoutId);
-                return sendJson(res, 200, { 
-                    ResultCode: 1, 
-                    ResultDesc: 'Transaction not found' 
-                });
-            }
-            
-            if (resultCode === 0) {
-                transaction.status = 'completed';
-                transaction.mpesaCode = receipt || 'MPESA' + Date.now();
-                transaction.completedAt = new Date().toISOString();
-                if (amount) transaction.amount = amount;
-                if (phoneNumber) transaction.phoneNumber = phoneNumber;
-                
-                // Generate hotspot credentials
-                transaction.mikrotikUsername = 'user_' + (transaction.mpesaCode || transaction.id).substring(0, 12);
-                transaction.mikrotikPassword = 'pass_' + Date.now().toString(36);
-                transaction.mikrotikCreated = true;
-                saveTransactions();
-                
-                console.log('✅ Payment completed for transaction:', transaction.id);
-                console.log('👤 Hotspot user created:', transaction.mikrotikUsername);
-                
-                return sendJson(res, 200, { 
-                    ResultCode: 0, 
-                    ResultDesc: 'Success' 
-                });
-            } else {
-                transaction.status = 'failed';
-                transaction.error = callback.Body?.stkCallback?.ResultDesc || 'Payment failed';
-                transaction.errorCode = resultCode;
-                saveTransactions();
-                
-                console.log(`❌ Payment failed: ${transaction.error} (Code: ${resultCode})`);
-                
-                return sendJson(res, 200, { 
-                    ResultCode: resultCode, 
-                    ResultDesc: transaction.error 
-                });
-            }
-        }
-
-        // ============================================================
-        // ===================== VOUCHER SYSTEM =====================
-        // ============================================================
-
-        // Redeem Voucher
-        if (req.method === 'POST' && url.pathname === '/api/voucher/redeem') {
-            const body = await readBody(req);
-            const { code, phoneNumber } = body;
-            
-            console.log('🎟️ Voucher redemption request:', { code, phoneNumber });
-            
-            if (!code) {
-                return sendJson(res, 400, { success: false, message: 'Voucher code required' });
-            }
-            
-            const voucher = vouchers.find(v => v.code === code && !v.used);
-            if (!voucher) {
-                return sendJson(res, 404, { success: false, message: 'Invalid or already used voucher' });
-            }
-            
-            // Check if voucher expired
-            if (voucher.expiresAt && new Date(voucher.expiresAt) < new Date()) {
-                return sendJson(res, 400, { success: false, message: 'Voucher has expired' });
-            }
-            
-            // Mark as used
-            voucher.used = true;
-            voucher.usedBy = phoneNumber || 'unknown';
-            voucher.usedAt = new Date().toISOString();
-            saveVouchers();
-            
-            // Create transaction for voucher redemption
-            const transactionId = 'VOUCH' + Date.now() + Math.random().toString(36).substring(7);
-            const duration = voucher.duration_seconds || 3600;
-            const planName = voucher.planName || 'Voucher Plan';
-            
-            const transaction = {
-                id: transactionId,
-                phoneNumber: phoneNumber || 'voucher_user',
-                amount: 0,
-                planId: voucher.planId || 'voucher',
-                planName: planName,
-                status: 'completed',
-                timestamp: new Date().toISOString(),
-                mpesaCode: 'VOUCHER_' + voucher.code,
-                completedAt: new Date().toISOString(),
-                expiresAt: new Date(Date.now() + duration * 1000).toISOString(),
-                mikrotikUsername: 'vuser_' + transactionId.substring(0, 8),
-                mikrotikPassword: 'vpass_' + Date.now().toString(36),
-                mikrotikCreated: true,
-                isVoucher: true,
-                voucherCode: voucher.code
-            };
-            transactions.push(transaction);
-            saveTransactions();
-            
-            return sendJson(res, 200, {
-                success: true,
-                message: '✅ Voucher redeemed successfully!',
-                data: {
-                    transactionId: transactionId,
-                    planName: planName,
-                    expiresAt: transaction.expiresAt,
-                    username: transaction.mikrotikUsername,
-                    password: transaction.mikrotikPassword
-                }
-            });
-        }
-
-        // ============================================================
-        // ===================== ADMIN ENDPOINTS =====================
-        // ============================================================
-
-        // Admin auth check
-        function isAdmin(req) {
-            const auth = req.headers.authorization;
-            if (!auth) return false;
-            const token = auth.replace('Bearer ', '');
-            return token === ADMIN_PASSWORD;
-        }
-
-        // ===== ADMIN VERIFICATION =====
-        if (req.method === 'POST' && url.pathname === '/api/admin/verify') {
-            const body = await readBody(req);
-            const { pin } = body;
-            
-            if (pin === ADMIN_PASSWORD) {
-                return sendJson(res, 200, { 
-                    success: true, 
-                    message: 'Admin verified' 
-                });
-            } else {
-                return sendJson(res, 401, { 
-                    success: false, 
-                    message: 'Invalid PIN' 
-                });
-            }
-        }
-
-        // ===== ADMIN SETTINGS =====
-        if (req.method === 'GET' && url.pathname === '/api/admin/settings') {
-            if (!isAdmin(req)) {
-                return sendJson(res, 401, { success: false, message: 'Unauthorized' });
-            }
-            return sendJson(res, 200, {
-                success: true,
-                data: settings
-            });
-        }
-
-        if (req.method === 'POST' && url.pathname === '/api/admin/settings') {
-            if (!isAdmin(req)) {
-                return sendJson(res, 401, { success: false, message: 'Unauthorized' });
-            }
-            
-            const body = await readBody(req);
-            console.log('⚙️ Updating settings:', body);
-            
-            // Update settings
-            if (body.businessName !== undefined) settings.businessName = body.businessName;
-            if (body.businessTagline !== undefined) settings.businessTagline = body.businessTagline;
-            if (body.supportPhone !== undefined) settings.supportPhone = body.supportPhone;
-            if (body.supportEmail !== undefined) settings.supportEmail = body.supportEmail;
-            if (body.website !== undefined) settings.website = body.website;
-            if (body.logo !== undefined) settings.logo = body.logo;
-            if (body.theme !== undefined) settings.theme = body.theme;
-            if (body.primaryColor !== undefined) settings.primaryColor = body.primaryColor;
-            if (body.secondaryColor !== undefined) settings.secondaryColor = body.secondaryColor;
-            if (body.accentColor !== undefined) settings.accentColor = body.accentColor;
-            if (body.textColor !== undefined) settings.textColor = body.textColor;
-            if (body.headerTextColor !== undefined) settings.headerTextColor = body.headerTextColor;
-            if (body.buttonTextColor !== undefined) settings.buttonTextColor = body.buttonTextColor;
-            
-            saveSettings();
-            
-            return sendJson(res, 200, {
-                success: true,
-                message: 'Settings updated successfully',
-                data: settings
-            });
-        }
-
-        // ===== ADMIN THEMES =====
-        if (req.method === 'GET' && url.pathname === '/api/admin/themes') {
-            if (!isAdmin(req)) {
-                return sendJson(res, 401, { success: false, message: 'Unauthorized' });
-            }
-            return sendJson(res, 200, {
-                success: true,
-                data: themes
-            });
-        }
-
-        if (req.method === 'POST' && url.pathname === '/api/admin/themes') {
-            if (!isAdmin(req)) {
-                return sendJson(res, 401, { success: false, message: 'Unauthorized' });
-            }
-            
-            const body = await readBody(req);
-            console.log('🎨 Adding new theme:', body);
-            
-            const newTheme = {
-                id: body.id || 'theme_' + Date.now(),
-                name: body.name || 'Custom Theme',
-                preview: body.preview || '🎨',
-                colors: body.colors || {
-                    primary: '#00c853',
-                    secondary: '#00e676',
-                    accent: '#0f2027',
-                    text: '#ffffff',
-                    headerText: '#ffffff',
-                    buttonText: '#000000'
-                },
-                gradient: body.gradient || 'linear-gradient(135deg, #0f2027, #203a43, #2c5364)'
-            };
-            
-            themes.push(newTheme);
-            saveThemes();
-            
-            return sendJson(res, 200, {
-                success: true,
-                message: 'Theme added successfully',
-                data: newTheme
-            });
-        }
-
-        if (req.method === 'DELETE' && url.pathname.startsWith('/api/admin/themes/')) {
-            if (!isAdmin(req)) {
-                return sendJson(res, 401, { success: false, message: 'Unauthorized' });
-            }
-            
-            const themeId = url.pathname.split('/').pop();
-            const index = themes.findIndex(t => t.id === themeId);
-            
-            if (index === -1) {
-                return sendJson(res, 404, { success: false, message: 'Theme not found' });
-            }
-            
-            // Don't allow deleting default theme
-            if (themeId === 'default') {
-                return sendJson(res, 400, { success: false, message: 'Cannot delete default theme' });
-            }
-            
-            themes.splice(index, 1);
-            saveThemes();
-            
-            return sendJson(res, 200, {
-                success: true,
-                message: 'Theme deleted successfully'
-            });
-        }
-
-        // ===== ADMIN PLANS =====
-        if (req.method === 'POST' && url.pathname === '/api/admin/plans') {
-            if (!isAdmin(req)) {
-                return sendJson(res, 401, { success: false, message: 'Unauthorized' });
-            }
-            
-            const body = await readBody(req);
-            const { action } = body;
-            
-            if (action === 'add') {
-                const { id, name, price, devices, duration_seconds } = body;
-                if (!id || !name || price === undefined) {
-                    return sendJson(res, 400, { success: false, message: 'Missing required fields' });
-                }
-                if (plans.find(p => p.id === id)) {
-                    return sendJson(res, 400, { success: false, message: 'Plan ID already exists' });
-                }
-                const newPlan = { id, name, price, devices: devices || 1, duration_seconds: duration_seconds || 3600 };
-                plans.push(newPlan);
-                savePlans();
-                return sendJson(res, 200, { success: true, message: 'Plan added', data: newPlan });
-            }
-            
-            if (action === 'update') {
-                const { id, name, price, devices, duration_seconds } = body;
-                const plan = plans.find(p => p.id === id);
-                if (!plan) {
-                    return sendJson(res, 404, { success: false, message: 'Plan not found' });
-                }
-                if (name) plan.name = name;
-                if (price !== undefined) plan.price = price;
-                if (devices !== undefined) plan.devices = devices;
-                if (duration_seconds !== undefined) plan.duration_seconds = duration_seconds;
-                savePlans();
-                return sendJson(res, 200, { success: true, message: 'Plan updated', data: plan });
-            }
-            
-            if (action === 'delete') {
-                const { id } = body;
-                const index = plans.findIndex(p => p.id === id);
-                if (index === -1) {
-                    return sendJson(res, 404, { success: false, message: 'Plan not found' });
-                }
-                plans.splice(index, 1);
-                savePlans();
-                return sendJson(res, 200, { success: true, message: 'Plan deleted' });
-            }
-            
-            return sendJson(res, 400, { success: false, message: 'Invalid action' });
-        }
-
-        // Generate Vouchers (Admin)
-        if (req.method === 'POST' && url.pathname === '/api/admin/voucher/generate') {
-            if (!isAdmin(req)) {
-                return sendJson(res, 401, { success: false, message: 'Unauthorized' });
-            }
-            
-            const body = await readBody(req);
-            const { planId, count, duration_seconds } = body;
-            
-            if (!planId) {
-                return sendJson(res, 400, { success: false, message: 'Plan ID required' });
-            }
-            
-            const plan = plans.find(p => p.id === planId);
-            if (!plan) {
-                return sendJson(res, 400, { success: false, message: 'Invalid plan ID' });
-            }
-            
-            const numVouchers = Math.min(count || 1, 100);
-            const generated = [];
-            
-            for (let i = 0; i < numVouchers; i++) {
-                const code = generateVoucherCode();
-                const voucher = {
-                    code: code,
-                    planId: plan.id,
-                    planName: plan.name,
-                    duration_seconds: duration_seconds || plan.duration_seconds,
-                    devices: plan.devices || 1,
-                    used: false,
-                    usedBy: null,
-                    usedAt: null,
-                    expiresAt: null,
-                    createdAt: new Date().toISOString()
-                };
-                vouchers.push(voucher);
-                generated.push(code);
-            }
-            saveVouchers();
-            
-            return sendJson(res, 200, {
-                success: true,
-                message: `Generated ${generated.length} vouchers`,
-                vouchers: generated,
-                count: generated.length
-            });
-        }
-
-        // Get All Vouchers (Admin)
-        if (req.method === 'GET' && url.pathname === '/api/admin/vouchers') {
-            if (!isAdmin(req)) {
-                return sendJson(res, 401, { success: false, message: 'Unauthorized' });
-            }
-            
-            return sendJson(res, 200, {
-                success: true,
-                data: vouchers,
-                count: vouchers.length,
-                used: vouchers.filter(v => v.used).length,
-                unused: vouchers.filter(v => !v.used).length
-            });
-        }
-
-        // Get All Transactions (Admin)
-        if (req.method === 'GET' && url.pathname === '/api/admin/transactions') {
-            if (!isAdmin(req)) {
-                return sendJson(res, 401, { success: false, message: 'Unauthorized' });
-            }
-            
-            return sendJson(res, 200, {
-                success: true,
-                data: transactions,
-                count: transactions.length,
-                summary: {
-                    total: transactions.length,
-                    completed: transactions.filter(t => t.status === 'completed').length,
-                    pending: transactions.filter(t => t.status === 'pending').length,
-                    failed: transactions.filter(t => t.status === 'failed').length,
-                    totalRevenue: transactions
-                        .filter(t => t.status === 'completed')
-                        .reduce((sum, t) => sum + (t.amount || 0), 0)
-                }
-            });
-        }
-
-        // ===== GET CREDENTIALS =====
-        if (req.method === 'GET' && url.pathname.startsWith('/api/get-credentials/')) {
-            const transactionId = url.pathname.split('/').pop();
-            const transaction = transactions.find(t => t.id === transactionId);
-            
-            if (!transaction) {
-                return sendJson(res, 404, { success: false, message: 'Transaction not found' });
-            }
-            
-            if (transaction.status !== 'completed') {
-                return sendJson(res, 400, { success: false, message: 'Payment not completed' });
-            }
-            
-            return sendJson(res, 200, {
-                success: true,
-                username: transaction.mikrotikUsername || 'user_' + (transaction.mpesaCode || transaction.id).substring(0, 12),
-                password: transaction.mikrotikPassword || 'pass_' + Date.now().toString(36),
-                plan: transaction.planName,
-                expiresAt: transaction.expiresAt || new Date(Date.now() + 7200000).toISOString()
-            });
-        }
-
-        // ===== API INFO =====
-        if (req.method === 'GET' && url.pathname === '/api') {
-            return sendJson(res, 200, {
-                name: 'GICH WiFi API',
-                version: '2.0.0',
-                status: 'Running',
-                endpoints: {
-                    public: {
-                        health: 'GET /api/health',
-                        plans: 'GET /api/plans',
-                        settings: 'GET /api/settings',
-                        themes: 'GET /api/themes',
-                        payment: 'POST /api/payment/initiate',
-                        transaction: 'GET /api/transaction/:id',
-                        transactions: 'GET /api/transactions',
-                        check_active: 'GET /api/check-active?phone=',
-                        voucher_redeem: 'POST /api/voucher/redeem',
-                        credentials: 'GET /api/get-credentials/:transactionId',
-                        callback: 'POST /api/mpesa-callback'
+                const res = await fetch(API_URL + '/admin/settings', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${ADMIN_PIN}`,
+                        'Content-Type': 'application/json'
                     },
-                    admin: {
-                        verify: 'POST /api/admin/verify',
-                        settings: 'GET/POST /api/admin/settings',
-                        themes: 'GET /api/admin/themes',
-                        add_theme: 'POST /api/admin/themes',
-                        delete_theme: 'DELETE /api/admin/themes/:id',
-                        plans: 'POST /api/admin/plans',
-                        generate_voucher: 'POST /api/admin/voucher/generate',
-                        vouchers: 'GET /api/admin/vouchers',
-                        transactions: 'GET /api/admin/transactions'
-                    }
-                },
-                statistics: {
-                    totalTransactions: transactions.length,
-                    totalAmount: transactions
-                        .filter(t => t.status === 'completed')
-                        .reduce((sum, t) => sum + (t.amount || 0), 0),
-                    activeVouchers: vouchers.filter(v => !v.used).length
+                    body: JSON.stringify({ logo: base64 })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    logoImage.src = base64;
+                    logoImage.style.display = 'block';
+                    logoEmoji.style.display = 'none';
+                    logoPreview.style.display = 'none';
+                    showToast('✅ Logo uploaded successfully!');
                 }
+            } catch (e) {
+                console.error('Error saving logo:', e);
+                showToast('❌ Error uploading logo');
+            }
+        };
+        reader.readAsDataURL(file);
+    }
+
+    // ============================================================
+    // SAVE BRANDING
+    // ============================================================
+    async function saveBranding() {
+        const data = {
+            businessName: editBusinessName.value,
+            businessTagline: editTagline.value,
+            supportPhone: editPhone.value,
+            supportEmail: editEmail.value
+        };
+
+        try {
+            const res = await fetch(API_URL + '/admin/settings', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${ADMIN_PIN}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(data)
             });
+            const result = await res.json();
+            if (result.success) {
+                applySettings({ ...currentSettings, ...data });
+                showToast('✅ Branding saved successfully!');
+            } else {
+                showToast('❌ Error saving branding');
+            }
+        } catch (e) {
+            console.error('Error saving branding:', e);
+            showToast('❌ Error saving branding');
+        }
+    }
+
+    // ============================================================
+    // RENDER PLANS (User View)
+    // ============================================================
+    function renderPlans(plans) {
+        plansContainer.innerHTML = '';
+        plans.forEach(p => {
+            const div = document.createElement('div');
+            div.className = 'plan';
+            div.dataset.id = p.id;
+            div.innerHTML = `
+                <span class="plan-name">${p.name}</span>
+                <span>
+                    <span class="plan-price">KSh ${p.price}</span>
+                    <span class="plan-devices"> • ${p.devices} device${p.devices > 1 ? 's' : ''}</span>
+                </span>
+            `;
+            div.onclick = () => openModal(p);
+            plansContainer.appendChild(div);
+        });
+    }
+
+    // ============================================================
+    // RENDER PLAN MANAGER (Admin)
+    // ============================================================
+    function renderPlanManager(plans) {
+        const container = $('planManagerList');
+        let html = '';
+        plans.forEach(p => {
+            html += `
+                <div style="display:flex;gap:8px;align-items:center;margin:4px 0;flex-wrap:wrap;">
+                    <span style="flex:1;min-width:80px;font-size:13px;">${p.name}</span>
+                    <span style="font-size:13px;color:var(--text-secondary);">KSh</span>
+                    <input type="number" id="plan_price_${p.id}" value="${p.price}" style="width:80px;padding:6px;font-size:13px;">
+                    <span style="font-size:12px;color:var(--text-muted);">${p.devices} device${p.devices > 1 ? 's' : ''}</span>
+                </div>
+            `;
+        });
+        container.innerHTML = html;
+    }
+
+    async function savePlans() {
+        let successCount = 0;
+        let errorCount = 0;
+
+        for (const plan of currentPlans) {
+            const priceInput = $('plan_price_' + plan.id);
+            if (!priceInput) continue;
+            const newPrice = parseInt(priceInput.value);
+            if (isNaN(newPrice) || newPrice === plan.price) continue;
+
+            try {
+                const res = await fetch(API_URL + '/admin/plans', {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${ADMIN_PIN}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        action: 'update',
+                        id: plan.id,
+                        price: newPrice
+                    })
+                });
+                const data = await res.json();
+                if (data.success) {
+                    successCount++;
+                    plan.price = newPrice;
+                } else {
+                    errorCount++;
+                }
+            } catch (e) {
+                errorCount++;
+            }
         }
 
-        return sendJson(res, 404, { error: 'Route not found' });
-
-    } catch (err) {
-        console.error('Server error:', err);
-        return sendJson(res, 500, { error: 'Internal server error' });
+        if (successCount > 0) {
+            showToast(`✅ ${successCount} plan${successCount > 1 ? 's' : ''} updated!`);
+            // Re-render plans
+            renderPlans(currentPlans);
+        }
+        if (errorCount > 0) {
+            showToast(`⚠️ ${errorCount} plan${errorCount > 1 ? 's' : ''} failed to update`);
+        }
+        if (successCount === 0 && errorCount === 0) {
+            showToast('ℹ️ No changes to save');
+        }
     }
-});
 
-server.listen(PORT, '0.0.0.0', () => {
-    console.log('\n========================================');
-    console.log('🌐 GICH WiFi API');
-    console.log('========================================');
-    console.log(`✅ Server running on port: ${PORT}`);
-    console.log(`📍 http://localhost:${PORT}/`);
-    console.log(`📍 http://localhost:${PORT}/api/health`);
-    console.log(`📍 http://localhost:${PORT}/api/plans`);
-    console.log('========================================');
-    console.log('📱 Test phone: 0712345678');
-    console.log('🔑 Test PIN: 12345');
-    console.log(`🛡️ Admin PIN: ${ADMIN_PASSWORD ? '✅ Set' : '⚠️ NOT SET'}`);
-    console.log('========================================\n');
-});
+    // ============================================================
+    // POPULATE VOUCHER PLAN SELECT
+    // ============================================================
+    function populateVoucherPlanSelect(plans) {
+        const select = $('voucherPlanSelect');
+        select.innerHTML = '';
+        plans.forEach(p => {
+            const opt = document.createElement('option');
+            opt.value = p.id;
+            opt.textContent = `${p.name} - KSh ${p.price}`;
+            select.appendChild(opt);
+        });
+    }
 
-process.on('uncaughtException', (err) => {
-    console.error('❌ Uncaught Exception:', err);
-});
+    // ============================================================
+    // VOUCHER FUNCTIONS
+    // ============================================================
+    async function generateVouchers() {
+        const planId = $('voucherPlanSelect').value;
+        const count = parseInt($('voucherCount').value) || 5;
+        const resultDiv = $('voucherGenerateResult');
 
-process.on('unhandledRejection', (reason, promise) => {
-    console.error('❌ Unhandled Rejection:', reason);
-});
+        resultDiv.textContent = '⏳ Generating...';
+        resultDiv.style.color = '#aaa';
+
+        try {
+            const res = await fetch(API_URL + '/admin/voucher/generate', {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${ADMIN_PIN}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ planId, count })
+            });
+            const data = await res.json();
+            if (data.success) {
+                resultDiv.innerHTML = `✅ Generated ${data.count} vouchers: <br> <code style="background:rgba(0,0,0,0.3);padding:8px;display:block;border-radius:4px;font-size:12px;margin-top:5px;word-wrap:break-word;">${data.vouchers.join(', ')}</code>`;
+                resultDiv.style.color = '#00c853';
+                loadVouchers();
+            } else {
+                resultDiv.textContent = '❌ ' + (data.message || 'Failed to generate');
+                resultDiv.style.color = '#ff6b6b';
+            }
+        } catch (e) {
+            resultDiv.textContent = '❌ Error: ' + e.message;
+            resultDiv.style.color = '#ff6b6b';
+        }
+    }
+
+    async function loadVouchers() {
+        const container = $('vouchersList');
+        try {
+            const res = await fetch(API_URL + '/admin/vouchers', {
+                headers: { 'Authorization': `Bearer ${ADMIN_PIN}` }
+            });
+            const data = await res.json();
+            if (data.success && data.data.length > 0) {
+                let html = `<table class="admin-table">
+                    <tr><th>Code</th><th>Plan</th><th>Status</th><th>Used By</th></tr>`;
+                data.data.slice(0, 30).forEach(v => {
+                    html += `<tr>
+                        <td><span class="voucher-code">${v.code}</span></td>
+                        <td>${v.planName || v.planId}</td>
+                        <td><span class="${v.used ? 'used' : 'unused'}">${v.used ? '❌ Used' : '✅ Available'}</span></td>
+                        <td>${v.usedBy || '-'}</td>
+                    </tr>`;
+                });
+                html += '</table>';
+                container.innerHTML = html;
+            } else {
+                container.innerHTML = '<p style="color:var(--text-secondary);font-size:13px;">No vouchers found.</p>';
+            }
+        } catch (e) {
+            container.innerHTML = '<p style="color:#ff6b6b;">Error loading vouchers: ' + e.message + '</p>';
+        }
+    }
+
+    async function loadTransactions() {
+        const container = $('transactionsList');
+        try {
+            const res = await fetch(API_URL + '/admin/transactions', {
+                headers: { 'Authorization': `Bearer ${ADMIN_PIN}` }
+            });
+            const data = await res.json();
+            if (data.success && data.data.length > 0) {
+                let html = `<table class="admin-table">
+                    <tr><th>Phone</th><th>Plan</th><th>Amount</th><th>Status</th><th>Date</th></tr>`;
+                data.data.slice(0, 30).forEach(t => {
+                    const statusClass = t.status === 'completed' ? 'status-completed' : t.status === 'pending' ? 'status-pending' : 'status-failed';
+                    html += `<tr>
+                        <td>${t.phoneNumber}</td>
+                        <td>${t.planName || t.planId}</td>
+                        <td>KSh ${t.amount || 0}</td>
+                        <td><span class="status-badge-sm ${statusClass}">${t.status}</span></td>
+                        <td style="font-size:11px;">${new Date(t.timestamp).toLocaleDateString()}</td>
+                    </tr>`;
+                });
+                html += '</table>';
+                if (data.summary) {
+                    html += `<p style="color:var(--text-secondary);font-size:12px;margin-top:10px;">
+                        Total: ${data.summary.total} | Completed: ${data.summary.completed} | Revenue: KSh ${data.summary.totalRevenue}
+                    </p>`;
+                }
+                container.innerHTML = html;
+            } else {
+                container.innerHTML = '<p style="color:var(--text-secondary);font-size:13px;">No transactions found.</p>';
+            }
+        } catch (e) {
+            container.innerHTML = '<p style="color:#ff6b6b;">Error loading transactions: ' + e.message + '</p>';
+        }
+    }
+
+    // ============================================================
+    // TOAST / NOTIFICATION
+    // ============================================================
+    function showToast(message) {
+        const div = document.createElement('div');
+        div.style.cssText = `
+            position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+            background: #1a1a2e; padding: 12px 24px; border-radius: 10px;
+            color: #fff; font-size: 14px; z-index: 1000;
+            border: 1px solid var(--border-color);
+            max-width: 90%; text-align: center;
+            animation: fadeIn 0.3s ease;
+        `;
+        div.textContent = message;
+        document.body.appendChild(div);
+        setTimeout(() => {
+            div.style.opacity = '0';
+            div.style.transition = 'opacity 0.5s ease';
+            setTimeout(() => div.remove(), 500);
+        }, 3000);
+    }
+
+    // ============================================================
+    // MENU FUNCTIONS
+    // ============================================================
+    function toggleMenu() {
+        dropdownMenu.classList.toggle('active');
+    }
+
+    function goHome() {
+        dropdownMenu.classList.remove('active');
+        closeAdmin();
+        resetApp();
+    }
+
+    async function openAdmin() {
+        dropdownMenu.classList.remove('active');
+        const pin = prompt('Enter admin PIN:');
+        if (!pin) return;
+
+        try {
+            const res = await fetch(API_URL + '/admin/verify', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ pin })
+            });
+            const data = await res.json();
+            if (data.success) {
+                sessionStorage.setItem('adminToken', pin);
+                adminPanel.classList.add('active');
+                userView.style.display = 'none';
+                loadVouchers();
+                loadTransactions();
+                loadPlans();
+                loadThemes();
+                // Load settings into admin fields
+                editBusinessName.value = currentSettings.businessName || '';
+                editTagline.value = currentSettings.businessTagline || '';
+                editPhone.value = currentSettings.supportPhone || '';
+                editEmail.value = currentSettings.supportEmail || '';
+                if (currentSettings.logo) {
+                    logoPreview.src = currentSettings.logo;
+                    logoPreview.style.display = 'block';
+                }
+            } else {
+                alert('❌ Incorrect PIN!');
+            }
+        } catch (e) {
+            console.error('Admin verification error:', e);
+            alert('❌ Error verifying PIN. Please try again.');
+        }
+    }
+
+    function closeAdmin() {
+        adminPanel.classList.remove('active');
+        userView.style.display = 'block';
+    }
+
+    document.addEventListener('click', function(e) {
+        if (!e.target.closest('.menu-btn') && !e.target.closest('.dropdown')) {
+            dropdownMenu.classList.remove('active');
+        }
+    });
+
+    // ============================================================
+    // CHECK SERVER STATUS
+    // ============================================================
+    async function checkServerStatus() {
+        try {
+            const res = await fetch(API_URL + '/health');
+            if (res.ok) {
+                statusBadge.textContent = '✅';
+                statusBadge.className = 'status-badge status-online';
+            } else {
+                statusBadge.textContent = '⚠️';
+                statusBadge.className = 'status-badge status-offline';
+            }
+        } catch (e) {
+            statusBadge.textContent = '❌';
+            statusBadge.className = 'status-badge status-offline';
+            console.error('Server check failed:', e);
+        }
+    }
+
+    // ============================================================
+    // MODAL FUNCTIONS
+    // ============================================================
+    function openModal(plan) {
+        selectedPlan = plan;
+        selectedPlanId = plan.id;
+        modalPlanDetail.textContent = `${plan.name} - KSh ${plan.price}`;
+        modalPhoneInput.value = '';
+        modalResult.textContent = '';
+        modalResult.style.color = 'var(--text-secondary)';
+        paymentModal.classList.add('active');
+        setTimeout(() => modalPhoneInput.focus(), 300);
+    }
+
+    function closeModal() {
+        paymentModal.classList.remove('active');
+        modalResult.textContent = '';
+    }
+
+    paymentModal.addEventListener('click', function(e) {
+        if (e.target === this) closeModal();
+    });
+
+    // ============================================================
+    // MODAL PAYMENT
+    // ============================================================
+    async function modalPay() {
+        const phone = modalPhoneInput.value.trim();
+        if (!phone || phone.length < 10) {
+            modalResult.textContent = '❌ Please enter a valid phone number';
+            modalResult.style.color = '#ff6b6b';
+            return;
+        }
+
+        modalPayBtn.disabled = true;
+        modalPayBtn.textContent = 'Processing...';
+        modalResult.textContent = '⏳ Sending payment request...';
+        modalResult.style.color = '#ffa726';
+
+        try {
+            const response = await fetch(API_URL + '/payment/initiate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    phoneNumber: phone,
+                    amount: selectedPlan.price,
+                    planId: selectedPlan.id,
+                    macAddress: ''
+                })
+            });
+            const data = await response.json();
+
+            if (data.success) {
+                transactionId = data.transactionId;
+                modalResult.textContent = '✅ Payment sent! Waiting for confirmation...';
+                modalResult.style.color = '#00c853';
+                closeModal();
+                showLoading(true);
+                await waitForTransaction(transactionId);
+            } else {
+                modalResult.textContent = '❌ ' + (data.message || 'Payment failed');
+                modalResult.style.color = '#ff6b6b';
+                modalPayBtn.disabled = false;
+                modalPayBtn.textContent = 'Pay Now';
+            }
+        } catch (error) {
+            console.error('Payment error:', error);
+            modalResult.textContent = '❌ Network error: ' + error.message;
+            modalResult.style.color = '#ff6b6b';
+            modalPayBtn.disabled = false;
+            modalPayBtn.textContent = 'Pay Now';
+        }
+    }
+
+    // ============================================================
+    // WAIT FOR TRANSACTION
+    // ============================================================
+    async function waitForTransaction(txnId) {
+        let attempts = 0;
+        const maxAttempts = 30;
+
+        while (attempts < maxAttempts) {
+            try {
+                const res = await fetch(`${API_URL}/transaction/${txnId}`);
+                const data = await res.json();
+
+                if (data.success && data.data.status === 'completed') {
+                    credentials = {
+                        username: data.data.mikrotikUsername || 'user_' + (data.data.mpesaCode || txnId),
+                        password: data.data.mikrotikPassword || 'pass_' + Date.now(),
+                        planName: data.data.planName || selectedPlan.name,
+                        expiresAt: data.data.expiresAt || new Date(Date.now() + selectedPlan.duration_seconds * 1000).toISOString()
+                    };
+                    showConnected();
+                    return;
+                }
+
+                if (data.success && (data.data.status === 'failed' || data.data.status === 'cancelled')) {
+                    alert('Payment failed or was cancelled. Please try again.');
+                    hideLoading();
+                    return;
+                }
+
+                const wait = Math.min(1000 * Math.pow(1.2, attempts), 5000);
+                await sleep(wait);
+                attempts++;
+            } catch (e) {
+                console.error('Polling error:', e);
+                await sleep(2000);
+                attempts++;
+            }
+        }
+
+        alert('Payment confirmation timed out. Please check your transaction status later.');
+        hideLoading();
+    }
+
+    function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+    // ============================================================
+    // SHOW CONNECTED STATE
+    // ============================================================
+    function showConnected() {
+        hideLoading();
+        stepPlans.classList.add('hidden');
+        stepConnected.classList.remove('hidden');
+
+        credUser.textContent = credentials.username || 'N/A';
+        credPass.textContent = credentials.password || 'N/A';
+        credPlanName.textContent = credentials.planName || selectedPlan.name;
+
+        startCountdown(credentials.expiresAt);
+    }
+
+    // ============================================================
+    // COUNTDOWN TIMER
+    // ============================================================
+    function startCountdown(expiresAt) {
+        if (countdownInterval) clearInterval(countdownInterval);
+
+        function update() {
+            const now = Date.now();
+            const expiry = new Date(expiresAt).getTime();
+            const diff = Math.max(0, expiry - now);
+
+            if (diff <= 0) {
+                countdownDisplay.textContent = '00:00:00';
+                clearInterval(countdownInterval);
+                return;
+            }
+
+            const hours = Math.floor(diff / 3600000);
+            const mins = Math.floor((diff % 3600000) / 60000);
+            const secs = Math.floor((diff % 60000) / 1000);
+            countdownDisplay.textContent =
+                String(hours).padStart(2, '0') + ':' +
+                String(mins).padStart(2, '0') + ':' +
+                String(secs).padStart(2, '0');
+        }
+
+        update();
+        countdownInterval = setInterval(update, 1000);
+    }
+
+    // ============================================================
+    // CHECK EXISTING PLAN
+    // ============================================================
+    async function checkExistingPlan() {
+        const phone = checkPhoneInput.value.trim();
+        if (!phone || phone.length < 10) {
+            checkResult.textContent = '❌ Please enter a valid phone number.';
+            checkResult.style.color = '#ff6b6b';
+            return;
+        }
+
+        checkResult.textContent = '⏳ Checking...';
+        checkResult.style.color = '#aaa';
+
+        try {
+            const res = await fetch(`${API_URL}/check-active?phone=${encodeURIComponent(phone)}`);
+            const data = await res.json();
+            if (data.success && data.active) {
+                checkResult.textContent = '✅ You have an active plan! Connecting...';
+                checkResult.style.color = '#00c853';
+                credentials = {
+                    username: data.data.username,
+                    password: data.data.password,
+                    planName: data.data.planName,
+                    expiresAt: data.data.expiresAt
+                };
+                showConnected();
+            } else {
+                checkResult.textContent = '❌ No active plan found for this number.';
+                checkResult.style.color = '#ff6b6b';
+            }
+        } catch (e) {
+            console.error('Check existing plan error:', e);
+            checkResult.textContent = '❌ Error checking status. Please try again.';
+            checkResult.style.color = '#ff6b6b';
+        }
+    }
+
+    // ============================================================
+    // VOUCHER REDEMPTION
+    // ============================================================
+    async function redeemVoucher() {
+        const code = voucherInput.value.trim();
+        if (!code) {
+            voucherResult.textContent = '❌ Please enter a voucher code.';
+            voucherResult.style.color = '#ff6b6b';
+            return;
+        }
+
+        voucherResult.textContent = '⏳ Validating...';
+        voucherResult.style.color = '#aaa';
+
+        try {
+            const response = await fetch(API_URL + '/voucher/redeem', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ code: code, phoneNumber: 'voucher_user' })
+            });
+            const data = await response.json();
+
+            if (data.success) {
+                voucherResult.textContent = '✅ Voucher redeemed! Connecting...';
+                voucherResult.style.color = '#00c853';
+                credentials = {
+                    username: data.data.username || 'voucher_user',
+                    password: data.data.password || 'pass_' + Date.now(),
+                    planName: data.data.planName || 'Voucher Plan',
+                    expiresAt: data.data.expiresAt || new Date(Date.now() + 3600000).toISOString()
+                };
+                showConnected();
+            } else {
+                voucherResult.textContent = '❌ ' + (data.message || 'Invalid voucher');
+                voucherResult.style.color = '#ff6b6b';
+            }
+        } catch (e) {
+            console.error('Voucher error:', e);
+            voucherResult.textContent = '❌ Error redeeming voucher.';
+            voucherResult.style.color = '#ff6b6b';
+        }
+    }
+
+    // ============================================================
+    // LOADING OVERLAY
+    // ============================================================
+    function showLoading(show) {
+        loadingOverlay.classList.toggle('active', show);
+    }
+
+    function hideLoading() {
+        loadingOverlay.classList.remove('active');
+    }
+
+    // ============================================================
+    // RESET APP
+    // ============================================================
+    function resetApp() {
+        if (countdownInterval) clearInterval(countdownInterval);
+        stepConnected.classList.add('hidden');
+        stepPlans.classList.remove('hidden');
+        selectedPlan = null;
+        transactionId = null;
+        credentials = null;
+    }
+
+    // ============================================================
+    // INIT
+    // ============================================================
+    document.addEventListener('DOMContentLoaded', () => {
+        loadSettings();
+        loadThemes();
+        loadPlans();
+        checkServerStatus();
+        setInterval(checkServerStatus, 30000);
+        console.log('🌐 GICH WiFi System Initialized');
+        console.log('📡 API URL:', API_URL);
+    });
+</script>
+
+</body>
+</html>
