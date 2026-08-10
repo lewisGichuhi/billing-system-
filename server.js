@@ -1,5 +1,5 @@
 /**
- * GICH WiFi - M-Pesa STK Push API
+ * GICH WiFi - Complete Backend with Voucher System
  * Deployable on Render with .env support
  */
 
@@ -16,13 +16,13 @@ const path = require('path');
 // ===================== CONFIGURATION =====================
 // ============================================================
 
-// Load from .env or use defaults
 const SHORTCODE = process.env.SHORTCODE || '174379';
 const PASSKEY = process.env.PASSKEY || 'bfb279f9aa9bdbcf158e97dd71a467cd2e0c893059b10f78e6b72ada1ed2c919';
 const CONSUMER_KEY = process.env.CONSUMER_KEY || '';
 const CONSUMER_SECRET = process.env.CONSUMER_SECRET || '';
 const CALLBACK_URL = process.env.CALLBACK_URL || 'https://billing-system-fm9a.onrender.com/api/mpesa-callback';
 const PORT = process.env.PORT || 10000;
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || 'admin123';
 
 console.log('\n========================================');
 console.log('🌐 GICH WiFi API');
@@ -45,12 +45,31 @@ const agent = new https.Agent({
 });
 
 // ============================================================
-// ===================== TRANSACTION STORAGE =====================
+// ===================== DATA STORAGE =====================
 // ============================================================
 
 const TRANSACTIONS_FILE = path.join(__dirname, 'transactions.json');
-let transactions = [];
+const VOUCHERS_FILE = path.join(__dirname, 'vouchers.json');
+const PLANS_FILE = path.join(__dirname, 'plans.json');
 
+let transactions = [];
+let vouchers = [];
+let plans = [];
+
+// Default plans
+const DEFAULT_PLANS = [
+    { id: '2_Hours', name: '2 Hours', price: 10, devices: 1, duration_seconds: 7200 },
+    { id: '5_Hours', name: '5 Hours', price: 20, devices: 1, duration_seconds: 18000 },
+    { id: '8_Hours', name: '8 Hours', price: 30, devices: 1, duration_seconds: 28800 },
+    { id: '12_Hours', name: '12 Hours', price: 50, devices: 1, duration_seconds: 43200 },
+    { id: '24_Hours', name: '24 Hours', price: 80, devices: 1, duration_seconds: 86400 },
+    { id: '1_Week_1_Device', name: '1 Week (1 Device)', price: 300, devices: 1, duration_seconds: 604800 },
+    { id: '1_Week_3_Devices', name: '1 Week (3 Devices)', price: 400, devices: 3, duration_seconds: 604800 },
+    { id: '1_Month_1_Device', name: '1 Month (1 Device)', price: 1000, devices: 1, duration_seconds: 2592000 },
+    { id: '1_Month_3_Devices', name: '1 Month (3 Devices)', price: 1200, devices: 3, duration_seconds: 2592000 }
+];
+
+// Load transactions
 if (fs.existsSync(TRANSACTIONS_FILE)) {
     try {
         const data = fs.readFileSync(TRANSACTIONS_FILE, 'utf8');
@@ -59,6 +78,32 @@ if (fs.existsSync(TRANSACTIONS_FILE)) {
     } catch (error) {
         console.error('Error loading transactions:', error);
     }
+}
+
+// Load vouchers
+if (fs.existsSync(VOUCHERS_FILE)) {
+    try {
+        const data = fs.readFileSync(VOUCHERS_FILE, 'utf8');
+        vouchers = JSON.parse(data);
+        console.log(`🎟️ Loaded ${vouchers.length} vouchers`);
+    } catch (error) {
+        console.error('Error loading vouchers:', error);
+    }
+}
+
+// Load plans
+if (fs.existsSync(PLANS_FILE)) {
+    try {
+        const data = fs.readFileSync(PLANS_FILE, 'utf8');
+        plans = JSON.parse(data);
+        console.log(`📦 Loaded ${plans.length} plans`);
+    } catch (error) {
+        console.error('Error loading plans:', error);
+        plans = DEFAULT_PLANS;
+    }
+} else {
+    plans = DEFAULT_PLANS;
+    savePlans();
 }
 
 function saveTransactions() {
@@ -70,20 +115,64 @@ function saveTransactions() {
     }
 }
 
+function saveVouchers() {
+    try {
+        fs.writeFileSync(VOUCHERS_FILE, JSON.stringify(vouchers, null, 2));
+        console.log('💾 Vouchers saved');
+    } catch (error) {
+        console.error('⚠️ Could not save vouchers:', error.message);
+    }
+}
+
+function savePlans() {
+    try {
+        fs.writeFileSync(PLANS_FILE, JSON.stringify(plans, null, 2));
+        console.log('💾 Plans saved');
+    } catch (error) {
+        console.error('⚠️ Could not save plans:', error.message);
+    }
+}
+
 // ============================================================
-// ===================== PLAN MAPPINGS =====================
+// ===================== HELPERS =====================
 // ============================================================
 
 function getPlanName(planId) {
-    const plans = {
-        '2_Hours': '2 Hours',
-        '5_Hours': '5 Hours',
-        '8_Hours': '8 Hours',
-        '12_Hours': '12 Hours',
-        '24_Hours': '24 Hours',
-        'Free_Trial': 'Free Trial'
-    };
-    return plans[planId] || planId;
+    const plan = plans.find(p => p.id === planId);
+    return plan ? plan.name : planId;
+}
+
+function getPlanDuration(planId) {
+    const plan = plans.find(p => p.id === planId);
+    return plan ? plan.duration_seconds : 3600;
+}
+
+function generateVoucherCode() {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let code = '';
+    for (let i = 0; i < 10; i++) {
+        code += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return code;
+}
+
+function normalizePhone(rawPhone) {
+    if (!rawPhone) return null;
+    let digits = String(rawPhone).trim().replace(/[^0-9+]/g, '');
+    digits = digits.replace(/^\+/, '');
+    
+    if (digits.startsWith('0')) digits = digits.substring(1);
+    if (digits.length === 9 && digits.startsWith('7')) return `254${digits}`;
+    if (digits.length === 10 && digits.startsWith('7')) return `254${digits}`;
+    if (digits.startsWith('254')) return digits;
+    
+    return digits;
+}
+
+function timestampNow() {
+    const now = new Date();
+    const pad = (n) => String(n).padStart(2, '0');
+    return `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
 }
 
 // ============================================================
@@ -184,29 +273,6 @@ async function getAccessToken() {
 
     console.log('✅ Access token obtained');
     return res.bodyJson.access_token;
-}
-
-// ============================================================
-// ===================== HELPERS =====================
-// ============================================================
-
-function timestampNow() {
-    const now = new Date();
-    const pad = (n) => String(n).padStart(2, '0');
-    return `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
-}
-
-function normalizePhone(rawPhone) {
-    if (!rawPhone) return null;
-    let digits = String(rawPhone).trim().replace(/[^0-9+]/g, '');
-    digits = digits.replace(/^\+/, '');
-    
-    if (digits.startsWith('0')) digits = digits.substring(1);
-    if (digits.length === 9 && digits.startsWith('7')) return `254${digits}`;
-    if (digits.length === 10 && digits.startsWith('7')) return `254${digits}`;
-    if (digits.startsWith('254')) return digits;
-    
-    return digits;
 }
 
 // ============================================================
@@ -377,8 +443,9 @@ const server = http.createServer(async (req, res) => {
                     <h1>🌐 GICH WiFi Server</h1>
                     <p>✅ Server is running!</p>
                     <hr>
-                    <p>API: <a href="/api/health" style="color:#00c853;">/api/health</a></p>
-                    <p>Try: <a href="/GICH_wifi.html" style="color:#00c853;">GICH_wifi.html</a></p>
+                    <p><a href="/api/health">API Health</a></p>
+                    <p><a href="/api/plans">Plans</a></p>
+                    <p><a href="/api/admin/transactions">Transactions (Admin)</a></p>
                 </body>
                 </html>
             `);
@@ -394,16 +461,9 @@ const server = http.createServer(async (req, res) => {
             return;
         }
 
-        // Serve redirect.html
-        if (req.method === 'GET' && (url.pathname === '/redirect.html' || url.pathname === '/redirect')) {
-            if (serveHtmlFile(res, 'redirect.html')) {
-                return;
-            }
-            sendHtml(res, 404, `<h1>File not found</h1><p>redirect.html not found</p>`);
-            return;
-        }
-
-        // ===== API ENDPOINTS =====
+        // ============================================================
+        // ===================== PUBLIC API ENDPOINTS =====================
+        // ============================================================
 
         // Health
         if (req.method === 'GET' && url.pathname === '/api/health') {
@@ -413,34 +473,11 @@ const server = http.createServer(async (req, res) => {
             });
         }
 
-        // Test OAuth
-        if (req.method === 'GET' && url.pathname === '/api/test-oauth') {
-            try {
-                const token = await getAccessToken();
-                return sendJson(res, 200, { 
-                    success: true, 
-                    token_preview: token.substring(0, 20) + '...' 
-                });
-            } catch (err) {
-                return sendJson(res, 502, { 
-                    success: false, 
-                    error: err.message 
-                });
-            }
-        }
-
         // Get Plans
         if (req.method === 'GET' && url.pathname === '/api/plans') {
             return sendJson(res, 200, {
                 success: true,
-                data: [
-                    { id: '2_Hours', name: '2 Hours', price: 10, duration: 2 },
-                    { id: '5_Hours', name: '5 Hours', price: 20, duration: 5 },
-                    { id: '8_Hours', name: '8 Hours', price: 30, duration: 8 },
-                    { id: '12_Hours', name: '12 Hours', price: 50, duration: 12 },
-                    { id: '24_Hours', name: '24 Hours', price: 80, duration: 24 },
-                    { id: 'Free_Trial', name: 'Free Trial', price: 0, duration: 5 }
-                ]
+                data: plans
             });
         }
 
@@ -454,16 +491,57 @@ const server = http.createServer(async (req, res) => {
             return sendJson(res, 200, { success: true, data: transaction });
         }
 
-        // Get All Transactions
+        // Get All Transactions (with phone filter)
         if (req.method === 'GET' && url.pathname === '/api/transactions') {
+            const phone = url.searchParams.get('phone');
+            let filtered = transactions;
+            if (phone) {
+                filtered = transactions.filter(t => t.phoneNumber === phone);
+            }
             return sendJson(res, 200, {
                 success: true,
-                data: transactions,
-                count: transactions.length
+                data: filtered,
+                count: filtered.length
             });
         }
 
-        // ===== INITIATE PAYMENT =====
+        // ===== CHECK EXISTING PLAN =====
+        if (req.method === 'GET' && url.pathname === '/api/check-active') {
+            const phone = url.searchParams.get('phone');
+            if (!phone) {
+                return sendJson(res, 400, { success: false, message: 'Phone number required' });
+            }
+            
+            const active = transactions.find(t =>
+                t.phoneNumber === phone &&
+                t.status === 'completed' &&
+                t.mikrotikCreated &&
+                (!t.expiresAt || new Date(t.expiresAt) > new Date())
+            );
+            
+            if (active) {
+                return sendJson(res, 200, {
+                    success: true,
+                    active: true,
+                    data: {
+                        id: active.id,
+                        planName: active.planName,
+                        expiresAt: active.expiresAt,
+                        username: active.mikrotikUsername,
+                        password: active.mikrotikPassword,
+                        mpesaCode: active.mpesaCode
+                    }
+                });
+            } else {
+                return sendJson(res, 200, { success: true, active: false });
+            }
+        }
+
+        // ============================================================
+        // ===================== PAYMENT =====================
+        // ============================================================
+
+        // Initiate Payment
         if (req.method === 'POST' && url.pathname === '/api/payment/initiate') {
             const body = await readBody(req);
             console.log('📥 Payment request:', body);
@@ -480,46 +558,46 @@ const server = http.createServer(async (req, res) => {
             try {
                 const transactionId = 'GICH' + Date.now() + Math.random().toString(36).substring(7);
                 const accountRef = 'GICH' + Date.now().toString().slice(-8);
-                
-                if (amount === 0) {
-                    const transaction = {
-                        id: transactionId,
-                        phoneNumber,
-                        amount,
-                        planId,
-                        planName: getPlanName(planId),
-                        status: 'completed',
-                        timestamp: new Date().toISOString(),
-                        macAddress: macAddress || null,
-                        mpesaCode: 'FREE' + Date.now(),
-                        completedAt: new Date().toISOString(),
-                        isFreeTrial: true
-                    };
-                    transactions.push(transaction);
-                    saveTransactions();
-                    
-                    return sendJson(res, 200, {
-                        success: true,
-                        message: '✅ Free Trial Activated!',
-                        transactionId: transactionId,
-                        isFreeTrial: true
-                    });
-                }
+                const duration = getPlanDuration(planId);
+                const planName = getPlanName(planId);
                 
                 const transaction = {
                     id: transactionId,
                     phoneNumber,
                     amount,
                     planId,
-                    planName: getPlanName(planId),
+                    planName: planName,
                     status: 'pending',
                     timestamp: new Date().toISOString(),
                     macAddress: macAddress || null,
                     mpesaCode: null,
-                    checkoutId: null
+                    checkoutId: null,
+                    expiresAt: new Date(Date.now() + duration * 1000).toISOString(),
+                    mikrotikUsername: null,
+                    mikrotikPassword: null,
+                    mikrotikCreated: false,
+                    deviceCount: plans.find(p => p.id === planId)?.devices || 1
                 };
                 transactions.push(transaction);
                 saveTransactions();
+                
+                // For free plans (amount 0), skip STK Push
+                if (amount === 0) {
+                    transaction.status = 'completed';
+                    transaction.mpesaCode = 'FREE' + Date.now();
+                    transaction.completedAt = new Date().toISOString();
+                    transaction.mikrotikUsername = 'user_' + transaction.id.substring(0, 12);
+                    transaction.mikrotikPassword = 'pass_' + Date.now().toString(36);
+                    transaction.mikrotikCreated = true;
+                    saveTransactions();
+                    
+                    return sendJson(res, 200, {
+                        success: true,
+                        message: '✅ Free plan activated!',
+                        transactionId: transactionId,
+                        isFree: true
+                    });
+                }
                 
                 const result = await stkPush({
                     phone: phoneNumber,
@@ -540,16 +618,20 @@ const server = http.createServer(async (req, res) => {
                         testPin: '12345'
                     });
                 } else {
+                    // Mock mode fallback
                     console.log('⚠️ STK Push failed, using mock mode as fallback...');
                     transaction.status = 'completed';
                     transaction.mpesaCode = 'MOCK' + Date.now();
                     transaction.completedAt = new Date().toISOString();
                     transaction.isMock = true;
+                    transaction.mikrotikUsername = 'user_' + transaction.id.substring(0, 12);
+                    transaction.mikrotikPassword = 'pass_' + Date.now().toString(36);
+                    transaction.mikrotikCreated = true;
                     saveTransactions();
                     
                     return sendJson(res, 200, {
                         success: true,
-                        message: '✅ MOCK MODE: Payment simulated due to sandbox issues.',
+                        message: '✅ MOCK MODE: Payment simulated.',
                         transactionId: transactionId,
                         mock: true
                     });
@@ -584,11 +666,9 @@ const server = http.createServer(async (req, res) => {
             
             console.log(`📊 Callback: ID=${checkoutId}, Code=${resultCode}, Receipt=${receipt}`);
             
-            // Find the transaction by checkout ID
             let transaction = transactions.find(t => t.checkoutId === checkoutId);
             
             if (!transaction) {
-                console.log('❌ Transaction not found for CheckoutRequestID:', checkoutId);
                 transaction = transactions.find(t => t.mpesaResponse?.CheckoutRequestID === checkoutId);
                 if (transaction) {
                     console.log('✅ Found transaction by mpesaResponse.CheckoutRequestID');
@@ -609,21 +689,15 @@ const server = http.createServer(async (req, res) => {
                 transaction.completedAt = new Date().toISOString();
                 if (amount) transaction.amount = amount;
                 if (phoneNumber) transaction.phoneNumber = phoneNumber;
+                
+                // Generate hotspot credentials
+                transaction.mikrotikUsername = 'user_' + (transaction.mpesaCode || transaction.id).substring(0, 12);
+                transaction.mikrotikPassword = 'pass_' + Date.now().toString(36);
+                transaction.mikrotikCreated = true;
                 saveTransactions();
                 
                 console.log('✅ Payment completed for transaction:', transaction.id);
-                
-                // Create hotspot user
-                try {
-                    console.log('👤 Creating hotspot user...');
-                    transaction.mikrotikCreated = true;
-                    transaction.mikrotikUsername = 'user_' + (transaction.mpesaCode || transaction.id);
-                    transaction.mikrotikPassword = 'pass_' + Date.now();
-                    saveTransactions();
-                    console.log('✅ Hotspot user created:', transaction.mikrotikUsername);
-                } catch (error) {
-                    console.error('❌ Failed to create hotspot user:', error);
-                }
+                console.log('👤 Hotspot user created:', transaction.mikrotikUsername);
                 
                 return sendJson(res, 200, { 
                     ResultCode: 0, 
@@ -644,53 +718,221 @@ const server = http.createServer(async (req, res) => {
             }
         }
 
-        // ===== SIMULATE PAYMENT =====
-        if (req.method === 'POST' && url.pathname === '/api/payment/simulate') {
+        // ============================================================
+        // ===================== VOUCHER SYSTEM =====================
+        // ============================================================
+
+        // Redeem Voucher
+        if (req.method === 'POST' && url.pathname === '/api/voucher/redeem') {
             const body = await readBody(req);
-            const { transactionId } = body;
+            const { code, phoneNumber } = body;
             
-            const transaction = transactions.find(t => t.id === transactionId);
-            if (!transaction) {
-                return sendJson(res, 404, { success: false, message: 'Transaction not found' });
+            console.log('🎟️ Voucher redemption request:', { code, phoneNumber });
+            
+            if (!code) {
+                return sendJson(res, 400, { success: false, message: 'Voucher code required' });
             }
             
-            transaction.status = 'completed';
-            transaction.mpesaCode = 'SIM' + Date.now();
-            transaction.completedAt = new Date().toISOString();
+            const voucher = vouchers.find(v => v.code === code && !v.used);
+            if (!voucher) {
+                return sendJson(res, 404, { success: false, message: 'Invalid or already used voucher' });
+            }
+            
+            // Check if voucher expired
+            if (voucher.expiresAt && new Date(voucher.expiresAt) < new Date()) {
+                return sendJson(res, 400, { success: false, message: 'Voucher has expired' });
+            }
+            
+            // Mark as used
+            voucher.used = true;
+            voucher.usedBy = phoneNumber || 'unknown';
+            voucher.usedAt = new Date().toISOString();
+            saveVouchers();
+            
+            // Create transaction for voucher redemption
+            const transactionId = 'VOUCH' + Date.now() + Math.random().toString(36).substring(7);
+            const duration = voucher.duration_seconds || 3600;
+            const planName = voucher.planName || 'Voucher Plan';
+            
+            const transaction = {
+                id: transactionId,
+                phoneNumber: phoneNumber || 'voucher_user',
+                amount: 0,
+                planId: voucher.planId || 'voucher',
+                planName: planName,
+                status: 'completed',
+                timestamp: new Date().toISOString(),
+                mpesaCode: 'VOUCHER_' + voucher.code,
+                completedAt: new Date().toISOString(),
+                expiresAt: new Date(Date.now() + duration * 1000).toISOString(),
+                mikrotikUsername: 'vuser_' + transactionId.substring(0, 8),
+                mikrotikPassword: 'vpass_' + Date.now().toString(36),
+                mikrotikCreated: true,
+                isVoucher: true,
+                voucherCode: voucher.code
+            };
+            transactions.push(transaction);
             saveTransactions();
             
             return sendJson(res, 200, {
                 success: true,
-                message: 'Payment simulated successfully',
-                data: transaction
+                message: '✅ Voucher redeemed successfully!',
+                data: {
+                    transactionId: transactionId,
+                    planName: planName,
+                    expiresAt: transaction.expiresAt,
+                    username: transaction.mikrotikUsername,
+                    password: transaction.mikrotikPassword
+                }
             });
         }
 
-        // ===== CONNECT WITH MPESA CODE =====
-        if (req.method === 'POST' && url.pathname === '/api/payment/connect') {
+        // ============================================================
+        // ===================== ADMIN ENDPOINTS =====================
+        // ============================================================
+
+        // Admin auth check
+        function isAdmin(req) {
+            const auth = req.headers.authorization;
+            if (!auth) return false;
+            const token = auth.replace('Bearer ', '');
+            return token === ADMIN_PASSWORD;
+        }
+
+        // Generate Vouchers (Admin)
+        if (req.method === 'POST' && url.pathname === '/api/admin/voucher/generate') {
+            if (!isAdmin(req)) {
+                return sendJson(res, 401, { success: false, message: 'Unauthorized' });
+            }
+            
             const body = await readBody(req);
-            const { mpesaCode } = body;
+            const { planId, count, duration_seconds } = body;
             
-            const transaction = transactions.find(t => t.mpesaCode === mpesaCode && t.status === 'completed');
+            if (!planId) {
+                return sendJson(res, 400, { success: false, message: 'Plan ID required' });
+            }
             
-            if (!transaction) {
-                return sendJson(res, 404, {
-                    success: false,
-                    message: 'Invalid or expired MPESA code'
-                });
+            const plan = plans.find(p => p.id === planId);
+            if (!plan) {
+                return sendJson(res, 400, { success: false, message: 'Invalid plan ID' });
+            }
+            
+            const numVouchers = Math.min(count || 1, 100);
+            const generated = [];
+            
+            for (let i = 0; i < numVouchers; i++) {
+                const code = generateVoucherCode();
+                const voucher = {
+                    code: code,
+                    planId: plan.id,
+                    planName: plan.name,
+                    duration_seconds: duration_seconds || plan.duration_seconds,
+                    devices: plan.devices || 1,
+                    used: false,
+                    usedBy: null,
+                    usedAt: null,
+                    expiresAt: null,
+                    createdAt: new Date().toISOString()
+                };
+                vouchers.push(voucher);
+                generated.push(code);
+            }
+            saveVouchers();
+            
+            return sendJson(res, 200, {
+                success: true,
+                message: `Generated ${generated.length} vouchers`,
+                vouchers: generated,
+                count: generated.length
+            });
+        }
+
+        // Get All Vouchers (Admin)
+        if (req.method === 'GET' && url.pathname === '/api/admin/vouchers') {
+            if (!isAdmin(req)) {
+                return sendJson(res, 401, { success: false, message: 'Unauthorized' });
             }
             
             return sendJson(res, 200, {
                 success: true,
-                message: 'Connected successfully!',
-                data: {
-                    sessionId: 'session_' + Date.now(),
-                    plan: transaction.planName,
-                    phoneNumber: transaction.phoneNumber,
-                    username: 'user_' + transaction.mpesaCode,
-                    password: 'pass_' + Date.now()
+                data: vouchers,
+                count: vouchers.length,
+                used: vouchers.filter(v => v.used).length,
+                unused: vouchers.filter(v => !v.used).length
+            });
+        }
+
+        // Get All Transactions (Admin)
+        if (req.method === 'GET' && url.pathname === '/api/admin/transactions') {
+            if (!isAdmin(req)) {
+                return sendJson(res, 401, { success: false, message: 'Unauthorized' });
+            }
+            
+            return sendJson(res, 200, {
+                success: true,
+                data: transactions,
+                count: transactions.length,
+                summary: {
+                    total: transactions.length,
+                    completed: transactions.filter(t => t.status === 'completed').length,
+                    pending: transactions.filter(t => t.status === 'pending').length,
+                    failed: transactions.filter(t => t.status === 'failed').length,
+                    totalRevenue: transactions
+                        .filter(t => t.status === 'completed')
+                        .reduce((sum, t) => sum + (t.amount || 0), 0)
                 }
             });
+        }
+
+        // Manage Plans (Admin)
+        if (req.method === 'POST' && url.pathname === '/api/admin/plans') {
+            if (!isAdmin(req)) {
+                return sendJson(res, 401, { success: false, message: 'Unauthorized' });
+            }
+            
+            const body = await readBody(req);
+            const { action } = body;
+            
+            if (action === 'add') {
+                const { id, name, price, devices, duration_seconds } = body;
+                if (!id || !name || price === undefined) {
+                    return sendJson(res, 400, { success: false, message: 'Missing required fields' });
+                }
+                if (plans.find(p => p.id === id)) {
+                    return sendJson(res, 400, { success: false, message: 'Plan ID already exists' });
+                }
+                const newPlan = { id, name, price, devices: devices || 1, duration_seconds: duration_seconds || 3600 };
+                plans.push(newPlan);
+                savePlans();
+                return sendJson(res, 200, { success: true, message: 'Plan added', data: newPlan });
+            }
+            
+            if (action === 'update') {
+                const { id, name, price, devices, duration_seconds } = body;
+                const plan = plans.find(p => p.id === id);
+                if (!plan) {
+                    return sendJson(res, 404, { success: false, message: 'Plan not found' });
+                }
+                if (name) plan.name = name;
+                if (price !== undefined) plan.price = price;
+                if (devices !== undefined) plan.devices = devices;
+                if (duration_seconds !== undefined) plan.duration_seconds = duration_seconds;
+                savePlans();
+                return sendJson(res, 200, { success: true, message: 'Plan updated', data: plan });
+            }
+            
+            if (action === 'delete') {
+                const { id } = body;
+                const index = plans.findIndex(p => p.id === id);
+                if (index === -1) {
+                    return sendJson(res, 404, { success: false, message: 'Plan not found' });
+                }
+                plans.splice(index, 1);
+                savePlans();
+                return sendJson(res, 200, { success: true, message: 'Plan deleted' });
+            }
+            
+            return sendJson(res, 400, { success: false, message: 'Invalid action' });
         }
 
         // ===== GET CREDENTIALS =====
@@ -708,10 +950,10 @@ const server = http.createServer(async (req, res) => {
             
             return sendJson(res, 200, {
                 success: true,
-                username: transaction.mikrotikUsername || 'user_' + (transaction.mpesaCode || transaction.id),
-                password: transaction.mikrotikPassword || 'pass_' + Date.now(),
+                username: transaction.mikrotikUsername || 'user_' + (transaction.mpesaCode || transaction.id).substring(0, 12),
+                password: transaction.mikrotikPassword || 'pass_' + Date.now().toString(36),
                 plan: transaction.planName,
-                expiresAt: new Date(Date.now() + 7200000).toISOString()
+                expiresAt: transaction.expiresAt || new Date(Date.now() + 7200000).toISOString()
             });
         }
 
@@ -722,21 +964,30 @@ const server = http.createServer(async (req, res) => {
                 version: '2.0.0',
                 status: 'Running',
                 endpoints: {
-                    home: 'GET /',
-                    health: 'GET /api/health',
-                    test_oauth: 'GET /api/test-oauth',
-                    plans: 'GET /api/plans',
-                    payment: 'POST /api/payment/initiate',
-                    transaction: 'GET /api/transaction/:id',
-                    transactions: 'GET /api/transactions',
-                    callback: 'POST /api/mpesa-callback',
-                    connect: 'POST /api/payment/connect',
-                    simulate: 'POST /api/payment/simulate',
-                    credentials: 'GET /api/get-credentials/:transactionId'
+                    public: {
+                        health: 'GET /api/health',
+                        plans: 'GET /api/plans',
+                        payment: 'POST /api/payment/initiate',
+                        transaction: 'GET /api/transaction/:id',
+                        transactions: 'GET /api/transactions',
+                        check_active: 'GET /api/check-active?phone=',
+                        voucher_redeem: 'POST /api/voucher/redeem',
+                        credentials: 'GET /api/get-credentials/:transactionId',
+                        callback: 'POST /api/mpesa-callback'
+                    },
+                    admin: {
+                        generate_voucher: 'POST /api/admin/voucher/generate',
+                        vouchers: 'GET /api/admin/vouchers',
+                        transactions: 'GET /api/admin/transactions',
+                        plans_manage: 'POST /api/admin/plans'
+                    }
                 },
                 statistics: {
                     totalTransactions: transactions.length,
-                    totalAmount: transactions.reduce((sum, t) => sum + (t.amount || 0), 0)
+                    totalAmount: transactions
+                        .filter(t => t.status === 'completed')
+                        .reduce((sum, t) => sum + (t.amount || 0), 0),
+                    activeVouchers: vouchers.filter(v => !v.used).length
                 }
             });
         }
@@ -756,10 +1007,11 @@ server.listen(PORT, '0.0.0.0', () => {
     console.log(`✅ Server running on port: ${PORT}`);
     console.log(`📍 http://localhost:${PORT}/`);
     console.log(`📍 http://localhost:${PORT}/api/health`);
-    console.log(`📍 http://localhost:${PORT}/api/test-oauth`);
+    console.log(`📍 http://localhost:${PORT}/api/plans`);
     console.log('========================================');
     console.log('📱 Test phone: 0712345678');
     console.log('🔑 Test PIN: 12345');
+    console.log('🛡️ Admin Password: admin123 (set ADMIN_PASSWORD env var)');
     console.log('========================================\n');
 });
 
