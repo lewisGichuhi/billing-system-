@@ -730,11 +730,11 @@ MODAL
 
 <script>
     // ============================================================
-    // CONFIGURATION
+    // CONFIGURATION - NO SENSITIVE DATA HERE!
+    // All sensitive data is stored on the backend (Render environment)
     // ============================================================
     const RENDER_URL = 'https://billing-system-fm9a.onrender.com';
     const API_URL = RENDER_URL + '/api';
-    const ADMIN_PIN = '1234'; // Change this in production
 
     // ============================================================
     // STATE
@@ -747,6 +747,9 @@ MODAL
     let currentSettings = {};
     let currentThemes = [];
     let currentPlans = [];
+
+    // Admin token storage (stored in memory, not in HTML)
+    let adminToken = null;
 
     // ============================================================
     // DOM REFS
@@ -954,11 +957,15 @@ MODAL
     }
 
     async function saveThemeToServer(themeId) {
+        if (!adminToken) {
+            alert('Please login to admin first');
+            return;
+        }
         try {
             const res = await fetch(API_URL + '/admin/settings', {
                 method: 'POST',
                 headers: {
-                    'Authorization': `Bearer ${ADMIN_PIN}`,
+                    'Authorization': `Bearer ${adminToken}`,
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({ theme: themeId })
@@ -978,18 +985,22 @@ MODAL
         const file = event.target.files[0];
         if (!file) return;
 
+        if (!adminToken) {
+            alert('Please login to admin first');
+            return;
+        }
+
         const reader = new FileReader();
         reader.onload = async function(e) {
             const base64 = e.target.result;
             logoPreview.src = base64;
             logoPreview.style.display = 'block';
 
-            // Save logo to server
             try {
                 const res = await fetch(API_URL + '/admin/settings', {
                     method: 'POST',
                     headers: {
-                        'Authorization': `Bearer ${ADMIN_PIN}`,
+                        'Authorization': `Bearer ${adminToken}`,
                         'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({ logo: base64 })
@@ -1014,6 +1025,11 @@ MODAL
     // SAVE BRANDING
     // ============================================================
     async function saveBranding() {
+        if (!adminToken) {
+            alert('Please login to admin first');
+            return;
+        }
+
         const data = {
             businessName: editBusinessName.value,
             businessTagline: editTagline.value,
@@ -1025,7 +1041,7 @@ MODAL
             const res = await fetch(API_URL + '/admin/settings', {
                 method: 'POST',
                 headers: {
-                    'Authorization': `Bearer ${ADMIN_PIN}`,
+                    'Authorization': `Bearer ${adminToken}`,
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify(data)
@@ -1084,6 +1100,11 @@ MODAL
     }
 
     async function savePlans() {
+        if (!adminToken) {
+            alert('Please login to admin first');
+            return;
+        }
+
         let successCount = 0;
         let errorCount = 0;
 
@@ -1097,7 +1118,7 @@ MODAL
                 const res = await fetch(API_URL + '/admin/plans', {
                     method: 'POST',
                     headers: {
-                        'Authorization': `Bearer ${ADMIN_PIN}`,
+                        'Authorization': `Bearer ${adminToken}`,
                         'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
@@ -1120,7 +1141,6 @@ MODAL
 
         if (successCount > 0) {
             showToast(`✅ ${successCount} plan${successCount > 1 ? 's' : ''} updated!`);
-            // Re-render plans
             renderPlans(currentPlans);
         }
         if (errorCount > 0) {
@@ -1149,6 +1169,11 @@ MODAL
     // VOUCHER FUNCTIONS
     // ============================================================
     async function generateVouchers() {
+        if (!adminToken) {
+            alert('Please login to admin first');
+            return;
+        }
+
         const planId = $('voucherPlanSelect').value;
         const count = parseInt($('voucherCount').value) || 5;
         const resultDiv = $('voucherGenerateResult');
@@ -1160,7 +1185,7 @@ MODAL
             const res = await fetch(API_URL + '/admin/voucher/generate', {
                 method: 'POST',
                 headers: {
-                    'Authorization': `Bearer ${ADMIN_PIN}`,
+                    'Authorization': `Bearer ${adminToken}`,
                     'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({ planId, count })
@@ -1184,7 +1209,7 @@ MODAL
         const container = $('vouchersList');
         try {
             const res = await fetch(API_URL + '/admin/vouchers', {
-                headers: { 'Authorization': `Bearer ${ADMIN_PIN}` }
+                headers: { 'Authorization': `Bearer ${adminToken}` }
             });
             const data = await res.json();
             if (data.success && data.data.length > 0) {
@@ -1212,7 +1237,7 @@ MODAL
         const container = $('transactionsList');
         try {
             const res = await fetch(API_URL + '/admin/transactions', {
-                headers: { 'Authorization': `Bearer ${ADMIN_PIN}` }
+                headers: { 'Authorization': `Bearer ${adminToken}` }
             });
             const data = await res.json();
             if (data.success && data.data.length > 0) {
@@ -1291,7 +1316,7 @@ MODAL
             });
             const data = await res.json();
             if (data.success) {
-                sessionStorage.setItem('adminToken', pin);
+                adminToken = pin;
                 adminPanel.classList.add('active');
                 userView.style.display = 'none';
                 loadVouchers();
@@ -1307,6 +1332,7 @@ MODAL
                     logoPreview.src = currentSettings.logo;
                     logoPreview.style.display = 'block';
                 }
+                showToast('✅ Admin access granted');
             } else {
                 alert('❌ Incorrect PIN!');
             }
@@ -1626,6 +1652,7 @@ MODAL
         setInterval(checkServerStatus, 30000);
         console.log('🌐 GICH WiFi System Initialized');
         console.log('📡 API URL:', API_URL);
+        console.log('🔐 Admin PIN: Enter when prompted (stored securely on backend)');
     });
 </script>
 
