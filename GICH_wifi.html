@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>GICH WIFI HOTSPOT</title>
     <style>
+        /* --- RESET & BASE --- */
         * {
             margin: 0;
             padding: 0;
@@ -18,15 +19,24 @@
             display: flex;
             flex-direction: column;
             align-items: center;
+            justify-content: center;
             padding: 20px;
         }
         .container {
-            max-width: 420px;
+            max-width: 450px;
             width: 100%;
+            background: rgba(26, 26, 26, 0.95);
+            padding: 30px 25px;
+            border-radius: 16px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.5);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            position: relative;
         }
+
+        /* --- HEADER --- */
         .header {
             text-align: center;
-            margin-bottom: 20px;
+            margin-bottom: 25px;
         }
         .header h1 {
             font-size: 28px;
@@ -41,114 +51,59 @@
         }
         .status-badge {
             display: inline-block;
-            padding: 6px 16px;
+            padding: 4px 14px;
             border-radius: 20px;
-            font-size: 14px;
+            font-size: 12px;
             font-weight: bold;
             margin-top: 8px;
         }
-        .status-online {
-            background: #00c853;
-            color: #000;
-        }
-        .status-offline {
-            background: #ff1744;
-            color: #fff;
-        }
-        .status-checking {
-            background: #ffa726;
-            color: #000;
-        }
+        .status-online { background: #00c853; color: #000; }
+        .status-offline { background: #ff1744; color: #fff; }
+        .status-checking { background: #ffa726; color: #000; }
+
+        /* --- CARDS & SECTIONS --- */
         .card {
-            background: rgba(26, 26, 26, 0.95);
-            padding: 20px;
-            border-radius: 12px;
-            margin: 10px 0;
-            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+            background: rgba(255, 255, 255, 0.03);
+            padding: 15px;
+            border-radius: 10px;
+            margin: 12px 0;
             border: 1px solid rgba(255, 255, 255, 0.05);
-            transition: all 0.3s ease;
         }
         .card h2 {
+            font-size: 18px;
+            margin-bottom: 12px;
             text-align: center;
-            margin-bottom: 15px;
-            font-size: 20px;
-            color: #fff;
+            color: #eee;
         }
         .card h3 {
-            text-align: center;
-            margin-bottom: 10px;
-            font-size: 16px;
+            font-size: 15px;
+            margin-bottom: 8px;
             color: #aaa;
         }
-        .info-step {
-            background: rgba(0, 200, 83, 0.1);
-            padding: 10px 15px;
-            border-radius: 8px;
-            margin: 6px 0;
-            border-left: 3px solid #00c853;
-        }
-        .info-step p {
-            margin: 0;
-            font-size: 14px;
-        }
+
+        /* --- PLANS --- */
         .plan {
             background: rgba(255, 255, 255, 0.05);
-            padding: 12px 15px;
+            padding: 10px 12px;
             border-radius: 8px;
-            margin: 8px 0;
+            margin: 6px 0;
             display: flex;
             justify-content: space-between;
             align-items: center;
-            transition: all 0.3s ease;
-        }
-        .plan:hover {
-            background: rgba(255, 255, 255, 0.1);
-        }
-        .plan-name {
-            font-weight: bold;
-        }
-        .plan-price {
-            color: #00c853;
-            font-weight: bold;
-        }
-        .plan button {
-            background: #00c853;
-            border: none;
-            padding: 6px 16px;
-            border-radius: 5px;
-            font-weight: bold;
+            transition: 0.2s;
             cursor: pointer;
-            transition: all 0.3s ease;
+            border: 1px solid transparent;
         }
-        .plan button:hover {
-            background: #fff;
-            transform: scale(1.05);
+        .plan:hover { background: rgba(255, 255, 255, 0.08); }
+        .plan.selected {
+            border-color: #00c853;
+            background: rgba(0, 200, 83, 0.1);
         }
-        .plan button:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-            transform: none;
-        }
-        .hidden {
-            display: none !important;
-        }
-        input {
-            width: 100%;
-            padding: 12px;
-            margin: 8px 0;
-            border-radius: 6px;
-            border: none;
-            font-size: 15px;
-            background: rgba(255, 255, 255, 0.1);
-            color: #fff;
-        }
-        input::placeholder {
-            color: rgba(255, 255, 255, 0.5);
-        }
-        input:focus {
-            outline: 2px solid #00c853;
-            background: rgba(255, 255, 255, 0.15);
-        }
+        .plan-name { font-weight: bold; font-size: 14px; }
+        .plan-price { color: #00c853; font-weight: bold; }
+        .plan-devices { font-size: 12px; color: #888; }
+
+        /* --- BUTTONS & INPUTS --- */
         .btn {
             width: 100%;
             padding: 12px;
@@ -158,785 +113,604 @@
             font-weight: bold;
             font-size: 16px;
             cursor: pointer;
-            transition: all 0.3s ease;
+            transition: 0.2s;
             color: #000;
+            margin-top: 6px;
         }
-        .btn:hover {
-            background: #00e676;
-            transform: scale(1.02);
-        }
-        .btn:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-            transform: none;
-        }
-        .btn-secondary {
-            background: #333;
+        .btn:hover { background: #00e676; transform: scale(1.02); }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+        .btn-secondary { background: #333; color: #fff; }
+        .btn-secondary:hover { background: #444; }
+
+        input[type="tel"], input[type="text"] {
+            width: 100%;
+            padding: 12px;
+            margin: 6px 0;
+            border-radius: 6px;
+            border: none;
+            font-size: 15px;
+            background: rgba(255, 255, 255, 0.08);
             color: #fff;
         }
-        .btn-secondary:hover {
-            background: #444;
+        input::placeholder { color: rgba(255, 255, 255, 0.4); }
+        input:focus { outline: 2px solid #00c853; background: rgba(255, 255, 255, 0.12); }
+
+        /* --- HIDE / SHOW --- */
+        .hidden { display: none !important; }
+
+        /* --- LOADING OVERLAY --- */
+        .loading-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.85);
+            border-radius: 16px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 10;
         }
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid rgba(255, 255, 255, 0.1);
+            border-top-color: #00c853;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .loading-text {
+            color: #aaa;
+            margin-top: 15px;
+            font-size: 14px;
+        }
+
+        /* --- COUNTDOWN --- */
+        .countdown {
+            text-align: center;
+            padding: 15px;
+            background: rgba(0, 200, 83, 0.08);
+            border-radius: 8px;
+            border: 1px solid rgba(0, 200, 83, 0.2);
+            margin: 10px 0;
+        }
+        .countdown .time {
+            font-size: 32px;
+            font-weight: bold;
+            color: #00c853;
+            font-family: monospace;
+        }
+        .countdown .label { color: #aaa; font-size: 13px; }
+
+        /* --- CREDENTIALS --- */
+        .cred-box {
+            background: rgba(0, 200, 83, 0.05);
+            padding: 12px;
+            border-radius: 6px;
+            border: 1px solid rgba(0, 200, 83, 0.15);
+            margin: 10px 0;
+        }
+        .cred-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 4px 0;
+            font-size: 14px;
+            font-family: monospace;
+        }
+        .cred-row .label { color: #888; }
+        .cred-row .value { color: #fff; }
+
+        /* --- VOUCHER SECTION --- */
+        .voucher-section {
+            margin-top: 15px;
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+            padding-top: 15px;
+        }
+        .voucher-section .btn { background: #ffa726; color: #000; }
+        .voucher-section .btn:hover { background: #ffb74d; }
+
+        /* --- ALREADY PAID --- */
+        .check-paid-section {
+            margin-top: 10px;
+            padding: 10px;
+            background: rgba(33, 150, 243, 0.05);
+            border-radius: 6px;
+            border: 1px solid rgba(33, 150, 243, 0.15);
+        }
+
+        /* --- FOOTER --- */
         .footer {
             text-align: center;
             margin-top: 20px;
-            color: #00c853;
-            font-size: 14px;
-            opacity: 0.7;
-        }
-        .loading {
-            text-align: center;
-            padding: 10px;
-            color: #00c853;
-        }
-        .divider {
-            border: none;
-            height: 1px;
-            background: linear-gradient(to right, transparent, #00c853, transparent);
-            margin: 20px 0;
-        }
-        .result-box {
-            padding: 12px;
-            border-radius: 8px;
-            margin: 10px 0;
-            border-left: 3px solid #00c853;
-            display: none;
-            white-space: pre-line;
-            font-size: 14px;
-            line-height: 1.6;
-        }
-        .result-box.show {
-            display: block;
-        }
-        .result-box.error {
-            border-left-color: #ff1744;
-            background: rgba(255, 23, 68, 0.1);
-        }
-        .result-box.success {
-            border-left-color: #00c853;
-            background: rgba(0, 200, 83, 0.1);
-        }
-        .result-box.info {
-            border-left-color: #2196f3;
-            background: rgba(33, 150, 243, 0.1);
-        }
-        .success-card {
-            text-align: center;
-            padding: 30px 20px;
-        }
-        .success-card .icon {
-            font-size: 64px;
-            margin-bottom: 15px;
-        }
-        .success-card h2 {
-            color: #00c853;
-            margin-bottom: 10px;
-        }
-        .success-card .details {
-            color: #aaa;
-            font-size: 14px;
-            line-height: 1.8;
-            margin: 15px 0;
-        }
-        .success-card .details span {
-            color: #fff;
-            font-weight: bold;
-        }
-        .transaction-id {
-            background: rgba(0, 200, 83, 0.1);
-            padding: 8px 12px;
-            border-radius: 6px;
+            color: #555;
             font-size: 12px;
-            color: #00c853;
-            margin: 10px 0;
-            word-break: break-all;
         }
-        .spinner {
-            display: inline-block;
-            width: 20px;
-            height: 20px;
-            border: 3px solid rgba(255, 255, 255, 0.3);
-            border-radius: 50%;
-            border-top-color: #00c853;
-            animation: spin 1s ease-in-out infinite;
-        }
-        @keyframes spin {
-            to { transform: rotate(360deg); }
-        }
-        .status-row {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            padding: 8px 0;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
-        }
-        .status-row .label {
-            color: #888;
-            font-size: 14px;
-        }
-        .status-row .value {
-            color: #fff;
-            font-weight: bold;
-            font-size: 14px;
-        }
-        .status-row .value.paid {
-            color: #00c853;
-        }
-        .status-row .value.pending {
-            color: #ffa726;
-        }
-        .url-display {
-            background: rgba(0, 200, 83, 0.05);
-            padding: 8px 12px;
-            border-radius: 6px;
-            font-size: 11px;
-            color: #888;
-            margin: 10px 0;
-            word-break: break-all;
-            border: 1px dashed rgba(255, 255, 255, 0.1);
-            text-align: center;
-        }
-        .url-display strong {
-            color: #00c853;
-        }
-        .credentials-box {
-            background: rgba(0, 200, 83, 0.1);
-            padding: 15px;
-            border-radius: 8px;
-            margin: 15px 0;
-            border: 1px solid rgba(0, 200, 83, 0.3);
-        }
-        .credentials-box h4 {
-            color: #00c853;
-            margin-bottom: 10px;
-        }
-        .credentials-box .cred-row {
-            display: flex;
-            justify-content: space-between;
-            padding: 5px 0;
-            font-size: 14px;
-        }
-        .credentials-box .cred-row .label {
-            color: #888;
-        }
-        .credentials-box .cred-row .value {
-            color: #fff;
-            font-family: monospace;
-            background: rgba(0, 0, 0, 0.3);
-            padding: 2px 8px;
-            border-radius: 4px;
-        }
-        .test-info {
-            background: rgba(255, 193, 7, 0.1);
-            padding: 12px;
-            border-radius: 8px;
-            margin: 10px 0;
-            border: 1px solid rgba(255, 193, 7, 0.3);
-            text-align: center;
-        }
-        .test-info p {
-            color: #ffc107;
-            font-size: 13px;
-            margin: 0;
-        }
+
+        /* --- RESPONSIVE --- */
         @media (max-width: 480px) {
-            .container {
-                max-width: 100%;
-            }
-            body {
-                padding: 10px;
-            }
+            .container { padding: 20px 15px; }
+            .plan { flex-wrap: wrap; gap: 4px; }
         }
     </style>
 </head>
 <body>
-    <div class="container">
-        <div class="header">
-            <h1>🌐 GICH WIFI</h1>
-            <p>Fast • Secure • Reliable Internet</p>
-            <div id="statusBadge" class="status-badge status-checking">⏳ Connecting...</div>
-            <div id="urlDisplay" class="url-display">📡 API: <strong id="apiUrlDisplay">Loading...</strong></div>
-        </div>
 
-        <div class="card test-info">
-            <p>🧪 SANDBOX TEST MODE</p>
-            <p style="font-size:12px;color:#888;margin-top:5px;">
-                Test Phone: <strong style="color:#00c853;">0712345678</strong><br>
-                Test PIN: <strong style="color:#00c853;">12345</strong>
-            </p>
-        </div>
+<div class="container" id="app">
 
-        <div class="card" id="howToCard">
-            <h2>📶 HOW TO CONNECT</h2>
-            <div class="info-step"><p>1️⃣ Connect to GICH WiFi network</p></div>
-            <div class="info-step"><p>2️⃣ Select your package below</p></div>
-            <div class="info-step"><p>3️⃣ Enter your phone number (0712345678)</p></div>
-            <div class="info-step"><p>4️⃣ Enter M-Pesa PIN when prompted (12345)</p></div>
-            <div class="info-step"><p>5️⃣ Wait for payment confirmation</p></div>
-            <div class="info-step"><p>6️⃣ Click "Connect to Internet"</p></div>
-            <div class="info-step"><p>7️⃣ Enjoy fast internet! 🎉</p></div>
-        </div>
+    <!-- ===== HEADER ===== -->
+    <div class="header">
+        <h1>🌐 GICH WIFI</h1>
+        <p>Fast • Secure • Reliable</p>
+        <div id="statusBadge" class="status-badge status-checking">⏳ Connecting...</div>
+    </div>
 
-        <div class="card" id="packages">
-            <h2>📦 WiFi Packages</h2>
-            <div class="plan">
-                <span class="plan-name">🎁 Free Trial</span>
-                <span class="plan-price">5 Hours - FREE</span>
-                <button onclick="selectPlan(0, 'Free Trial', 'Free_Trial')">Get</button>
-            </div>
-            <div class="plan">
-                <span class="plan-name">⏱ 2 Hours</span>
-                <span class="plan-price">KSh 10</span>
-                <button onclick="selectPlan(10, '2 Hours', '2_Hours')">Buy</button>
-            </div>
-            <div class="plan">
-                <span class="plan-name">⏱ 5 Hours</span>
-                <span class="plan-price">KSh 20</span>
-                <button onclick="selectPlan(20, '5 Hours', '5_Hours')">Buy</button>
-            </div>
-            <div class="plan">
-                <span class="plan-name">⏱ 8 Hours</span>
-                <span class="plan-price">KSh 30</span>
-                <button onclick="selectPlan(30, '8 Hours', '8_Hours')">Buy</button>
-            </div>
-            <div class="plan">
-                <span class="plan-name">⏱ 12 Hours</span>
-                <span class="plan-price">KSh 50</span>
-                <button onclick="selectPlan(50, '12 Hours', '12_Hours')">Buy</button>
-            </div>
-            <div class="plan">
-                <span class="plan-name">⏱ 24 Hours</span>
-                <span class="plan-price">KSh 80</span>
-                <button onclick="selectPlan(80, '24 Hours', '24_Hours')">Buy</button>
+    <!-- ===== LOADING OVERLAY ===== -->
+    <div id="loadingOverlay" class="loading-overlay hidden">
+        <div class="spinner"></div>
+        <div class="loading-text">⏳ Processing your request...</div>
+        <div style="font-size:12px;color:#666;margin-top:8px;">This may take up to 50 seconds</div>
+    </div>
+
+    <!-- ===== STEP 1: PLANS ===== -->
+    <div id="stepPlans">
+        <div class="card">
+            <h2>📦 Select Your Plan</h2>
+            <div id="plansContainer">
+                <!-- Plans will be loaded dynamically -->
             </div>
         </div>
 
-        <div class="card hidden" id="paymentCard">
-            <h2>💳 M-Pesa Payment</h2>
-            <p id="planDisplay" style="text-align:center;font-size:16px;color:#00c853;margin-bottom:15px;"></p>
+        <div class="card">
             <input type="tel" id="phoneInput" placeholder="Enter M-Pesa number (e.g., 0712345678)" />
-            <button class="btn" id="payBtn" onclick="makePayment()">Pay Now</button>
-            <p style="text-align:center;font-size:12px;color:#888;margin-top:10px;">📱 You'll receive an M-Pesa prompt to enter your PIN</p>
-            <p style="text-align:center;font-size:11px;color:#ffa726;">Sandbox PIN: 12345</p>
-            <div id="resultBox" class="result-box"></div>
-            <div id="loadingIndicator" class="loading hidden">
-                <span class="spinner"></span> Processing payment...
-            </div>
-            <button class="btn btn-secondary hidden" id="backBtn" onclick="backToPlans()" style="margin-top:10px;">← Back to Plans</button>
+            <button class="btn" id="payBtn" onclick="initiatePayment()">Pay Now</button>
         </div>
 
-        <div class="card hidden" id="successCard">
-            <div class="success-card">
-                <div class="icon">🎉</div>
-                <h2>Payment Successful!</h2>
-                <p style="color:#aaa;margin-bottom:15px;">Thank you for choosing GICH WiFi</p>
-                <div class="details">
-                    <div class="status-row">
-                        <span class="label">📱 Phone</span>
-                        <span class="value" id="successPhone">-</span>
-                    </div>
-                    <div class="status-row">
-                        <span class="label">💰 Amount</span>
-                        <span class="value paid" id="successAmount">-</span>
-                    </div>
-                    <div class="status-row">
-                        <span class="label">📦 Plan</span>
-                        <span class="value" id="successPlan">-</span>
-                    </div>
-                    <div class="status-row">
-                        <span class="label">📋 Status</span>
-                        <span class="value paid">✅ Completed</span>
-                    </div>
-                </div>
-                <div class="transaction-id" id="successTransactionId">Transaction ID: -</div>
-                
-                <div class="credentials-box hidden" id="credentialsBox">
-                    <h4>🔑 Your Login Credentials</h4>
-                    <div class="cred-row">
-                        <span class="label">Username:</span>
-                        <span class="value" id="credUsername">-</span>
-                    </div>
-                    <div class="cred-row">
-                        <span class="label">Password:</span>
-                        <span class="value" id="credPassword">-</span>
-                    </div>
-                    <div class="cred-row">
-                        <span class="label">Plan:</span>
-                        <span class="value" id="credPlan">-</span>
-                    </div>
-                    <p style="font-size:12px;color:#888;margin-top:10px;">Use these credentials to login to the hotspot</p>
-                </div>
-                
-                <button class="btn" id="connectBtn" onclick="connectToInternet()" style="margin-top:10px;">🌐 Connect to Internet</button>
-                <button class="btn btn-secondary" onclick="backToPlans()" style="margin-top:10px;">Back to Plans</button>
-            </div>
-        </div>
-
-        <div class="card" id="connectCard">
-            <h3>🔗 Already Paid?</h3>
-            <p style="text-align:center;font-size:12px;color:#888;margin-bottom:10px;">Enter your M-Pesa confirmation code to connect</p>
-            <input type="text" id="mpesaCodeInput" placeholder="Enter M-Pesa code (e.g., P2A3B4C5)" />
-            <button class="btn" id="connectBtnCode" onclick="connectWithCode()">Connect Now</button>
-            <div id="connectResult" class="result-box"></div>
-        </div>
-
-        <div class="footer">
-            🔒 Secure • ⚡ Fast • 📡 Reliable
+        <!-- ===== ALREADY PAID? ===== -->
+        <div class="card check-paid-section">
+            <p style="font-size:13px;color:#aaa;text-align:center;">Already paid? Check your status</p>
+            <input type="text" id="checkPhoneInput" placeholder="Enter your phone number" style="margin-bottom:6px;" />
+            <button class="btn btn-secondary" onclick="checkExistingPlan()">Check Status</button>
+            <div id="checkResult" style="margin-top:8px;font-size:13px;color:#aaa;"></div>
         </div>
     </div>
 
-    <script>
-        // ============================================================
-        // CONFIGURATION - FIXED FOR RENDER
-        // ============================================================
-        // Hardcode your Render URL for reliability
-        const RENDER_URL = 'https://billing-system-fm9a.onrender.com';
-        const API_URL = RENDER_URL + '/api';
-        
-        // ============================================================
-        // HOTSPOT PARAMETERS (passed from MikroTik)
-        // ============================================================
-        const urlParams = new URLSearchParams(window.location.search);
-        const linkLogin = urlParams.get('link-login') || '';
-        const linkOrig = urlParams.get('link-orig') || '';
-        const macAddress = urlParams.get('mac') || '';
-        const ip = urlParams.get('ip') || '';
+    <!-- ===== STEP 2: PAYMENT PROCESSING ===== -->
+    <div id="stepProcessing" class="hidden">
+        <div class="card" style="text-align:center;padding:30px 20px;">
+            <div class="spinner" style="margin:0 auto 15px;"></div>
+            <h3>⏳ Processing Payment</h3>
+            <p style="color:#aaa;font-size:14px;">Please wait while we confirm your payment...</p>
+            <p style="color:#666;font-size:12px;margin-top:6px;">This may take up to 50 seconds</p>
+        </div>
+    </div>
 
-        console.log('🌐 GICH WiFi System Loaded');
-        console.log('📡 API URL:', API_URL);
-        console.log('📱 MAC:', macAddress);
-        console.log('🌐 IP:', ip);
+    <!-- ===== STEP 3: CONNECTED / COUNTDOWN ===== -->
+    <div id="stepConnected" class="hidden">
+        <div class="card" style="text-align:center;">
+            <div style="font-size:48px;">🎉</div>
+            <h2 style="color:#00c853;">Connected!</h2>
+            <p style="color:#aaa;">You are now online.</p>
+        </div>
 
-        // ============================================================
-        // STATE
-        // ============================================================
-        let currentAmount = 0;
-        let currentPlan = '';
-        let currentPlanId = '';
-        let currentTransactionId = '';
-        let statusCheckInterval = null;
-        let credentials = null;
-        let isPaymentCompleted = false;
+        <div class="countdown">
+            <div class="label">⏱ Time Remaining</div>
+            <div class="time" id="countdownDisplay">--:--:--</div>
+        </div>
 
-        // ============================================================
-        // CHECK SERVER STATUS - FIXED
-        // ============================================================
-        async function checkServerStatus() {
-            const badge = document.getElementById('statusBadge');
-            const urlDisplay = document.getElementById('apiUrlDisplay');
-            
-            // Update the display
-            urlDisplay.textContent = API_URL;
-            
-            try {
-                // Use the API_URL directly with /health
-                const response = await fetch(API_URL + '/health');
-                if (response.ok) {
-                    const data = await response.json();
-                    badge.textContent = '✅ Server Online';
-                    badge.className = 'status-badge status-online';
-                    console.log('✅ Server connected:', data);
-                } else {
-                    badge.textContent = '⚠️ Server Error';
-                    badge.className = 'status-badge status-offline';
-                }
-            } catch (error) {
-                badge.textContent = '❌ Server Offline - Check Connection';
-                badge.className = 'status-badge status-offline';
-                console.error('❌ Server connection error:', error);
-                console.error('🔍 API URL used:', API_URL + '/health');
-            }
-        }
+        <div class="cred-box">
+            <div class="cred-row"><span class="label">Username</span><span class="value" id="credUser">-</span></div>
+            <div class="cred-row"><span class="label">Password</span><span class="value" id="credPass">-</span></div>
+            <div class="cred-row"><span class="label">Plan</span><span class="value" id="credPlanName">-</span></div>
+        </div>
 
-        function displayApiUrl() {
-            document.getElementById('apiUrlDisplay').textContent = API_URL;
-        }
+        <button class="btn btn-secondary" onclick="resetApp()">Disconnect / Back</button>
+    </div>
 
-        // ============================================================
-        // SELECT PLAN
-        // ============================================================
-        function selectPlan(amount, planName, planId) {
-            currentAmount = amount;
-            currentPlan = planName;
-            currentPlanId = planId;
-            isPaymentCompleted = false;
+    <!-- ===== STEP 4: VOUCHER INPUT ===== -->
+    <div class="card voucher-section">
+        <h3>🎟️ Have a Voucher?</h3>
+        <input type="text" id="voucherInput" placeholder="Enter voucher code" />
+        <button class="btn" onclick="redeemVoucher()">Redeem Voucher</button>
+        <div id="voucherResult" style="margin-top:8px;font-size:13px;color:#aaa;"></div>
+    </div>
 
-            document.getElementById('packages').classList.add('hidden');
-            document.getElementById('howToCard').classList.add('hidden');
-            document.getElementById('paymentCard').classList.remove('hidden');
-            document.getElementById('successCard').classList.add('hidden');
+    <!-- ===== FOOTER ===== -->
+    <div class="footer">
+        🔒 Secure • ⚡ Fast • 📡 Reliable
+    </div>
+</div>
 
-            const display = document.getElementById('planDisplay');
-            if (amount === 0) {
-                display.textContent = '🎁 ' + planName + ' - FREE Trial';
+<script>
+    // ============================================================
+    // CONFIGURATION
+    // ============================================================
+    const RENDER_URL = 'https://billing-system-fm9a.onrender.com';
+    const API_URL = RENDER_URL + '/api';
+
+    // ============================================================
+    // STATE
+    // ============================================================
+    let selectedPlan = null;
+    let selectedPlanId = null;
+    let transactionId = null;
+    let countdownInterval = null;
+    let credentials = null;
+
+    // ============================================================
+    // DOM REFS
+    // ============================================================
+    const $ = id => document.getElementById(id);
+    const statusBadge = $('statusBadge');
+    const plansContainer = $('plansContainer');
+    const phoneInput = $('phoneInput');
+    const payBtn = $('payBtn');
+    const stepPlans = $('stepPlans');
+    const stepProcessing = $('stepProcessing');
+    const stepConnected = $('stepConnected');
+    const loadingOverlay = $('loadingOverlay');
+    const countdownDisplay = $('countdownDisplay');
+    const credUser = $('credUser');
+    const credPass = $('credPass');
+    const credPlanName = $('credPlanName');
+    const checkPhoneInput = $('checkPhoneInput');
+    const checkResult = $('checkResult');
+    const voucherInput = $('voucherInput');
+    const voucherResult = $('voucherResult');
+
+    // ============================================================
+    // PLAN DATA (matches backend)
+    // ============================================================
+    const PLAN_DATA = [
+        { id: '2_Hours', name: '2 Hours', price: 10, devices: 1, duration_seconds: 7200 },
+        { id: '5_Hours', name: '5 Hours', price: 20, devices: 1, duration_seconds: 18000 },
+        { id: '8_Hours', name: '8 Hours', price: 30, devices: 1, duration_seconds: 28800 },
+        { id: '12_Hours', name: '12 Hours', price: 50, devices: 1, duration_seconds: 43200 },
+        { id: '24_Hours', name: '24 Hours', price: 80, devices: 1, duration_seconds: 86400 },
+        { id: '1_Week_1_Device', name: '1 Week (1 Device)', price: 300, devices: 1, duration_seconds: 604800 },
+        { id: '1_Week_3_Devices', name: '1 Week (3 Devices)', price: 400, devices: 3, duration_seconds: 604800 },
+        { id: '1_Month_1_Device', name: '1 Month (1 Device)', price: 1000, devices: 1, duration_seconds: 2592000 },
+        { id: '1_Month_3_Devices', name: '1 Month (3 Devices)', price: 1200, devices: 3, duration_seconds: 2592000 }
+    ];
+
+    // ============================================================
+    // CHECK SERVER STATUS
+    // ============================================================
+    async function checkServerStatus() {
+        try {
+            const res = await fetch(API_URL + '/health');
+            if (res.ok) {
+                statusBadge.textContent = '✅ Online';
+                statusBadge.className = 'status-badge status-online';
             } else {
-                display.textContent = '⏱ ' + planName + ' - KSh ' + amount;
+                statusBadge.textContent = '⚠️ Error';
+                statusBadge.className = 'status-badge status-offline';
             }
+        } catch (e) {
+            statusBadge.textContent = '❌ Offline';
+            statusBadge.className = 'status-badge status-offline';
+            console.error('Server check failed:', e);
+        }
+    }
 
-            document.getElementById('resultBox').className = 'result-box';
-            document.getElementById('resultBox').style.display = 'none';
-            document.getElementById('phoneInput').value = '';
-            document.getElementById('phoneInput').focus();
-            document.getElementById('payBtn').disabled = false;
-            document.getElementById('payBtn').textContent = 'Pay Now';
-            document.getElementById('backBtn').classList.add('hidden');
+    // ============================================================
+    // RENDER PLANS
+    // ============================================================
+    function renderPlans() {
+        plansContainer.innerHTML = '';
+        PLAN_DATA.forEach(p => {
+            const div = document.createElement('div');
+            div.className = 'plan';
+            div.dataset.id = p.id;
+            div.innerHTML = `
+                <span class="plan-name">${p.name}</span>
+                <span>
+                    <span class="plan-price">KSh ${p.price}</span>
+                    <span class="plan-devices"> • ${p.devices} device${p.devices > 1 ? 's' : ''}</span>
+                </span>
+            `;
+            div.onclick = () => selectPlan(p.id);
+            plansContainer.appendChild(div);
+        });
+        // Auto-select first plan
+        if (PLAN_DATA.length) selectPlan(PLAN_DATA[0].id);
+    }
+
+    function selectPlan(id) {
+        selectedPlanId = id;
+        selectedPlan = PLAN_DATA.find(p => p.id === id);
+        document.querySelectorAll('.plan').forEach(el => {
+            el.classList.toggle('selected', el.dataset.id === id);
+        });
+    }
+
+    // ============================================================
+    // PAYMENT FLOW
+    // ============================================================
+    async function initiatePayment() {
+        const phone = phoneInput.value.trim();
+        if (!phone || phone.length < 10) {
+            alert('Please enter a valid phone number (e.g., 0712345678)');
+            return;
+        }
+        if (!selectedPlan) {
+            alert('Please select a plan first.');
+            return;
         }
 
-        function backToPlans() {
-            if (statusCheckInterval) {
-                clearInterval(statusCheckInterval);
-                statusCheckInterval = null;
-            }
-            isPaymentCompleted = false;
-            document.getElementById('paymentCard').classList.add('hidden');
-            document.getElementById('successCard').classList.add('hidden');
-            document.getElementById('packages').classList.remove('hidden');
-            document.getElementById('howToCard').classList.remove('hidden');
-        }
+        // Show loading
+        showLoading(true);
+        payBtn.disabled = true;
+        payBtn.textContent = 'Processing...';
 
-        // ============================================================
-        // MAKE PAYMENT
-        // ============================================================
-        async function makePayment() {
-            const phone = document.getElementById('phoneInput').value.trim();
+        try {
+            const response = await fetch(API_URL + '/payment/initiate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    phoneNumber: phone,
+                    amount: selectedPlan.price,
+                    planId: selectedPlan.id,
+                    macAddress: ''
+                })
+            });
+            const data = await response.json();
+            console.log('Payment response:', data);
 
-            if (phone.length < 10) {
-                showResult('resultBox', '❌ Please enter a valid M-Pesa number (e.g., 0712345678)', 'error');
-                return;
-            }
-
-            const payBtn = document.getElementById('payBtn');
-            const loading = document.getElementById('loadingIndicator');
-            const resultBox = document.getElementById('resultBox');
-
-            payBtn.disabled = true;
-            payBtn.textContent = 'Processing...';
-            loading.classList.remove('hidden');
-            resultBox.className = 'result-box';
-            resultBox.style.display = 'none';
-            isPaymentCompleted = false;
-
-            try {
-                console.log('📤 Sending payment request to:', API_URL + '/payment/initiate');
-                console.log('📤 Data:', { phoneNumber: phone, amount: currentAmount, planId: currentPlanId, macAddress: macAddress });
-
-                const response = await fetch(API_URL + '/payment/initiate', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        phoneNumber: phone,
-                        amount: currentAmount,
-                        planId: currentPlanId,
-                        macAddress: macAddress
-                    })
-                });
-
-                const data = await response.json();
-                console.log('📥 Payment response:', data);
-
-                if (response.ok && data.success) {
-                    currentTransactionId = data.transactionId;
-                    
-                    document.getElementById('paymentCard').classList.add('hidden');
-                    document.getElementById('successCard').classList.remove('hidden');
-                    
-                    document.getElementById('successPhone').textContent = phone;
-                    document.getElementById('successAmount').textContent = 'KSh ' + currentAmount;
-                    document.getElementById('successPlan').textContent = currentPlan;
-                    document.getElementById('successTransactionId').textContent = 'Transaction ID: ' + data.transactionId;
-                    
-                    // Check if it's mock mode
-                    if (data.mock) {
-                        console.log('⚠️ Mock mode activated');
-                        isPaymentCompleted = true;
-                        // Show mock credentials
-                        setTimeout(() => {
-                            fetchCredentials(data.transactionId);
-                        }, 2000);
-                    } else {
-                        // Start polling for real payment
-                        checkTransactionStatus(data.transactionId);
-                    }
-                    
-                } else {
-                    showResult('resultBox', '❌ Payment failed: ' + (data.message || 'Unknown error'), 'error');
-                    document.getElementById('backBtn').classList.remove('hidden');
-                    payBtn.disabled = false;
-                    payBtn.textContent = 'Pay Now';
-                    loading.classList.add('hidden');
-                }
-            } catch (error) {
-                console.error('❌ Payment error:', error);
-                showResult('resultBox', '❌ Network error: ' + error.message + '\n\nMake sure the backend is running', 'error');
-                document.getElementById('backBtn').classList.remove('hidden');
+            if (data.success) {
+                transactionId = data.transactionId;
+                // Wait for transaction to complete
+                await waitForTransaction(transactionId);
+            } else {
+                alert('Payment failed: ' + (data.message || 'Unknown error'));
+                hideLoading();
                 payBtn.disabled = false;
                 payBtn.textContent = 'Pay Now';
-                loading.classList.add('hidden');
             }
+        } catch (error) {
+            console.error('Payment error:', error);
+            alert('An error occurred. Please try again.');
+            hideLoading();
+            payBtn.disabled = false;
+            payBtn.textContent = 'Pay Now';
         }
+    }
 
-        // ============================================================
-        // CHECK TRANSACTION STATUS - IMPROVED POLLING
-        // ============================================================
-        function checkTransactionStatus(transactionId) {
-            let attempts = 0;
-            const maxAttempts = 20; // Check for ~60 seconds
-            let isCompleted = false;
-            
-            console.log('🔄 Checking transaction status for:', transactionId);
-            
-            if (statusCheckInterval) {
-                clearInterval(statusCheckInterval);
-                statusCheckInterval = null;
-            }
-            
-            statusCheckInterval = setInterval(async () => {
-                try {
-                    const response = await fetch(`${API_URL}/transaction/${transactionId}`);
-                    const data = await response.json();
-                    
-                    console.log(`📊 Status check ${attempts + 1}:`, data);
-                    
-                    if (data.success && data.data.status === 'completed') {
-                        clearInterval(statusCheckInterval);
-                        statusCheckInterval = null;
-                        isCompleted = true;
-                        isPaymentCompleted = true;
-                        console.log('✅ Transaction completed!');
-                        
-                        // Show credentials
-                        if (data.data.mikrotikCreated) {
-                            showCredentials(data.data);
-                        } else {
-                            await fetchCredentials(transactionId);
-                        }
-                        
-                        document.getElementById('successTransactionId').textContent = 
-                            'Transaction ID: ' + transactionId + '\nMPESA Code: ' + (data.data.mpesaCode || 'N/A');
-                        
-                    } else if (data.success && (data.data.status === 'failed' || data.data.status === 'cancelled')) {
-                        clearInterval(statusCheckInterval);
-                        statusCheckInterval = null;
-                        console.log('❌ Transaction failed or cancelled');
-                        document.getElementById('successCard').classList.add('hidden');
-                        document.getElementById('paymentCard').classList.remove('hidden');
-                        showResult('resultBox', '❌ Payment failed or cancelled. Please try again.', 'error');
-                        document.getElementById('backBtn').classList.remove('hidden');
-                        document.getElementById('payBtn').disabled = false;
-                        document.getElementById('payBtn').textContent = 'Pay Now';
-                        document.getElementById('loadingIndicator').classList.add('hidden');
-                    }
-                    
-                    attempts++;
-                    if (attempts >= maxAttempts && !isCompleted) {
-                        clearInterval(statusCheckInterval);
-                        statusCheckInterval = null;
-                        console.log('⏱️ Status check timeout - still pending');
-                        // Don't show error, just stop polling
-                        // The user can check manually or refresh
-                        document.getElementById('loadingIndicator').classList.add('hidden');
-                        document.getElementById('payBtn').disabled = false;
-                        document.getElementById('payBtn').textContent = 'Pay Now';
-                    }
-                } catch (error) {
-                    console.error('Status check error:', error);
-                }
-            }, 3000);
-        }
+    // ============================================================
+    // WAIT FOR TRANSACTION (POLLING WITH BACKOFF)
+    // ============================================================
+    async function waitForTransaction(txnId) {
+        let attempts = 0;
+        const maxAttempts = 30; // ~50 seconds with backoff
 
-        // ============================================================
-        // FETCH CREDENTIALS
-        // ============================================================
-        async function fetchCredentials(transactionId) {
+        while (attempts < maxAttempts) {
             try {
-                const response = await fetch(`${API_URL}/get-credentials/${transactionId}?linkLogin=${encodeURIComponent(linkLogin)}&linkOrig=${encodeURIComponent(linkOrig)}&mac=${encodeURIComponent(macAddress)}`);
-                const data = await response.json();
-                
-                if (data.success) {
-                    credentials = data;
-                    showCredentials(data);
-                    document.getElementById('loadingIndicator').classList.add('hidden');
-                    document.getElementById('payBtn').disabled = false;
-                    document.getElementById('payBtn').textContent = 'Pay Now';
-                } else {
-                    console.log('⏳ Credentials not ready yet, will retry...');
-                    setTimeout(() => fetchCredentials(transactionId), 5000);
+                const res = await fetch(`${API_URL}/transaction/${txnId}`);
+                const data = await res.json();
+                console.log(`Status check ${attempts+1}:`, data);
+
+                if (data.success && data.data.status === 'completed') {
+                    // Success!
+                    credentials = {
+                        username: data.data.mikrotikUsername || 'user_' + (data.data.mpesaCode || txnId),
+                        password: data.data.mikrotikPassword || 'pass_' + Date.now(),
+                        planName: data.data.planName || selectedPlan.name,
+                        expiresAt: data.data.expiresAt || new Date(Date.now() + selectedPlan.duration_seconds * 1000).toISOString()
+                    };
+                    showConnected();
+                    return;
                 }
-            } catch (error) {
-                console.error('Error fetching credentials:', error);
+
+                if (data.success && (data.data.status === 'failed' || data.data.status === 'cancelled')) {
+                    alert('Payment failed or was cancelled. Please try again.');
+                    hideLoading();
+                    payBtn.disabled = false;
+                    payBtn.textContent = 'Pay Now';
+                    return;
+                }
+
+                // Exponential backoff: wait longer each time (max 5s)
+                const wait = Math.min(1000 * Math.pow(1.2, attempts), 5000);
+                await sleep(wait);
+                attempts++;
+            } catch (e) {
+                console.error('Polling error:', e);
+                await sleep(2000);
+                attempts++;
             }
         }
 
-        function showCredentials(data) {
-            const box = document.getElementById('credentialsBox');
-            box.classList.remove('hidden');
-            document.getElementById('credUsername').textContent = data.username || 'N/A';
-            document.getElementById('credPassword').textContent = data.password || 'N/A';
-            document.getElementById('credPlan').textContent = data.plan || 'N/A';
-            credentials = data;
-            isPaymentCompleted = true;
-            
-            // Hide loading indicator
-            document.getElementById('loadingIndicator').classList.add('hidden');
-            document.getElementById('payBtn').disabled = false;
-            document.getElementById('payBtn').textContent = 'Pay Now';
-        }
+        // Timeout
+        alert('Payment confirmation timed out. Please check your transaction status later.');
+        hideLoading();
+        payBtn.disabled = false;
+        payBtn.textContent = 'Pay Now';
+    }
 
-        // ============================================================
-        // CONNECT TO INTERNET (Hotspot Login)
-        // ============================================================
-        function connectToInternet() {
-            if (!credentials) {
-                alert('⏳ Please wait for your credentials to be ready...');
+    function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
+
+    // ============================================================
+    // SHOW CONNECTED STATE
+    // ============================================================
+    function showConnected() {
+        hideLoading();
+        stepPlans.classList.add('hidden');
+        stepProcessing.classList.add('hidden');
+        stepConnected.classList.remove('hidden');
+
+        // Show credentials
+        credUser.textContent = credentials.username || 'N/A';
+        credPass.textContent = credentials.password || 'N/A';
+        credPlanName.textContent = credentials.planName || selectedPlan.name;
+
+        // Start countdown
+        startCountdown(credentials.expiresAt);
+
+        // Auto-connect to internet (simulate)
+        // In production, this would POST to MikroTik API
+        console.log('🌐 Auto-connecting to internet...');
+        // Here you would call your MikroTik login endpoint
+        // For now, just show connected state
+    }
+
+    // ============================================================
+    // COUNTDOWN TIMER
+    // ============================================================
+    function startCountdown(expiresAt) {
+        if (countdownInterval) clearInterval(countdownInterval);
+
+        function update() {
+            const now = Date.now();
+            const expiry = new Date(expiresAt).getTime();
+            const diff = Math.max(0, expiry - now);
+
+            if (diff <= 0) {
+                countdownDisplay.textContent = '00:00:00';
+                clearInterval(countdownInterval);
                 return;
             }
 
-            console.log('🌐 Connecting to internet...');
-            console.log('   👤 Username:', credentials.username);
-            console.log('   🔑 Password:', credentials.password);
-            
-            const loginForm = document.createElement('form');
-            loginForm.method = 'POST';
-            loginForm.action = linkLogin || 'http://' + window.location.hostname + '/login';
-            
-            const fields = {
-                'username': credentials.username,
-                'password': credentials.password,
-                'dst': linkOrig || '',
-                'mac': macAddress || '',
-                'link-login': linkLogin || ''
-            };
-            
-            for (const [key, value] of Object.entries(fields)) {
-                const input = document.createElement('input');
-                input.type = 'hidden';
-                input.name = key;
-                input.value = value || '';
-                loginForm.appendChild(input);
-            }
-            
-            document.body.appendChild(loginForm);
-            console.log('📤 Submitting login form to:', loginForm.action);
-            loginForm.submit();
+            const hours = Math.floor(diff / 3600000);
+            const mins = Math.floor((diff % 3600000) / 60000);
+            const secs = Math.floor((diff % 60000) / 1000);
+            countdownDisplay.textContent =
+                String(hours).padStart(2, '0') + ':' +
+                String(mins).padStart(2, '0') + ':' +
+                String(secs).padStart(2, '0');
         }
 
-        // ============================================================
-        // CONNECT WITH MPESA CODE (Fallback)
-        // ============================================================
-        async function connectWithCode() {
-            const mpesaCode = document.getElementById('mpesaCodeInput').value.trim();
-            const resultBox = document.getElementById('connectResult');
+        update();
+        countdownInterval = setInterval(update, 1000);
+    }
 
-            if (!mpesaCode) {
-                showResult('connectResult', '❌ Please enter your M-Pesa confirmation code', 'error');
-                return;
-            }
+    // ============================================================
+    // CHECK EXISTING PLAN
+    // ============================================================
+    async function checkExistingPlan() {
+        const phone = checkPhoneInput.value.trim();
+        if (!phone || phone.length < 10) {
+            checkResult.textContent = '❌ Please enter a valid phone number.';
+            checkResult.style.color = '#ff6b6b';
+            return;
+        }
 
-            const connectBtn = document.getElementById('connectBtnCode');
-            connectBtn.disabled = true;
-            connectBtn.textContent = 'Connecting...';
-            resultBox.className = 'result-box';
-            resultBox.style.display = 'none';
+        checkResult.textContent = '⏳ Checking...';
+        checkResult.style.color = '#aaa';
 
-            try {
-                console.log('📤 Sending connect request:', { mpesaCode: mpesaCode });
-
-                const response = await fetch(API_URL + '/payment/connect', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({
-                        mpesaCode: mpesaCode,
-                        phoneNumber: '0712345678',
-                        macAddress: macAddress
-                    })
-                });
-
-                const data = await response.json();
-                console.log('📥 Connect response:', data);
-
-                if (data.success && data.data.username) {
-                    showResult('connectResult',
-                        '✅ Found your payment!\n\n' +
-                        '🔑 Username: ' + data.data.username + '\n' +
-                        '🔑 Password: ' + data.data.password + '\n\n' +
-                        '🌐 Connecting to internet...',
-                        'success'
-                    );
-                    
-                    setTimeout(() => {
-                        const loginForm = document.createElement('form');
-                        loginForm.method = 'POST';
-                        loginForm.action = linkLogin || 'http://' + window.location.hostname + '/login';
-                        
-                        const fields = {
-                            'username': data.data.username,
-                            'password': data.data.password,
-                            'dst': linkOrig || '',
-                            'mac': macAddress || ''
-                        };
-                        
-                        for (const [key, value] of Object.entries(fields)) {
-                            const input = document.createElement('input');
-                            input.type = 'hidden';
-                            input.name = key;
-                            input.value = value || '';
-                            loginForm.appendChild(input);
-                        }
-                        
-                        document.body.appendChild(loginForm);
-                        loginForm.submit();
-                    }, 2000);
-                    
-                    document.getElementById('mpesaCodeInput').value = '';
-                    
+        try {
+            // Get all transactions and find active one for this phone
+            const res = await fetch(API_URL + '/transactions');
+            const data = await res.json();
+            if (data.success && data.data) {
+                const active = data.data.find(t =>
+                    t.phoneNumber === phone &&
+                    t.status === 'completed' &&
+                    t.mikrotikCreated &&
+                    (!t.expiresAt || new Date(t.expiresAt) > new Date())
+                );
+                if (active) {
+                    checkResult.textContent = '✅ You have an active plan! Redirecting...';
+                    checkResult.style.color = '#00c853';
+                    // Auto-connect
+                    credentials = {
+                        username: active.mikrotikUsername || 'user_' + (active.mpesaCode || active.id),
+                        password: active.mikrotikPassword || 'pass_' + Date.now(),
+                        planName: active.planName || 'Active Plan',
+                        expiresAt: active.expiresAt || new Date(Date.now() + 3600000).toISOString()
+                    };
+                    showConnected();
                 } else {
-                    showResult('connectResult', '❌ ' + (data.message || 'Connection failed'), 'error');
-                }
-            } catch (error) {
-                console.error('❌ Connect error:', error);
-                showResult('connectResult', '❌ Network error: ' + error.message, 'error');
-            } finally {
-                connectBtn.disabled = false;
-                connectBtn.textContent = 'Connect Now';
-            }
-        }
-
-        // ============================================================
-        // SHOW RESULT
-        // ============================================================
-        function showResult(elementId, message, type) {
-            const element = document.getElementById(elementId);
-            element.textContent = message;
-            element.className = 'result-box show ' + type;
-            element.style.display = 'block';
-        }
-
-        // ============================================================
-        // KEYBOARD SUPPORT
-        // ============================================================
-        document.addEventListener('keydown', function(event) {
-            if (event.key === 'Enter') {
-                const activeElement = document.activeElement;
-                if (activeElement && activeElement.id === 'phoneInput') {
-                    makePayment();
-                } else if (activeElement && activeElement.id === 'mpesaCodeInput') {
-                    connectWithCode();
+                    checkResult.textContent = '❌ No active plan found for this number.';
+                    checkResult.style.color = '#ff6b6b';
                 }
             }
-        });
+        } catch (e) {
+            console.error('Check existing plan error:', e);
+            checkResult.textContent = '❌ Error checking status. Please try again.';
+            checkResult.style.color = '#ff6b6b';
+        }
+    }
 
-        // ============================================================
-        // INITIALIZE
-        // ============================================================
-        document.addEventListener('DOMContentLoaded', function() {
-            displayApiUrl();
-            checkServerStatus();
-            setInterval(checkServerStatus, 30000);
-        });
-    </script>
+    // ============================================================
+    // VOUCHER REDEMPTION
+    // ============================================================
+    async function redeemVoucher() {
+        const code = voucherInput.value.trim();
+        if (!code) {
+            voucherResult.textContent = '❌ Please enter a voucher code.';
+            voucherResult.style.color = '#ff6b6b';
+            return;
+        }
+
+        voucherResult.textContent = '⏳ Validating...';
+        voucherResult.style.color = '#aaa';
+
+        try {
+            // In production, this would call a backend endpoint to validate the voucher
+            // For now, simulate validation
+            await sleep(1500);
+            // Mock: Accept any code that is 8+ characters
+            if (code.length >= 8) {
+                voucherResult.textContent = '✅ Voucher valid! Connecting...';
+                voucherResult.style.color = '#00c853';
+                // Simulate connection
+                credentials = {
+                    username: 'voucher_user_' + Date.now(),
+                    password: 'voucher_pass_' + Date.now(),
+                    planName: 'Voucher Plan',
+                    expiresAt: new Date(Date.now() + 86400000).toISOString() // 24 hours
+                };
+                showConnected();
+            } else {
+                voucherResult.textContent = '❌ Invalid voucher code. Please check and try again.';
+                voucherResult.style.color = '#ff6b6b';
+            }
+        } catch (e) {
+            console.error('Voucher error:', e);
+            voucherResult.textContent = '❌ Error redeeming voucher.';
+            voucherResult.style.color = '#ff6b6b';
+        }
+    }
+
+    // ============================================================
+    // LOADING OVERLAY HELPERS
+    // ============================================================
+    function showLoading(show) {
+        loadingOverlay.classList.toggle('hidden', !show);
+    }
+
+    function hideLoading() {
+        loadingOverlay.classList.add('hidden');
+    }
+
+    // ============================================================
+    // RESET APP
+    // ============================================================
+    function resetApp() {
+        if (countdownInterval) clearInterval(countdownInterval);
+        stepConnected.classList.add('hidden');
+        stepPlans.classList.remove('hidden');
+        stepProcessing.classList.add('hidden');
+        selectedPlan = null;
+        transactionId = null;
+        credentials = null;
+        payBtn.disabled = false;
+        payBtn.textContent = 'Pay Now';
+        // Reselect first plan
+        if (PLAN_DATA.length) selectPlan(PLAN_DATA[0].id);
+    }
+
+    // ============================================================
+    // INIT
+    // ============================================================
+    document.addEventListener('DOMContentLoaded', () => {
+        renderPlans();
+        checkServerStatus();
+        setInterval(checkServerStatus, 30000);
+    });
+</script>
+
 </body>
 </html>
