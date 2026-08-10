@@ -1,5 +1,5 @@
 /**
- * GICH WiFi - Complete Backend with Theme Customizer
+ * GICH WiFi - Complete Backend with Theme Customizer & Cache Control
  * Deployable on Render with .env support
  */
 
@@ -74,7 +74,7 @@ const DEFAULT_SETTINGS = {
     supportPhone: '0796587763',
     supportEmail: 'support@gichwifi.co.ke',
     website: 'https://gichwifi.co.ke',
-    logo: '', // Base64 or URL
+    logo: '',
     theme: 'default',
     primaryColor: '#00c853',
     secondaryColor: '#00e676',
@@ -208,15 +208,15 @@ const DEFAULT_THEMES = [
 // ============================================================
 
 const DEFAULT_PLANS = [
-    { id: '2_Hours', name: '2 Hours', price: 10, devices: 1, duration_seconds: 7200 },
-    { id: '5_Hours', name: '5 Hours', price: 20, devices: 1, duration_seconds: 18000 },
-    { id: '8_Hours', name: '8 Hours', price: 30, devices: 1, duration_seconds: 28800 },
-    { id: '12_Hours', name: '12 Hours', price: 50, devices: 1, duration_seconds: 43200 },
-    { id: '24_Hours', name: '24 Hours', price: 80, devices: 1, duration_seconds: 86400 },
-    { id: '1_Week_1_Device', name: '1 Week (1 Device)', price: 300, devices: 1, duration_seconds: 604800 },
-    { id: '1_Week_3_Devices', name: '1 Week (3 Devices)', price: 400, devices: 3, duration_seconds: 604800 },
-    { id: '1_Month_1_Device', name: '1 Month (1 Device)', price: 1000, devices: 1, duration_seconds: 2592000 },
-    { id: '1_Month_3_Devices', name: '1 Month (3 Devices)', price: 1200, devices: 3, duration_seconds: 2592000 }
+    { id: '2_Hours', name: '2 Hours', price: 10, devices: 1, shared_users: 1, duration_seconds: 7200 },
+    { id: '5_Hours', name: '5 Hours', price: 20, devices: 1, shared_users: 1, duration_seconds: 18000 },
+    { id: '8_Hours', name: '8 Hours', price: 30, devices: 1, shared_users: 1, duration_seconds: 28800 },
+    { id: '12_Hours', name: '12 Hours', price: 50, devices: 1, shared_users: 1, duration_seconds: 43200 },
+    { id: '24_Hours', name: '24 Hours', price: 80, devices: 1, shared_users: 1, duration_seconds: 86400 },
+    { id: '1_Week_1_Device', name: '1 Week (1 Device)', price: 300, devices: 1, shared_users: 1, duration_seconds: 604800 },
+    { id: '1_Week_3_Devices', name: '1 Week (3 Devices)', price: 400, devices: 3, shared_users: 3, duration_seconds: 604800 },
+    { id: '1_Month_1_Device', name: '1 Month (1 Device)', price: 1000, devices: 1, shared_users: 1, duration_seconds: 2592000 },
+    { id: '1_Month_3_Devices', name: '1 Month (3 Devices)', price: 1200, devices: 3, shared_users: 3, duration_seconds: 2592000 }
 ];
 
 // ============================================================
@@ -379,6 +379,29 @@ function timestampNow() {
     const now = new Date();
     const pad = (n) => String(n).padStart(2, '0');
     return `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+}
+
+function getMpesaErrorMessage(resultCode, resultDesc) {
+    const errorMessages = {
+        '0': { message: '✅ Payment completed successfully!', type: 'success' },
+        '2001': { message: '❌ Insufficient M-Pesa balance. Please top up and try again.', type: 'insufficient' },
+        '1032': { message: '❌ You cancelled the transaction.', type: 'cancelled' },
+        '1037': { message: '❌ You did not enter your PIN in time. Please try again.', type: 'timeout' },
+        '2003': { message: '❌ Invalid transaction. Please try again.', type: 'invalid' },
+        '2004': { message: '❌ Invalid provider. Please try again.', type: 'invalid' },
+        '2005': { message: '❌ Invalid amount. Please contact support.', type: 'invalid' },
+        '1033': { message: '❌ Transaction failed. Please try again.', type: 'failed' },
+        '1036': { message: '❌ Transaction failed due to network issue. Please try again.', type: 'failed' },
+        '1038': { message: '❌ Transaction failed. Please try again.', type: 'failed' }
+    };
+    
+    const error = errorMessages[resultCode];
+    if (error) return error.message;
+    
+    if (resultDesc) {
+        return `❌ ${resultDesc}`;
+    }
+    return '❌ Payment failed. Please try again.';
 }
 
 // ============================================================
@@ -551,18 +574,27 @@ async function stkPush({ phone, amount, accountReference }) {
 // ===================== SERVER FUNCTIONS =====================
 // ============================================================
 
+// Send JSON with cache-busting headers
 function sendJson(res, statusCode, obj) {
     res.writeHead(statusCode, { 
         'Content-Type': 'application/json',
         'Access-Control-Allow-Origin': '*',
         'Access-Control-Allow-Methods': 'POST, GET, DELETE, OPTIONS',
-        'Access-Control-Allow-Headers': 'Content-Type, Authorization'
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0'
     });
     res.end(JSON.stringify(obj, null, 2));
 }
 
 function sendHtml(res, statusCode, html) {
-    res.writeHead(statusCode, { 'Content-Type': 'text/html' });
+    res.writeHead(statusCode, { 
+        'Content-Type': 'text/html',
+        'Cache-Control': 'no-cache, no-store, must-revalidate',
+        'Pragma': 'no-cache',
+        'Expires': '0'
+    });
     res.end(html);
 }
 
@@ -638,14 +670,13 @@ function isAdmin(req) {
 // ============================================================
 
 const server = http.createServer(async (req, res) => {
-    // Always set CORS headers - Allow everything for maximum compatibility
+    // Always set CORS headers
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'POST, GET, DELETE, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, Origin, X-Requested-With, Accept');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
     res.setHeader('Access-Control-Allow-Credentials', 'true');
     res.setHeader('Access-Control-Max-Age', '86400');
 
-    // Handle preflight requests
     if (req.method === 'OPTIONS') {
         res.writeHead(204);
         res.end();
@@ -707,18 +738,30 @@ const server = http.createServer(async (req, res) => {
             });
         }
 
-        // Get Settings (Public)
+        // ===== GET SETTINGS - WITH COMPLETE DATA =====
         if (req.method === 'GET' && url.pathname === '/api/settings') {
+            // Ensure all settings are returned
+            const settingsData = {
+                businessName: settings.businessName || DEFAULT_SETTINGS.businessName,
+                businessTagline: settings.businessTagline || DEFAULT_SETTINGS.businessTagline,
+                supportPhone: settings.supportPhone || DEFAULT_SETTINGS.supportPhone,
+                supportEmail: settings.supportEmail || DEFAULT_SETTINGS.supportEmail,
+                theme: settings.theme || DEFAULT_SETTINGS.theme,
+                primaryColor: settings.primaryColor || DEFAULT_SETTINGS.primaryColor,
+                secondaryColor: settings.secondaryColor || DEFAULT_SETTINGS.secondaryColor,
+                accentColor: settings.accentColor || DEFAULT_SETTINGS.accentColor,
+                textColor: settings.textColor || DEFAULT_SETTINGS.textColor,
+                headerTextColor: settings.headerTextColor || DEFAULT_SETTINGS.headerTextColor,
+                buttonTextColor: settings.buttonTextColor || DEFAULT_SETTINGS.buttonTextColor,
+                logo: settings.logo || '',
+                website: settings.website || DEFAULT_SETTINGS.website
+            };
+            
+            console.log('📤 Sending settings:', Object.keys(settingsData));
+            
             return sendJson(res, 200, {
                 success: true,
-                data: {
-                    businessName: settings.businessName,
-                    businessTagline: settings.businessTagline,
-                    supportPhone: settings.supportPhone,
-                    supportEmail: settings.supportEmail,
-                    theme: settings.theme,
-                    primaryColor: settings.primaryColor
-                }
+                data: settingsData
             });
         }
 
@@ -825,7 +868,10 @@ const server = http.createServer(async (req, res) => {
                     mikrotikUsername: null,
                     mikrotikPassword: null,
                     mikrotikCreated: false,
-                    deviceCount: plans.find(p => p.id === planId)?.devices || 1
+                    deviceCount: plans.find(p => p.id === planId)?.devices || 1,
+                    sharedUsers: plans.find(p => p.id === planId)?.shared_users || 1,
+                    errorCode: null,
+                    errorDescription: null
                 };
                 transactions.push(transaction);
                 saveTransactions();
@@ -867,7 +913,7 @@ const server = http.createServer(async (req, res) => {
                         testPin: '12345'
                     });
                 } else {
-                    // Mock mode fallback
+                    // STK Push failed - use mock mode
                     console.log('⚠️ STK Push failed, using mock mode as fallback...');
                     transaction.status = 'completed';
                     transaction.mpesaCode = 'MOCK' + Date.now();
@@ -895,7 +941,7 @@ const server = http.createServer(async (req, res) => {
             }
         }
 
-        // ===== MPESA CALLBACK =====
+        // ===== MPESA CALLBACK - IMPROVED ERROR HANDLING =====
         if (req.method === 'POST' && url.pathname === '/api/mpesa-callback') {
             const callback = await readBody(req);
             console.log('📞 M-Pesa Callback Received:');
@@ -912,8 +958,10 @@ const server = http.createServer(async (req, res) => {
             const phoneNumber = callback.Body?.stkCallback?.CallbackMetadata?.Item?.find(
                 item => item.Name === 'PhoneNumber'
             )?.Value;
+            const resultDesc = callback.Body?.stkCallback?.ResultDesc || 'Unknown error';
             
             console.log(`📊 Callback: ID=${checkoutId}, Code=${resultCode}, Receipt=${receipt}`);
+            console.log(`📊 Result Description: ${resultDesc}`);
             
             let transaction = transactions.find(t => t.checkoutId === checkoutId);
             
@@ -932,37 +980,95 @@ const server = http.createServer(async (req, res) => {
                 });
             }
             
+            // ===== HANDLE DIFFERENT RESULT CODES =====
             if (resultCode === 0) {
+                // Payment successful
                 transaction.status = 'completed';
                 transaction.mpesaCode = receipt || 'MPESA' + Date.now();
                 transaction.completedAt = new Date().toISOString();
                 if (amount) transaction.amount = amount;
                 if (phoneNumber) transaction.phoneNumber = phoneNumber;
+                transaction.errorCode = null;
+                transaction.errorDescription = null;
                 
-                // Generate hotspot credentials
+                // Generate hotspot credentials with device limit
+                const sharedUsers = transaction.sharedUsers || 1;
                 transaction.mikrotikUsername = 'user_' + (transaction.mpesaCode || transaction.id).substring(0, 12);
                 transaction.mikrotikPassword = 'pass_' + Date.now().toString(36);
                 transaction.mikrotikCreated = true;
                 saveTransactions();
                 
                 console.log('✅ Payment completed for transaction:', transaction.id);
-                console.log('👤 Hotspot user created:', transaction.mikrotikUsername);
+                console.log(`👤 Hotspot user created: ${transaction.mikrotikUsername} (${sharedUsers} devices)`);
                 
                 return sendJson(res, 200, { 
                     ResultCode: 0, 
                     ResultDesc: 'Success' 
                 });
-            } else {
-                transaction.status = 'failed';
-                transaction.error = callback.Body?.stkCallback?.ResultDesc || 'Payment failed';
+                
+            } else if (resultCode === 1037) {
+                // User cancelled or timed out (no PIN entered)
+                transaction.status = 'cancelled';
+                transaction.errorDescription = resultDesc;
                 transaction.errorCode = resultCode;
                 saveTransactions();
                 
-                console.log(`❌ Payment failed: ${transaction.error} (Code: ${resultCode})`);
-                
+                console.log(`⏱️ Payment cancelled by user: ${resultDesc}`);
                 return sendJson(res, 200, { 
                     ResultCode: resultCode, 
-                    ResultDesc: transaction.error 
+                    ResultDesc: resultDesc 
+                });
+                
+            } else if (resultCode === 2001) {
+                // Insufficient balance
+                transaction.status = 'failed';
+                transaction.errorDescription = 'Insufficient M-Pesa balance. Please top up and try again.';
+                transaction.errorCode = resultCode;
+                saveTransactions();
+                
+                console.log(`💰 Insufficient balance: ${resultDesc}`);
+                return sendJson(res, 200, { 
+                    ResultCode: resultCode, 
+                    ResultDesc: 'Insufficient balance' 
+                });
+                
+            } else if (resultCode === 1032) {
+                // Transaction cancelled by user
+                transaction.status = 'cancelled';
+                transaction.errorDescription = 'Transaction cancelled by user';
+                transaction.errorCode = resultCode;
+                saveTransactions();
+                
+                console.log(`🚫 Transaction cancelled by user: ${resultDesc}`);
+                return sendJson(res, 200, { 
+                    ResultCode: resultCode, 
+                    ResultDesc: resultDesc 
+                });
+                
+            } else if (resultCode === 1033) {
+                // Transaction failed
+                transaction.status = 'failed';
+                transaction.errorDescription = resultDesc || 'Transaction failed';
+                transaction.errorCode = resultCode;
+                saveTransactions();
+                
+                console.log(`❌ Transaction failed: ${resultDesc}`);
+                return sendJson(res, 200, { 
+                    ResultCode: resultCode, 
+                    ResultDesc: resultDesc 
+                });
+                
+            } else {
+                // Other errors
+                transaction.status = 'failed';
+                transaction.errorDescription = resultDesc || 'Payment failed';
+                transaction.errorCode = resultCode;
+                saveTransactions();
+                
+                console.log(`❌ Payment failed: ${resultDesc} (Code: ${resultCode})`);
+                return sendJson(res, 200, { 
+                    ResultCode: resultCode, 
+                    ResultDesc: resultDesc 
                 });
             }
         }
@@ -1002,6 +1108,7 @@ const server = http.createServer(async (req, res) => {
             const transactionId = 'VOUCH' + Date.now() + Math.random().toString(36).substring(7);
             const duration = voucher.duration_seconds || 3600;
             const planName = voucher.planName || 'Voucher Plan';
+            const sharedUsers = voucher.devices || 1;
             
             const transaction = {
                 id: transactionId,
@@ -1018,7 +1125,8 @@ const server = http.createServer(async (req, res) => {
                 mikrotikPassword: 'vpass_' + Date.now().toString(36),
                 mikrotikCreated: true,
                 isVoucher: true,
-                voucherCode: voucher.code
+                voucherCode: voucher.code,
+                sharedUsers: sharedUsers
             };
             transactions.push(transaction);
             saveTransactions();
@@ -1098,6 +1206,7 @@ const server = http.createServer(async (req, res) => {
                     });
                 }
                 settings.logo = body.logo;
+                console.log('🖼️ Logo updated (size: ' + body.logo.length + ' chars)');
             }
             if (body.theme !== undefined) settings.theme = body.theme;
             if (body.primaryColor !== undefined) settings.primaryColor = body.primaryColor;
@@ -1109,6 +1218,7 @@ const server = http.createServer(async (req, res) => {
             
             saveSettings();
             
+            // Return the updated settings
             return sendJson(res, 200, {
                 success: true,
                 message: 'Settings updated successfully',
@@ -1198,21 +1308,28 @@ const server = http.createServer(async (req, res) => {
             const { action } = body;
             
             if (action === 'add') {
-                const { id, name, price, devices, duration_seconds } = body;
+                const { id, name, price, devices, shared_users, duration_seconds } = body;
                 if (!id || !name || price === undefined) {
                     return sendJson(res, 400, { success: false, message: 'Missing required fields' });
                 }
                 if (plans.find(p => p.id === id)) {
                     return sendJson(res, 400, { success: false, message: 'Plan ID already exists' });
                 }
-                const newPlan = { id, name, price, devices: devices || 1, duration_seconds: duration_seconds || 3600 };
+                const newPlan = { 
+                    id, 
+                    name, 
+                    price, 
+                    devices: devices || 1, 
+                    shared_users: shared_users || 1,
+                    duration_seconds: duration_seconds || 3600 
+                };
                 plans.push(newPlan);
                 savePlans();
                 return sendJson(res, 200, { success: true, message: 'Plan added', data: newPlan });
             }
             
             if (action === 'update') {
-                const { id, name, price, devices, duration_seconds } = body;
+                const { id, name, price, devices, shared_users, duration_seconds } = body;
                 const plan = plans.find(p => p.id === id);
                 if (!plan) {
                     return sendJson(res, 404, { success: false, message: 'Plan not found' });
@@ -1220,6 +1337,7 @@ const server = http.createServer(async (req, res) => {
                 if (name) plan.name = name;
                 if (price !== undefined) plan.price = price;
                 if (devices !== undefined) plan.devices = devices;
+                if (shared_users !== undefined) plan.shared_users = shared_users;
                 if (duration_seconds !== undefined) plan.duration_seconds = duration_seconds;
                 savePlans();
                 return sendJson(res, 200, { success: true, message: 'Plan updated', data: plan });
@@ -1316,6 +1434,7 @@ const server = http.createServer(async (req, res) => {
                     total: transactions.length,
                     completed: transactions.filter(t => t.status === 'completed').length,
                     pending: transactions.filter(t => t.status === 'pending').length,
+                    cancelled: transactions.filter(t => t.status === 'cancelled').length,
                     failed: transactions.filter(t => t.status === 'failed').length,
                     totalRevenue: transactions
                         .filter(t => t.status === 'completed')
@@ -1404,11 +1523,16 @@ server.listen(PORT, '0.0.0.0', () => {
     console.log(`📍 http://localhost:${PORT}/`);
     console.log(`📍 http://localhost:${PORT}/api/health`);
     console.log(`📍 http://localhost:${PORT}/api/plans`);
+    console.log(`📍 http://localhost:${PORT}/api/settings`);
     console.log('========================================');
     console.log('📱 Test phone: 0712345678');
     console.log('🔑 Test PIN: 12345');
     console.log(`🛡️ Admin PIN: ${ADMIN_PASSWORD ? '✅ Set' : '⚠️ NOT SET'}`);
     console.log('📋 CORS: ✅ All origins allowed');
+    console.log('📊 M-Pesa Error Handling: ✅ Enabled');
+    console.log('💾 Cache Control: ✅ Enabled');
+    console.log('📦 Shared Users: ✅ Per-plan device limits');
+    console.log('🎨 Theme Customizer: ✅ Active');
     console.log('========================================\n');
 });
 
