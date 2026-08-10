@@ -936,6 +936,11 @@ MODAL
     }
 
     async function applyTheme(themeId) {
+        if (!adminToken) {
+            alert('Please login to admin first');
+            return;
+        }
+        
         const theme = currentThemes.find(t => t.id === themeId);
         if (!theme) return;
 
@@ -949,8 +954,8 @@ MODAL
 
         // Update active state
         document.querySelectorAll('.theme-option').forEach(el => el.classList.remove('active'));
-        const themeEl = document.querySelector(`.theme-option .name:contains("${theme.name}")`);
-        if (themeEl) themeEl.closest('.theme-option').classList.add('active');
+        const clickedEl = document.querySelector(`.theme-option .preview:contains("${theme.preview}")`);
+        if (clickedEl) clickedEl.closest('.theme-option').classList.add('active');
 
         // Save theme to settings
         await saveThemeToServer(themeId);
@@ -974,6 +979,7 @@ MODAL
             if (data.success) {
                 currentSettings.theme = themeId;
                 console.log('✅ Theme saved:', themeId);
+                showToast('✅ Theme applied!');
             }
         } catch (e) { console.error('Error saving theme:', e); }
     }
@@ -1012,6 +1018,8 @@ MODAL
                     logoEmoji.style.display = 'none';
                     logoPreview.style.display = 'none';
                     showToast('✅ Logo uploaded successfully!');
+                } else {
+                    showToast('❌ Error uploading logo: ' + (data.message || 'Unknown error'));
                 }
             } catch (e) {
                 console.error('Error saving logo:', e);
@@ -1051,7 +1059,7 @@ MODAL
                 applySettings({ ...currentSettings, ...data });
                 showToast('✅ Branding saved successfully!');
             } else {
-                showToast('❌ Error saving branding');
+                showToast('❌ Error saving branding: ' + (result.message || 'Unknown error'));
             }
         } catch (e) {
             console.error('Error saving branding:', e);
@@ -1207,6 +1215,11 @@ MODAL
 
     async function loadVouchers() {
         const container = $('vouchersList');
+        if (!adminToken) {
+            container.innerHTML = '<p style="color:#ff6b6b;">Please login to admin first</p>';
+            return;
+        }
+        
         try {
             const res = await fetch(API_URL + '/admin/vouchers', {
                 headers: { 'Authorization': `Bearer ${adminToken}` }
@@ -1229,12 +1242,18 @@ MODAL
                 container.innerHTML = '<p style="color:var(--text-secondary);font-size:13px;">No vouchers found.</p>';
             }
         } catch (e) {
+            console.error('Error loading vouchers:', e);
             container.innerHTML = '<p style="color:#ff6b6b;">Error loading vouchers: ' + e.message + '</p>';
         }
     }
 
     async function loadTransactions() {
         const container = $('transactionsList');
+        if (!adminToken) {
+            container.innerHTML = '<p style="color:#ff6b6b;">Please login to admin first</p>';
+            return;
+        }
+        
         try {
             const res = await fetch(API_URL + '/admin/transactions', {
                 headers: { 'Authorization': `Bearer ${adminToken}` }
@@ -1264,6 +1283,7 @@ MODAL
                 container.innerHTML = '<p style="color:var(--text-secondary);font-size:13px;">No transactions found.</p>';
             }
         } catch (e) {
+            console.error('Error loading transactions:', e);
             container.innerHTML = '<p style="color:#ff6b6b;">Error loading transactions: ' + e.message + '</p>';
         }
     }
@@ -1315,14 +1335,21 @@ MODAL
                 body: JSON.stringify({ pin })
             });
             const data = await res.json();
+            console.log('🔐 Admin verification:', data);
+            
             if (data.success) {
                 adminToken = pin;
+                console.log('✅ Admin token stored');
+                
                 adminPanel.classList.add('active');
                 userView.style.display = 'none';
-                loadVouchers();
-                loadTransactions();
-                loadPlans();
-                loadThemes();
+                
+                // Load all admin data
+                await loadVouchers();
+                await loadTransactions();
+                await loadPlans();
+                await loadThemes();
+                
                 // Load settings into admin fields
                 editBusinessName.value = currentSettings.businessName || '';
                 editTagline.value = currentSettings.businessTagline || '';
@@ -1345,8 +1372,10 @@ MODAL
     function closeAdmin() {
         adminPanel.classList.remove('active');
         userView.style.display = 'block';
+        // Don't clear adminToken - keep it for the session
     }
 
+    // Close dropdown when clicking outside
     document.addEventListener('click', function(e) {
         if (!e.target.closest('.menu-btn') && !e.target.closest('.dropdown')) {
             dropdownMenu.classList.remove('active');
