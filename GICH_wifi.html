@@ -23,7 +23,7 @@
             padding: 20px;
         }
         .container {
-            max-width: 450px;
+            max-width: 500px;
             width: 100%;
             background: rgba(26, 26, 26, 0.95);
             padding: 30px 25px;
@@ -33,40 +33,109 @@
             position: relative;
         }
 
-        /* --- HEADER --- */
+        /* --- HEADER WITH MENU --- */
         .header {
-            text-align: center;
-            margin-bottom: 25px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 20px;
+            position: relative;
         }
-        .header h1 {
-            font-size: 28px;
+        .header-title {
+            flex: 1;
+            text-align: center;
+        }
+        .header-title h1 {
+            font-size: 24px;
             background: linear-gradient(45deg, #00c853, #00e676);
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
         }
-        .header p {
+        .header-title p {
             color: #888;
-            font-size: 14px;
-            margin-top: 5px;
+            font-size: 12px;
+            margin-top: 2px;
         }
+
+        /* --- HAMBURGER MENU --- */
+        .menu-btn {
+            background: none;
+            border: none;
+            color: #fff;
+            font-size: 28px;
+            cursor: pointer;
+            padding: 5px 10px;
+            border-radius: 8px;
+            transition: 0.2s;
+            z-index: 10;
+            position: relative;
+        }
+        .menu-btn:hover {
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        /* --- DROPDOWN MENU --- */
+        .dropdown {
+            position: absolute;
+            top: 50px;
+            left: 0;
+            background: #1a1a2e;
+            border-radius: 12px;
+            padding: 8px 0;
+            min-width: 180px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            display: none;
+            z-index: 20;
+        }
+        .dropdown.active {
+            display: block;
+        }
+        .dropdown-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 20px;
+            color: #ccc;
+            text-decoration: none;
+            font-size: 14px;
+            cursor: pointer;
+            transition: 0.2s;
+            border: none;
+            background: none;
+            width: 100%;
+            text-align: left;
+        }
+        .dropdown-item:hover {
+            background: rgba(255, 255, 255, 0.05);
+            color: #fff;
+        }
+        .dropdown-item .icon {
+            font-size: 18px;
+        }
+        .dropdown-divider {
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+            margin: 4px 12px;
+        }
+
+        /* --- STATUS BADGE --- */
         .status-badge {
             display: inline-block;
-            padding: 4px 14px;
+            padding: 3px 12px;
             border-radius: 20px;
-            font-size: 12px;
+            font-size: 11px;
             font-weight: bold;
-            margin-top: 8px;
         }
         .status-online { background: #00c853; color: #000; }
         .status-offline { background: #ff1744; color: #fff; }
         .status-checking { background: #ffa726; color: #000; }
 
-        /* --- CARDS & SECTIONS --- */
+        /* --- CARDS --- */
         .card {
             background: rgba(255, 255, 255, 0.03);
             padding: 15px;
             border-radius: 10px;
-            margin: 12px 0;
+            margin: 10px 0;
             border: 1px solid rgba(255, 255, 255, 0.05);
         }
         .card h2 {
@@ -121,8 +190,10 @@
         .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
         .btn-secondary { background: #333; color: #fff; }
         .btn-secondary:hover { background: #444; }
+        .btn-danger { background: #ff1744; color: #fff; }
+        .btn-danger:hover { background: #ff5252; }
 
-        input[type="tel"], input[type="text"] {
+        input[type="tel"], input[type="text"], input[type="password"], input[type="number"] {
             width: 100%;
             padding: 12px;
             margin: 6px 0;
@@ -134,9 +205,72 @@
         }
         input::placeholder { color: rgba(255, 255, 255, 0.4); }
         input:focus { outline: 2px solid #00c853; background: rgba(255, 255, 255, 0.12); }
+        select {
+            width: 100%;
+            padding: 12px;
+            margin: 6px 0;
+            border-radius: 6px;
+            border: none;
+            font-size: 15px;
+            background: rgba(255, 255, 255, 0.08);
+            color: #fff;
+        }
+        select option { background: #1a1a2e; color: #fff; }
 
-        /* --- HIDE / SHOW --- */
-        .hidden { display: none !important; }
+        /* --- MODAL / POPUP --- */
+        .modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.8);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+            padding: 20px;
+        }
+        .modal-overlay.active {
+            display: flex;
+        }
+        .modal {
+            background: #1a1a2e;
+            padding: 30px 25px;
+            border-radius: 16px;
+            max-width: 400px;
+            width: 100%;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            position: relative;
+        }
+        .modal-close {
+            position: absolute;
+            top: 12px;
+            right: 16px;
+            background: none;
+            border: none;
+            color: #888;
+            font-size: 24px;
+            cursor: pointer;
+        }
+        .modal-close:hover { color: #fff; }
+        .modal h2 {
+            color: #fff;
+            text-align: center;
+            margin-bottom: 10px;
+        }
+        .modal p {
+            color: #aaa;
+            text-align: center;
+            font-size: 14px;
+            margin-bottom: 15px;
+        }
+        .modal .plan-detail {
+            text-align: center;
+            font-size: 18px;
+            color: #00c853;
+            margin-bottom: 15px;
+        }
 
         /* --- LOADING OVERLAY --- */
         .loading-overlay {
@@ -147,11 +281,14 @@
             bottom: 0;
             background: rgba(0, 0, 0, 0.85);
             border-radius: 16px;
-            display: flex;
+            display: none;
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            z-index: 10;
+            z-index: 50;
+        }
+        .loading-overlay.active {
+            display: flex;
         }
         .spinner {
             width: 50px;
@@ -221,6 +358,67 @@
             border: 1px solid rgba(33, 150, 243, 0.15);
         }
 
+        /* --- ADMIN PANEL (Hidden by default) --- */
+        #adminPanel {
+            display: none;
+        }
+        #adminPanel.active {
+            display: block;
+        }
+        .admin-section {
+            background: rgba(255, 255, 255, 0.03);
+            padding: 15px;
+            border-radius: 10px;
+            margin: 10px 0;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        .admin-section h2 {
+            font-size: 16px;
+            color: #00c853;
+            margin-bottom: 10px;
+        }
+        .admin-section .row {
+            display: flex;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .admin-section .row > * {
+            flex: 1;
+            min-width: 120px;
+        }
+        .admin-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 12px;
+            margin-top: 8px;
+        }
+        .admin-table th, .admin-table td {
+            padding: 6px 8px;
+            text-align: left;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        .admin-table th { color: #888; font-weight: normal; }
+        .voucher-code {
+            font-family: monospace;
+            background: rgba(0,0,0,0.3);
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-size: 11px;
+        }
+        .status-badge-sm {
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 10px;
+        }
+        .status-completed { background: #00c853; color: #000; }
+        .status-pending { background: #ffa726; color: #000; }
+        .status-failed { background: #ff1744; color: #fff; }
+        .used { color: #ff6b6b; }
+        .unused { color: #00c853; }
+        .back-to-user {
+            margin-top: 10px;
+        }
+
         /* --- FOOTER --- */
         .footer {
             text-align: center;
@@ -233,6 +431,8 @@
         @media (max-width: 480px) {
             .container { padding: 20px 15px; }
             .plan { flex-wrap: wrap; gap: 4px; }
+            .modal { padding: 20px 15px; }
+            .admin-section .row { flex-direction: column; }
         }
     </style>
 </head>
@@ -240,86 +440,158 @@
 
 <div class="container" id="app">
 
-    <!-- ===== HEADER ===== -->
+    <!-- ===== HEADER WITH HAMBURGER MENU ===== -->
     <div class="header">
-        <h1>🌐 GICH WIFI</h1>
-        <p>Fast • Secure • Reliable</p>
-        <div id="statusBadge" class="status-badge status-checking">⏳ Connecting...</div>
+        <div style="position:relative;">
+            <button class="menu-btn" onclick="toggleMenu()" aria-label="Menu">☰</button>
+            <div class="dropdown" id="dropdownMenu">
+                <button class="dropdown-item" onclick="goHome()">
+                    <span class="icon">🏠</span> Home
+                </button>
+                <button class="dropdown-item" onclick="openAdmin()">
+                    <span class="icon">🔧</span> Admin
+                </button>
+                <div class="dropdown-divider"></div>
+                <button class="dropdown-item" onclick="toggleMenu()" style="color:#888;">
+                    <span class="icon">✕</span> Close
+                </button>
+            </div>
+        </div>
+        <div class="header-title">
+            <h1>🌐 GICH WIFI</h1>
+            <p>Fast • Secure • Reliable</p>
+        </div>
+        <div id="statusBadge" class="status-badge status-checking">⏳</div>
     </div>
 
     <!-- ===== LOADING OVERLAY ===== -->
-    <div id="loadingOverlay" class="loading-overlay hidden">
+    <div id="loadingOverlay" class="loading-overlay">
         <div class="spinner"></div>
         <div class="loading-text">⏳ Processing your request...</div>
         <div style="font-size:12px;color:#666;margin-top:8px;">This may take up to 50 seconds</div>
     </div>
 
-    <!-- ===== STEP 1: PLANS ===== -->
-    <div id="stepPlans">
-        <div class="card">
-            <h2>📦 Select Your Plan</h2>
-            <div id="plansContainer">
-                <!-- Plans will be loaded dynamically -->
+    <!-- ============================================================ -->
+    <!-- ===================== USER VIEW ===================== -->
+    <!-- ============================================================ -->
+    <div id="userView">
+
+        <!-- ===== STEP 1: PLANS ===== -->
+        <div id="stepPlans">
+            <div class="card">
+                <h2>📦 Select Your Plan</h2>
+                <div id="plansContainer">
+                    <!-- Plans will be loaded dynamically -->
+                </div>
+            </div>
+
+            <!-- ===== ALREADY PAID? ===== -->
+            <div class="card check-paid-section">
+                <p style="font-size:13px;color:#aaa;text-align:center;">Already paid? Check your status</p>
+                <input type="tel" id="checkPhoneInput" placeholder="Enter your phone number" style="margin-bottom:6px;" />
+                <button class="btn btn-secondary" onclick="checkExistingPlan()">Check Status</button>
+                <div id="checkResult" style="margin-top:8px;font-size:13px;color:#aaa;"></div>
+            </div>
+
+            <!-- ===== VOUCHER SECTION ===== -->
+            <div class="card voucher-section">
+                <h3>🎟️ Have a Voucher?</h3>
+                <input type="text" id="voucherInput" placeholder="Enter voucher code" />
+                <button class="btn" onclick="redeemVoucher()">Redeem Voucher</button>
+                <div id="voucherResult" style="margin-top:8px;font-size:13px;color:#aaa;"></div>
             </div>
         </div>
 
-        <div class="card">
-            <input type="tel" id="phoneInput" placeholder="Enter M-Pesa number (e.g., 0712345678)" />
-            <button class="btn" id="payBtn" onclick="initiatePayment()">Pay Now</button>
-        </div>
+        <!-- ===== STEP 2: CONNECTED / COUNTDOWN ===== -->
+        <div id="stepConnected" class="hidden">
+            <div class="card" style="text-align:center;">
+                <div style="font-size:48px;">🎉</div>
+                <h2 style="color:#00c853;">Connected!</h2>
+                <p style="color:#aaa;">You are now online.</p>
+            </div>
 
-        <!-- ===== ALREADY PAID? ===== -->
-        <div class="card check-paid-section">
-            <p style="font-size:13px;color:#aaa;text-align:center;">Already paid? Check your status</p>
-            <input type="text" id="checkPhoneInput" placeholder="Enter your phone number" style="margin-bottom:6px;" />
-            <button class="btn btn-secondary" onclick="checkExistingPlan()">Check Status</button>
-            <div id="checkResult" style="margin-top:8px;font-size:13px;color:#aaa;"></div>
+            <div class="countdown">
+                <div class="label">⏱ Time Remaining</div>
+                <div class="time" id="countdownDisplay">--:--:--</div>
+            </div>
+
+            <div class="cred-box">
+                <div class="cred-row"><span class="label">Username</span><span class="value" id="credUser">-</span></div>
+                <div class="cred-row"><span class="label">Password</span><span class="value" id="credPass">-</span></div>
+                <div class="cred-row"><span class="label">Plan</span><span class="value" id="credPlanName">-</span></div>
+            </div>
+
+            <button class="btn btn-secondary" onclick="resetApp()">Disconnect / Back</button>
         </div>
     </div>
 
-    <!-- ===== STEP 2: PAYMENT PROCESSING ===== -->
-    <div id="stepProcessing" class="hidden">
-        <div class="card" style="text-align:center;padding:30px 20px;">
-            <div class="spinner" style="margin:0 auto 15px;"></div>
-            <h3>⏳ Processing Payment</h3>
-            <p style="color:#aaa;font-size:14px;">Please wait while we confirm your payment...</p>
-            <p style="color:#666;font-size:12px;margin-top:6px;">This may take up to 50 seconds</p>
-        </div>
-    </div>
-
-    <!-- ===== STEP 3: CONNECTED / COUNTDOWN ===== -->
-    <div id="stepConnected" class="hidden">
-        <div class="card" style="text-align:center;">
-            <div style="font-size:48px;">🎉</div>
-            <h2 style="color:#00c853;">Connected!</h2>
-            <p style="color:#aaa;">You are now online.</p>
+    <!-- ============================================================ -->
+    <!-- ===================== ADMIN VIEW ===================== -->
+    <!-- ============================================================ -->
+    <div id="adminPanel">
+        <div class="card" style="border-color:#00c853;">
+            <h2 style="color:#00c853;">🔧 Admin Panel</h2>
+            <button class="btn btn-secondary back-to-user" onclick="closeAdmin()">← Back to User View</button>
         </div>
 
-        <div class="countdown">
-            <div class="label">⏱ Time Remaining</div>
-            <div class="time" id="countdownDisplay">--:--:--</div>
+        <!-- Generate Vouchers -->
+        <div class="admin-section">
+            <h2>🎟️ Generate Vouchers</h2>
+            <div class="row">
+                <select id="voucherPlanSelect">
+                    <option value="2_Hours">2 Hours - KSh 10</option>
+                    <option value="5_Hours">5 Hours - KSh 20</option>
+                    <option value="8_Hours">8 Hours - KSh 30</option>
+                    <option value="12_Hours">12 Hours - KSh 50</option>
+                    <option value="24_Hours">24 Hours - KSh 80</option>
+                    <option value="1_Week_1_Device">1 Week (1 Device) - KSh 300</option>
+                    <option value="1_Week_3_Devices">1 Week (3 Devices) - KSh 400</option>
+                    <option value="1_Month_1_Device">1 Month (1 Device) - KSh 1000</option>
+                    <option value="1_Month_3_Devices">1 Month (3 Devices) - KSh 1200</option>
+                </select>
+                <input type="number" id="voucherCount" placeholder="Count" value="5" min="1" max="100">
+                <button class="btn" onclick="generateVouchers()">Generate</button>
+            </div>
+            <div id="voucherGenerateResult" style="margin-top:8px;font-size:13px;color:#aaa;"></div>
         </div>
 
-        <div class="cred-box">
-            <div class="cred-row"><span class="label">Username</span><span class="value" id="credUser">-</span></div>
-            <div class="cred-row"><span class="label">Password</span><span class="value" id="credPass">-</span></div>
-            <div class="cred-row"><span class="label">Plan</span><span class="value" id="credPlanName">-</span></div>
+        <!-- Vouchers List -->
+        <div class="admin-section">
+            <h2>🎟️ Vouchers</h2>
+            <button class="btn btn-secondary" onclick="loadVouchers()" style="width:auto;padding:6px 16px;font-size:13px;">Refresh</button>
+            <div id="vouchersList" style="margin-top:8px;overflow-x:auto;">
+                <p style="color:#888;font-size:13px;">Loading vouchers...</p>
+            </div>
         </div>
 
-        <button class="btn btn-secondary" onclick="resetApp()">Disconnect / Back</button>
-    </div>
-
-    <!-- ===== STEP 4: VOUCHER INPUT ===== -->
-    <div class="card voucher-section">
-        <h3>🎟️ Have a Voucher?</h3>
-        <input type="text" id="voucherInput" placeholder="Enter voucher code" />
-        <button class="btn" onclick="redeemVoucher()">Redeem Voucher</button>
-        <div id="voucherResult" style="margin-top:8px;font-size:13px;color:#aaa;"></div>
+        <!-- Transactions -->
+        <div class="admin-section">
+            <h2>📊 Transactions</h2>
+            <button class="btn btn-secondary" onclick="loadTransactions()" style="width:auto;padding:6px 16px;font-size:13px;">Refresh</button>
+            <div id="transactionsList" style="margin-top:8px;overflow-x:auto;">
+                <p style="color:#888;font-size:13px;">Loading transactions...</p>
+            </div>
+        </div>
     </div>
 
     <!-- ===== FOOTER ===== -->
     <div class="footer">
         🔒 Secure • ⚡ Fast • 📡 Reliable
+    </div>
+</div>
+
+<!-- ===== MODAL / POPUP ===== -->
+<div id="paymentModal" class="modal-overlay">
+    <div class="modal">
+        <button class="modal-close" onclick="closeModal()">✕</button>
+        <h2>💳 M-Pesa Payment</h2>
+        <div class="plan-detail" id="modalPlanDetail">2 Hours - KSh 10</div>
+        <p>Enter your M-Pesa number to receive the payment prompt</p>
+        <input type="tel" id="modalPhoneInput" placeholder="Enter M-Pesa number (e.g., 0712345678)" />
+        <button class="btn" id="modalPayBtn" onclick="modalPay()">Pay Now</button>
+        <p style="text-align:center;font-size:11px;color:#666;margin-top:8px;">📱 You'll receive an M-Pesa prompt</p>
+        <p style="text-align:center;font-size:10px;color:#555;">Sandbox PIN: 12345</p>
+        <div id="modalResult" style="margin-top:8px;font-size:13px;color:#aaa;text-align:center;"></div>
     </div>
 </div>
 
@@ -329,6 +601,8 @@
     // ============================================================
     const RENDER_URL = 'https://billing-system-fm9a.onrender.com';
     const API_URL = RENDER_URL + '/api';
+    // NOTE: Admin PIN is stored securely on the backend (ADMIN_PASSWORD env variable)
+    // The frontend sends the PIN to the backend for verification
 
     // ============================================================
     // STATE
@@ -345,10 +619,7 @@
     const $ = id => document.getElementById(id);
     const statusBadge = $('statusBadge');
     const plansContainer = $('plansContainer');
-    const phoneInput = $('phoneInput');
-    const payBtn = $('payBtn');
     const stepPlans = $('stepPlans');
-    const stepProcessing = $('stepProcessing');
     const stepConnected = $('stepConnected');
     const loadingOverlay = $('loadingOverlay');
     const countdownDisplay = $('countdownDisplay');
@@ -359,9 +630,19 @@
     const checkResult = $('checkResult');
     const voucherInput = $('voucherInput');
     const voucherResult = $('voucherResult');
+    const dropdownMenu = $('dropdownMenu');
+    const adminPanel = $('adminPanel');
+    const userView = $('userView');
+
+    // Modal refs
+    const paymentModal = $('paymentModal');
+    const modalPlanDetail = $('modalPlanDetail');
+    const modalPhoneInput = $('modalPhoneInput');
+    const modalPayBtn = $('modalPayBtn');
+    const modalResult = $('modalResult');
 
     // ============================================================
-    // PLAN DATA (matches backend)
+    // PLAN DATA
     // ============================================================
     const PLAN_DATA = [
         { id: '2_Hours', name: '2 Hours', price: 10, devices: 1, duration_seconds: 7200 },
@@ -376,20 +657,75 @@
     ];
 
     // ============================================================
+    // MENU FUNCTIONS
+    // ============================================================
+    function toggleMenu() {
+        dropdownMenu.classList.toggle('active');
+    }
+
+    function goHome() {
+        dropdownMenu.classList.remove('active');
+        closeAdmin();
+        resetApp();
+    }
+
+    async function openAdmin() {
+        dropdownMenu.classList.remove('active');
+        const pin = prompt('Enter admin PIN:');
+        if (!pin) return;
+
+        try {
+            // Verify PIN with backend
+            const res = await fetch(API_URL + '/admin/verify', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ pin })
+            });
+            const data = await res.json();
+
+            if (data.success) {
+                // Store the token for subsequent admin requests
+                sessionStorage.setItem('adminToken', pin);
+                adminPanel.classList.add('active');
+                userView.style.display = 'none';
+                loadVouchers();
+                loadTransactions();
+            } else {
+                alert('❌ Incorrect PIN!');
+            }
+        } catch (e) {
+            console.error('Admin verification error:', e);
+            alert('❌ Error verifying PIN. Please try again.');
+        }
+    }
+
+    function closeAdmin() {
+        adminPanel.classList.remove('active');
+        userView.style.display = 'block';
+    }
+
+    // Close dropdown when clicking outside
+    document.addEventListener('click', function(e) {
+        if (!e.target.closest('.menu-btn') && !e.target.closest('.dropdown')) {
+            dropdownMenu.classList.remove('active');
+        }
+    });
+
+    // ============================================================
     // CHECK SERVER STATUS
     // ============================================================
     async function checkServerStatus() {
         try {
             const res = await fetch(API_URL + '/health');
             if (res.ok) {
-                statusBadge.textContent = '✅ Online';
+                statusBadge.textContent = '✅';
                 statusBadge.className = 'status-badge status-online';
             } else {
-                statusBadge.textContent = '⚠️ Error';
+                statusBadge.textContent = '⚠️';
                 statusBadge.className = 'status-badge status-offline';
             }
         } catch (e) {
-            statusBadge.textContent = '❌ Offline';
+            statusBadge.textContent = '❌';
             statusBadge.className = 'status-badge status-offline';
             console.error('Server check failed:', e);
         }
@@ -411,39 +747,50 @@
                     <span class="plan-devices"> • ${p.devices} device${p.devices > 1 ? 's' : ''}</span>
                 </span>
             `;
-            div.onclick = () => selectPlan(p.id);
+            div.onclick = () => openModal(p);
             plansContainer.appendChild(div);
         });
-        // Auto-select first plan
-        if (PLAN_DATA.length) selectPlan(PLAN_DATA[0].id);
-    }
-
-    function selectPlan(id) {
-        selectedPlanId = id;
-        selectedPlan = PLAN_DATA.find(p => p.id === id);
-        document.querySelectorAll('.plan').forEach(el => {
-            el.classList.toggle('selected', el.dataset.id === id);
-        });
     }
 
     // ============================================================
-    // PAYMENT FLOW
+    // MODAL FUNCTIONS (Popup Style)
     // ============================================================
-    async function initiatePayment() {
-        const phone = phoneInput.value.trim();
+    function openModal(plan) {
+        selectedPlan = plan;
+        selectedPlanId = plan.id;
+        modalPlanDetail.textContent = `${plan.name} - KSh ${plan.price}`;
+        modalPhoneInput.value = '';
+        modalResult.textContent = '';
+        modalResult.style.color = '#aaa';
+        paymentModal.classList.add('active');
+        setTimeout(() => modalPhoneInput.focus(), 300);
+    }
+
+    function closeModal() {
+        paymentModal.classList.remove('active');
+        modalResult.textContent = '';
+    }
+
+    // Close modal when clicking outside
+    paymentModal.addEventListener('click', function(e) {
+        if (e.target === this) closeModal();
+    });
+
+    // ============================================================
+    // MODAL PAYMENT
+    // ============================================================
+    async function modalPay() {
+        const phone = modalPhoneInput.value.trim();
         if (!phone || phone.length < 10) {
-            alert('Please enter a valid phone number (e.g., 0712345678)');
-            return;
-        }
-        if (!selectedPlan) {
-            alert('Please select a plan first.');
+            modalResult.textContent = '❌ Please enter a valid phone number';
+            modalResult.style.color = '#ff6b6b';
             return;
         }
 
-        // Show loading
-        showLoading(true);
-        payBtn.disabled = true;
-        payBtn.textContent = 'Processing...';
+        modalPayBtn.disabled = true;
+        modalPayBtn.textContent = 'Processing...';
+        modalResult.textContent = '⏳ Sending payment request...';
+        modalResult.style.color = '#ffa726';
 
         try {
             const response = await fetch(API_URL + '/payment/initiate', {
@@ -461,29 +808,32 @@
 
             if (data.success) {
                 transactionId = data.transactionId;
-                // Wait for transaction to complete
+                modalResult.textContent = '✅ Payment sent! Waiting for confirmation...';
+                modalResult.style.color = '#00c853';
+                closeModal();
+                showLoading(true);
                 await waitForTransaction(transactionId);
             } else {
-                alert('Payment failed: ' + (data.message || 'Unknown error'));
-                hideLoading();
-                payBtn.disabled = false;
-                payBtn.textContent = 'Pay Now';
+                modalResult.textContent = '❌ ' + (data.message || 'Payment failed');
+                modalResult.style.color = '#ff6b6b';
+                modalPayBtn.disabled = false;
+                modalPayBtn.textContent = 'Pay Now';
             }
         } catch (error) {
             console.error('Payment error:', error);
-            alert('An error occurred. Please try again.');
-            hideLoading();
-            payBtn.disabled = false;
-            payBtn.textContent = 'Pay Now';
+            modalResult.textContent = '❌ An error occurred. Please try again.';
+            modalResult.style.color = '#ff6b6b';
+            modalPayBtn.disabled = false;
+            modalPayBtn.textContent = 'Pay Now';
         }
     }
 
     // ============================================================
-    // WAIT FOR TRANSACTION (POLLING WITH BACKOFF)
+    // WAIT FOR TRANSACTION
     // ============================================================
     async function waitForTransaction(txnId) {
         let attempts = 0;
-        const maxAttempts = 30; // ~50 seconds with backoff
+        const maxAttempts = 30;
 
         while (attempts < maxAttempts) {
             try {
@@ -492,7 +842,6 @@
                 console.log(`Status check ${attempts+1}:`, data);
 
                 if (data.success && data.data.status === 'completed') {
-                    // Success!
                     credentials = {
                         username: data.data.mikrotikUsername || 'user_' + (data.data.mpesaCode || txnId),
                         password: data.data.mikrotikPassword || 'pass_' + Date.now(),
@@ -506,12 +855,9 @@
                 if (data.success && (data.data.status === 'failed' || data.data.status === 'cancelled')) {
                     alert('Payment failed or was cancelled. Please try again.');
                     hideLoading();
-                    payBtn.disabled = false;
-                    payBtn.textContent = 'Pay Now';
                     return;
                 }
 
-                // Exponential backoff: wait longer each time (max 5s)
                 const wait = Math.min(1000 * Math.pow(1.2, attempts), 5000);
                 await sleep(wait);
                 attempts++;
@@ -522,11 +868,8 @@
             }
         }
 
-        // Timeout
         alert('Payment confirmation timed out. Please check your transaction status later.');
         hideLoading();
-        payBtn.disabled = false;
-        payBtn.textContent = 'Pay Now';
     }
 
     function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
@@ -537,22 +880,14 @@
     function showConnected() {
         hideLoading();
         stepPlans.classList.add('hidden');
-        stepProcessing.classList.add('hidden');
         stepConnected.classList.remove('hidden');
 
-        // Show credentials
         credUser.textContent = credentials.username || 'N/A';
         credPass.textContent = credentials.password || 'N/A';
         credPlanName.textContent = credentials.planName || selectedPlan.name;
 
-        // Start countdown
         startCountdown(credentials.expiresAt);
-
-        // Auto-connect to internet (simulate)
-        // In production, this would POST to MikroTik API
         console.log('🌐 Auto-connecting to internet...');
-        // Here you would call your MikroTik login endpoint
-        // For now, just show connected state
     }
 
     // ============================================================
@@ -600,31 +935,21 @@
         checkResult.style.color = '#aaa';
 
         try {
-            // Get all transactions and find active one for this phone
-            const res = await fetch(API_URL + '/transactions');
+            const res = await fetch(`${API_URL}/check-active?phone=${encodeURIComponent(phone)}`);
             const data = await res.json();
-            if (data.success && data.data) {
-                const active = data.data.find(t =>
-                    t.phoneNumber === phone &&
-                    t.status === 'completed' &&
-                    t.mikrotikCreated &&
-                    (!t.expiresAt || new Date(t.expiresAt) > new Date())
-                );
-                if (active) {
-                    checkResult.textContent = '✅ You have an active plan! Redirecting...';
-                    checkResult.style.color = '#00c853';
-                    // Auto-connect
-                    credentials = {
-                        username: active.mikrotikUsername || 'user_' + (active.mpesaCode || active.id),
-                        password: active.mikrotikPassword || 'pass_' + Date.now(),
-                        planName: active.planName || 'Active Plan',
-                        expiresAt: active.expiresAt || new Date(Date.now() + 3600000).toISOString()
-                    };
-                    showConnected();
-                } else {
-                    checkResult.textContent = '❌ No active plan found for this number.';
-                    checkResult.style.color = '#ff6b6b';
-                }
+            if (data.success && data.active) {
+                checkResult.textContent = '✅ You have an active plan! Connecting...';
+                checkResult.style.color = '#00c853';
+                credentials = {
+                    username: data.data.username,
+                    password: data.data.password,
+                    planName: data.data.planName,
+                    expiresAt: data.data.expiresAt
+                };
+                showConnected();
+            } else {
+                checkResult.textContent = '❌ No active plan found for this number.';
+                checkResult.style.color = '#ff6b6b';
             }
         } catch (e) {
             console.error('Check existing plan error:', e);
@@ -648,23 +973,25 @@
         voucherResult.style.color = '#aaa';
 
         try {
-            // In production, this would call a backend endpoint to validate the voucher
-            // For now, simulate validation
-            await sleep(1500);
-            // Mock: Accept any code that is 8+ characters
-            if (code.length >= 8) {
-                voucherResult.textContent = '✅ Voucher valid! Connecting...';
+            const response = await fetch(API_URL + '/voucher/redeem', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ code: code, phoneNumber: 'voucher_user' })
+            });
+            const data = await response.json();
+
+            if (data.success) {
+                voucherResult.textContent = '✅ Voucher redeemed! Connecting...';
                 voucherResult.style.color = '#00c853';
-                // Simulate connection
                 credentials = {
-                    username: 'voucher_user_' + Date.now(),
-                    password: 'voucher_pass_' + Date.now(),
-                    planName: 'Voucher Plan',
-                    expiresAt: new Date(Date.now() + 86400000).toISOString() // 24 hours
+                    username: data.data.username || 'voucher_user',
+                    password: data.data.password || 'pass_' + Date.now(),
+                    planName: data.data.planName || 'Voucher Plan',
+                    expiresAt: data.data.expiresAt || new Date(Date.now() + 3600000).toISOString()
                 };
                 showConnected();
             } else {
-                voucherResult.textContent = '❌ Invalid voucher code. Please check and try again.';
+                voucherResult.textContent = '❌ ' + (data.message || 'Invalid voucher');
                 voucherResult.style.color = '#ff6b6b';
             }
         } catch (e) {
@@ -678,11 +1005,11 @@
     // LOADING OVERLAY HELPERS
     // ============================================================
     function showLoading(show) {
-        loadingOverlay.classList.toggle('hidden', !show);
+        loadingOverlay.classList.toggle('active', show);
     }
 
     function hideLoading() {
-        loadingOverlay.classList.add('hidden');
+        loadingOverlay.classList.remove('active');
     }
 
     // ============================================================
@@ -692,14 +1019,112 @@
         if (countdownInterval) clearInterval(countdownInterval);
         stepConnected.classList.add('hidden');
         stepPlans.classList.remove('hidden');
-        stepProcessing.classList.add('hidden');
         selectedPlan = null;
         transactionId = null;
         credentials = null;
-        payBtn.disabled = false;
-        payBtn.textContent = 'Pay Now';
-        // Reselect first plan
-        if (PLAN_DATA.length) selectPlan(PLAN_DATA[0].id);
+    }
+
+    // ============================================================
+    // ADMIN FUNCTIONS (Use stored token)
+    // ============================================================
+    function getAdminHeaders() {
+        const token = sessionStorage.getItem('adminToken');
+        return {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+        };
+    }
+
+    async function generateVouchers() {
+        const planId = document.getElementById('voucherPlanSelect').value;
+        const count = parseInt(document.getElementById('voucherCount').value) || 5;
+        const resultDiv = document.getElementById('voucherGenerateResult');
+
+        resultDiv.textContent = '⏳ Generating...';
+        resultDiv.style.color = '#aaa';
+
+        try {
+            const res = await fetch(API_URL + '/admin/voucher/generate', {
+                method: 'POST',
+                headers: getAdminHeaders(),
+                body: JSON.stringify({ planId, count })
+            });
+            const data = await res.json();
+            if (data.success) {
+                resultDiv.innerHTML = `✅ Generated ${data.count} vouchers: <br> <code style="background:rgba(0,0,0,0.3);padding:8px;display:block;border-radius:4px;font-size:12px;margin-top:5px;word-wrap:break-word;">${data.vouchers.join(', ')}</code>`;
+                resultDiv.style.color = '#00c853';
+                loadVouchers();
+            } else {
+                resultDiv.textContent = '❌ ' + (data.message || 'Failed to generate');
+                resultDiv.style.color = '#ff6b6b';
+            }
+        } catch (e) {
+            resultDiv.textContent = '❌ Error: ' + e.message;
+            resultDiv.style.color = '#ff6b6b';
+        }
+    }
+
+    async function loadVouchers() {
+        const container = document.getElementById('vouchersList');
+        try {
+            const res = await fetch(API_URL + '/admin/vouchers', {
+                headers: getAdminHeaders()
+            });
+            const data = await res.json();
+            if (data.success && data.data.length > 0) {
+                let html = `<table class="admin-table">
+                    <tr><th>Code</th><th>Plan</th><th>Status</th><th>Used By</th></tr>`;
+                data.data.slice(0, 30).forEach(v => {
+                    html += `<tr>
+                        <td><span class="voucher-code">${v.code}</span></td>
+                        <td>${v.planName || v.planId}</td>
+                        <td><span class="${v.used ? 'used' : 'unused'}">${v.used ? '❌ Used' : '✅ Available'}</span></td>
+                        <td>${v.usedBy || '-'}</td>
+                    </tr>`;
+                });
+                html += '</table>';
+                container.innerHTML = html;
+            } else {
+                container.innerHTML = '<p style="color:#888;font-size:13px;">No vouchers found.</p>';
+            }
+        } catch (e) {
+            container.innerHTML = '<p style="color:#ff6b6b;">Error loading vouchers: ' + e.message + '</p>';
+        }
+    }
+
+    async function loadTransactions() {
+        const container = document.getElementById('transactionsList');
+        try {
+            const res = await fetch(API_URL + '/admin/transactions', {
+                headers: getAdminHeaders()
+            });
+            const data = await res.json();
+            if (data.success && data.data.length > 0) {
+                let html = `<table class="admin-table">
+                    <tr><th>Phone</th><th>Plan</th><th>Amount</th><th>Status</th><th>Date</th></tr>`;
+                data.data.slice(0, 30).forEach(t => {
+                    const statusClass = t.status === 'completed' ? 'status-completed' : t.status === 'pending' ? 'status-pending' : 'status-failed';
+                    html += `<tr>
+                        <td>${t.phoneNumber}</td>
+                        <td>${t.planName || t.planId}</td>
+                        <td>KSh ${t.amount || 0}</td>
+                        <td><span class="status-badge-sm ${statusClass}">${t.status}</span></td>
+                        <td style="font-size:11px;">${new Date(t.timestamp).toLocaleDateString()}</td>
+                    </tr>`;
+                });
+                html += '</table>';
+                if (data.summary) {
+                    html += `<p style="color:#888;font-size:12px;margin-top:10px;">
+                        Total: ${data.summary.total} | Completed: ${data.summary.completed} | Revenue: KSh ${data.summary.totalRevenue}
+                    </p>`;
+                }
+                container.innerHTML = html;
+            } else {
+                container.innerHTML = '<p style="color:#888;font-size:13px;">No transactions found.</p>';
+            }
+        } catch (e) {
+            container.innerHTML = '<p style="color:#ff6b6b;">Error loading transactions: ' + e.message + '</p>';
+        }
     }
 
     // ============================================================
