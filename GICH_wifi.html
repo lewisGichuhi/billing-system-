@@ -518,8 +518,8 @@
     <!-- LOADING OVERLAY -->
     <div id="loadingOverlay" class="loading-overlay">
         <div class="spinner"></div>
-        <div class="loading-text">⏳ Processing your request...</div>
-        <div style="font-size:12px;color:#666;margin-top:8px;">This may take up to 50 seconds</div>
+        <div class="loading-text">⏳ Processing your payment...</div>
+        <div style="font-size:12px;color:#666;margin-top:8px;">Please check your phone for the M-Pesa prompt</div>
     </div>
 
     <!-- USER VIEW -->
@@ -665,41 +665,24 @@
 
 <script>
     // ============================================================
-    // CONFIGURATION - AUTO-DETECT ENVIRONMENT
+    // CONFIGURATION
     // ============================================================
     console.log('🌐 GICH WiFi System Starting...');
     console.log('📡 Current Host:', window.location.hostname);
-    console.log('📁 Protocol:', window.location.protocol);
 
-    // Auto-detect environment
     const RENDER_URL = 'https://billing-system-fm9a.onrender.com';
     const currentHost = window.location.hostname;
-    const isFileProtocol = window.location.protocol === 'file:';
-    const isLocalhost = currentHost === 'localhost' || currentHost === '127.0.0.1' || currentHost === '';
-    const isMikroTik = currentHost === '192.168.88.1' || currentHost.includes('192.168') || currentHost.includes('10.0');
+    const isLocal = currentHost === 'localhost' || currentHost === '127.0.0.1' || currentHost === '' || window.location.protocol === 'file:';
 
-    // Determine API URL
+    // API URL - Add timestamp for cache busting
     let API_URL;
-    if (isFileProtocol) {
-        // File:// protocol - use Render URL directly
+    if (isLocal) {
         API_URL = RENDER_URL + '/api';
-        console.log('🏠 Running as local file - using Render URL');
-    } else if (isLocalhost) {
-        // Local testing (VS Code Live Server, Python HTTP server)
-        API_URL = RENDER_URL + '/api';
-        console.log('🏠 Running on localhost - using Render URL');
-    } else if (isMikroTik) {
-        // MikroTik router environment
-        API_URL = RENDER_URL + '/api';
-        console.log('🔗 Running on MikroTik router - using Render URL');
     } else {
-        // On Render or custom domain
         API_URL = 'https://' + currentHost + '/api';
-        console.log('🌍 Running on Render - using current hostname');
     }
 
     console.log('📡 API URL:', API_URL);
-    console.log('📡 Render URL:', RENDER_URL);
 
     // ============================================================
     // STATE
@@ -713,9 +696,10 @@
     let currentThemes = [];
     let currentPlans = [];
     let adminToken = null;
+    let logoCacheBuster = Date.now(); // For cache busting
 
     // ============================================================
-    // GET URL PARAMETERS (from MikroTik)
+    // GET URL PARAMETERS
     // ============================================================
     const urlParams = new URLSearchParams(window.location.search);
     const linkLogin = urlParams.get('link-login') || '';
@@ -771,15 +755,15 @@
     // DEFAULT PLANS
     // ============================================================
     const DEFAULT_PLANS = [
-        { id: '2_Hours', name: '2 Hours', price: 10, devices: 1, duration_seconds: 7200 },
-        { id: '5_Hours', name: '5 Hours', price: 20, devices: 1, duration_seconds: 18000 },
-        { id: '8_Hours', name: '8 Hours', price: 30, devices: 1, duration_seconds: 28800 },
-        { id: '12_Hours', name: '12 Hours', price: 50, devices: 1, duration_seconds: 43200 },
-        { id: '24_Hours', name: '24 Hours', price: 80, devices: 1, duration_seconds: 86400 },
-        { id: '1_Week_1_Device', name: '1 Week (1 Device)', price: 300, devices: 1, duration_seconds: 604800 },
-        { id: '1_Week_3_Devices', name: '1 Week (3 Devices)', price: 400, devices: 3, duration_seconds: 604800 },
-        { id: '1_Month_1_Device', name: '1 Month (1 Device)', price: 1000, devices: 1, duration_seconds: 2592000 },
-        { id: '1_Month_3_Devices', name: '1 Month (3 Devices)', price: 1200, devices: 3, duration_seconds: 2592000 }
+        { id: '2_Hours', name: '2 Hours', price: 10, devices: 1, shared_users: 1, duration_seconds: 7200 },
+        { id: '5_Hours', name: '5 Hours', price: 20, devices: 1, shared_users: 1, duration_seconds: 18000 },
+        { id: '8_Hours', name: '8 Hours', price: 30, devices: 1, shared_users: 1, duration_seconds: 28800 },
+        { id: '12_Hours', name: '12 Hours', price: 50, devices: 1, shared_users: 1, duration_seconds: 43200 },
+        { id: '24_Hours', name: '24 Hours', price: 80, devices: 1, shared_users: 1, duration_seconds: 86400 },
+        { id: '1_Week_1_Device', name: '1 Week (1 Device)', price: 300, devices: 1, shared_users: 1, duration_seconds: 604800 },
+        { id: '1_Week_3_Devices', name: '1 Week (3 Devices)', price: 400, devices: 3, shared_users: 3, duration_seconds: 604800 },
+        { id: '1_Month_1_Device', name: '1 Month (1 Device)', price: 1000, devices: 1, shared_users: 1, duration_seconds: 2592000 },
+        { id: '1_Month_3_Devices', name: '1 Month (3 Devices)', price: 1200, devices: 3, shared_users: 3, duration_seconds: 2592000 }
     ];
 
     // ============================================================
@@ -801,18 +785,24 @@
     // ============================================================
     async function loadSettings() {
         try {
-            const res = await fetch(API_URL + '/settings');
+            // Add cache-busting parameter
+            const cacheBuster = Date.now();
+            const res = await fetch(API_URL + '/settings?t=' + cacheBuster);
             const data = await res.json();
             if (data.success) {
                 currentSettings = data.data;
                 applySettings(data.data);
+                console.log('✅ Settings loaded:', data.data);
             }
-        } catch (e) { console.error('Error loading settings:', e); }
+        } catch (e) { 
+            console.error('Error loading settings:', e); 
+        }
     }
 
     async function loadThemes() {
         try {
-            const res = await fetch(API_URL + '/themes');
+            const cacheBuster = Date.now();
+            const res = await fetch(API_URL + '/themes?t=' + cacheBuster);
             const data = await res.json();
             if (data.success) {
                 currentThemes = data.data;
@@ -835,28 +825,37 @@
     }
 
     // ============================================================
-    // APPLY SETTINGS TO UI
+    // APPLY SETTINGS TO UI - WITH CACHE BUSTING
     // ============================================================
     function applySettings(settings) {
+        console.log('🎨 Applying settings:', settings);
+        
+        // Update text
         businessNameEl.textContent = settings.businessName || 'GICH WIFI';
         businessTaglineEl.textContent = settings.businessTagline || 'Fast • Secure • Reliable';
         pageTitle.textContent = settings.businessName + ' HOTSPOT';
         supportInfo.textContent = '📞 ' + (settings.supportPhone || '') + ' • ✉️ ' + (settings.supportEmail || '');
 
+        // Update logo with cache busting
         if (settings.logo && settings.logo.startsWith('data:image')) {
-            logoImage.src = settings.logo;
+            // Add cache buster to logo URL
+            const logoWithCache = settings.logo + '?t=' + Date.now();
+            logoImage.src = logoWithCache;
             logoImage.style.display = 'block';
             logoEmoji.style.display = 'none';
+            console.log('🖼️ Logo applied with cache busting');
         } else {
             logoImage.style.display = 'none';
             logoEmoji.style.display = 'block';
         }
 
+        // Update admin fields
         editBusinessName.value = settings.businessName || '';
         editTagline.value = settings.businessTagline || '';
         editPhone.value = settings.supportPhone || '';
         editEmail.value = settings.supportEmail || '';
 
+        // Apply colors
         if (settings.primaryColor) {
             document.documentElement.style.setProperty('--brand-primary', settings.primaryColor);
             customColorPicker.value = settings.primaryColor;
@@ -877,14 +876,20 @@
             document.documentElement.style.setProperty('--button-text', settings.buttonTextColor);
         }
 
+        // Apply gradient if theme is set
         const theme = currentThemes.find(t => t.id === settings.theme);
         if (theme) {
             document.body.style.background = theme.gradient;
         }
+        
+        // Force a reflow to apply changes
+        document.body.style.display = 'none';
+        document.body.offsetHeight; // Trigger reflow
+        document.body.style.display = '';
     }
 
     // ============================================================
-    // RENDER THEMES - FIXED
+    // RENDER THEMES
     // ============================================================
     function renderThemes(themes) {
         themeGrid.innerHTML = '';
@@ -902,7 +907,7 @@
     }
 
     // ============================================================
-    // APPLY THEME - FIXED
+    // APPLY THEME
     // ============================================================
     async function applyTheme(themeId) {
         if (!adminToken) {
@@ -913,6 +918,7 @@
         const theme = currentThemes.find(t => t.id === themeId);
         if (!theme) return;
 
+        // Apply immediately
         document.body.style.background = theme.gradient;
         document.documentElement.style.setProperty('--brand-primary', theme.colors.primary);
         document.documentElement.style.setProperty('--brand-secondary', theme.colors.secondary);
@@ -920,6 +926,7 @@
         document.documentElement.style.setProperty('--text-primary', theme.colors.text);
         document.documentElement.style.setProperty('--header-text', theme.colors.headerText);
 
+        // Update active state
         document.querySelectorAll('.theme-option').forEach(el => el.classList.remove('active'));
         document.querySelectorAll('.theme-option').forEach(el => {
             if (el.dataset.themeId === themeId) {
@@ -949,12 +956,14 @@
                 currentSettings.theme = themeId;
                 console.log('✅ Theme saved:', themeId);
                 showToast('✅ Theme applied!');
+                // Reload settings to ensure consistency
+                await loadSettings();
             }
         } catch (e) { console.error('Error saving theme:', e); }
     }
 
     // ============================================================
-    // LOGO UPLOAD
+    // LOGO UPLOAD - WITH CACHE BUSTING
     // ============================================================
     function handleLogoUpload(event) {
         const file = event.target.files[0];
@@ -962,6 +971,12 @@
 
         if (!adminToken) {
             alert('Please login to admin first');
+            return;
+        }
+
+        // Validate file size (max 2MB)
+        if (file.size > 2 * 1024 * 1024) {
+            showToast('❌ Logo too large! Max 2MB');
             return;
         }
 
@@ -982,11 +997,15 @@
                 });
                 const data = await res.json();
                 if (data.success) {
-                    logoImage.src = base64;
+                    // Apply logo immediately with cache busting
+                    const logoWithCache = base64 + '?t=' + Date.now();
+                    logoImage.src = logoWithCache;
                     logoImage.style.display = 'block';
                     logoEmoji.style.display = 'none';
                     logoPreview.style.display = 'none';
                     showToast('✅ Logo uploaded successfully!');
+                    // Reload settings to update cache
+                    await loadSettings();
                 } else {
                     showToast('❌ Error uploading logo: ' + (data.message || 'Unknown error'));
                 }
@@ -1027,6 +1046,8 @@
             if (result.success) {
                 applySettings({ ...currentSettings, ...data });
                 showToast('✅ Branding saved successfully!');
+                // Reload settings to ensure consistency
+                await loadSettings();
             } else {
                 showToast('❌ Error saving branding: ' + (result.message || 'Unknown error'));
             }
@@ -1421,7 +1442,7 @@
 
             if (data.success) {
                 transactionId = data.transactionId;
-                modalResult.textContent = '✅ Payment sent! Waiting for confirmation...';
+                modalResult.textContent = '✅ Payment sent! Please check your phone and enter your M-Pesa PIN.';
                 modalResult.style.color = '#00c853';
                 closeModal();
                 showLoading(true);
@@ -1487,7 +1508,7 @@
     function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
     // ============================================================
-    // SHOW CONNECTED STATE - WITH AUTO-CLOSE
+    // SHOW CONNECTED STATE
     // ============================================================
     function showConnected() {
         hideLoading();
@@ -1718,14 +1739,17 @@
     // ============================================================
     // INIT
     // ============================================================
-    document.addEventListener('DOMContentLoaded', () => {
-        loadSettings();
-        loadThemes();
-        loadPlans();
-        checkServerStatus();
-        setInterval(checkServerStatus, 30000);
+    document.addEventListener('DOMContentLoaded', async () => {
         console.log('🌐 GICH WiFi System Initialized');
         console.log('📡 API URL:', API_URL);
+        
+        // Load settings first
+        await loadSettings();
+        await loadThemes();
+        await loadPlans();
+        checkServerStatus();
+        
+        setInterval(checkServerStatus, 30000);
         console.log('📍 Environment:', window.location.hostname || 'local');
         console.log('🔐 Admin PIN: Enter when prompted (stored securely on backend)');
         console.log('📱 MAC Address:', macAddress);
