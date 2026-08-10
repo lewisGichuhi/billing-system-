@@ -6,7 +6,7 @@
     <title id="pageTitle">GICH WIFI HOTSPOT</title>
     <style>
         /* ============================================================
-           DYNAMIC THEME VARIABLES - Applied via JavaScript
+           DYNAMIC THEME VARIABLES
            ============================================================ */
         :root {
             --brand-primary: #00c853;
@@ -22,9 +22,6 @@
             --input-bg: rgba(255, 255, 255, 0.08);
         }
         
-        /* ============================================================
-           RESET & BASE
-           ============================================================ */
         * {
             margin: 0;
             padding: 0;
@@ -54,9 +51,6 @@
             transition: all 0.4s ease;
         }
 
-        /* ============================================================
-           HEADER WITH CUSTOM LOGO
-           ============================================================ */
         .header {
             display: flex;
             align-items: center;
@@ -99,9 +93,6 @@
             transition: color 0.4s ease;
         }
 
-        /* ============================================================
-           MENU BUTTON
-           ============================================================ */
         .menu-btn {
             background: none;
             border: none;
@@ -169,9 +160,6 @@
         .status-offline { background: #ff1744; color: #fff; }
         .status-checking { background: #ffa726; color: #000; }
 
-        /* ============================================================
-           CARDS
-           ============================================================ */
         .card {
             background: rgba(255, 255, 255, 0.03);
             padding: 15px;
@@ -195,9 +183,6 @@
             font-weight: 500;
         }
 
-        /* ============================================================
-           PLANS
-           ============================================================ */
         .plan {
             background: rgba(255, 255, 255, 0.05);
             padding: 10px 12px;
@@ -222,9 +207,6 @@
         .plan-price { color: var(--brand-primary); font-weight: bold; transition: color 0.4s ease; }
         .plan-devices { font-size: 12px; color: var(--text-secondary); }
 
-        /* ============================================================
-           BUTTONS & INPUTS
-           ============================================================ */
         .btn {
             width: 100%;
             padding: 12px;
@@ -262,9 +244,6 @@
         }
         select option { background: #1a1a2e; color: var(--text-primary); }
 
-        /* ============================================================
-           MODAL
-           ============================================================ */
         .modal-overlay {
             position: fixed;
             top: 0;
@@ -317,9 +296,6 @@
             font-weight: bold;
         }
 
-        /* ============================================================
-           LOADING
-           ============================================================ */
         .loading-overlay {
             position: absolute;
             top: 0;
@@ -350,9 +326,6 @@
             font-size: 14px;
         }
 
-        /* ============================================================
-           COUNTDOWN
-           ============================================================ */
         .countdown {
             text-align: center;
             padding: 15px;
@@ -386,9 +359,6 @@
         .cred-row .label { color: var(--text-secondary); }
         .cred-row .value { color: var(--text-primary); }
 
-        /* ============================================================
-           ADMIN PANEL
-           ============================================================ */
         #adminPanel {
             display: none;
         }
@@ -417,9 +387,6 @@
             min-width: 120px;
         }
 
-        /* ============================================================
-           THEME PICKER
-           ============================================================ */
         .theme-grid {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(80px, 1fr));
@@ -453,9 +420,6 @@
             color: var(--text-secondary);
         }
 
-        /* ============================================================
-           LOGO UPLOAD
-           ============================================================ */
         .logo-upload-area {
             border: 2px dashed var(--border-color);
             border-radius: 10px;
@@ -476,9 +440,6 @@
             margin-bottom: 8px;
         }
 
-        /* ============================================================
-           ADMIN TABLES
-           ============================================================ */
         .admin-table {
             width: 100%;
             border-collapse: collapse;
@@ -510,9 +471,6 @@
         .unused { color: var(--brand-primary); }
         .back-to-user { margin-top: 10px; }
 
-        /* ============================================================
-           FOOTER
-           ============================================================ */
         .footer {
             text-align: center;
             margin-top: 20px;
@@ -522,9 +480,6 @@
         }
         .footer .brand { color: var(--brand-primary); font-weight: bold; }
 
-        /* ============================================================
-           RESPONSIVE
-           ============================================================ */
         @media (max-width: 480px) {
             .container { padding: 18px 12px; }
             .theme-grid { grid-template-columns: repeat(auto-fill, minmax(65px, 1fr)); }
@@ -538,9 +493,7 @@
 
 <div class="container" id="app">
 
-    <!-- ============================================================
-    HEADER
-    ============================================================ -->
+    <!-- HEADER -->
     <div class="header">
         <div style="position:relative;">
             <button class="menu-btn" onclick="toggleMenu()" aria-label="Menu">☰</button>
@@ -562,33 +515,26 @@
         <div id="statusBadge" class="status-badge status-checking">⏳</div>
     </div>
 
-    <!-- ============================================================
-    LOADING OVERLAY
-    ============================================================ -->
+    <!-- LOADING OVERLAY -->
     <div id="loadingOverlay" class="loading-overlay">
         <div class="spinner"></div>
         <div class="loading-text">⏳ Processing your request...</div>
         <div style="font-size:12px;color:#666;margin-top:8px;">This may take up to 50 seconds</div>
     </div>
 
-    <!-- ============================================================
-    USER VIEW
-    ============================================================ -->
+    <!-- USER VIEW -->
     <div id="userView">
-
         <div id="stepPlans">
             <div class="card">
                 <h2>📦 Select Your Plan</h2>
                 <div id="plansContainer"></div>
             </div>
-
             <div class="card check-paid-section">
                 <p style="font-size:13px;color:var(--text-secondary);text-align:center;">Already paid? Check your status</p>
                 <input type="tel" id="checkPhoneInput" placeholder="Enter your phone number" />
                 <button class="btn btn-secondary" onclick="checkExistingPlan()">Check Status</button>
                 <div id="checkResult" style="margin-top:8px;font-size:13px;color:var(--text-secondary);"></div>
             </div>
-
             <div class="card voucher-section">
                 <h3>🎟️ Have a Voucher?</h3>
                 <input type="text" id="voucherInput" placeholder="Enter voucher code" />
@@ -601,7 +547,7 @@
             <div class="card" style="text-align:center;">
                 <div style="font-size:48px;">🎉</div>
                 <h2 style="color:var(--brand-primary);">Connected!</h2>
-                <p style="color:var(--text-secondary);">You are now online.</p>
+                <p style="color:var(--text-secondary);">You are now online. Your browser will close automatically.</p>
             </div>
             <div class="countdown">
                 <div class="label">⏱ Time Remaining</div>
@@ -612,20 +558,17 @@
                 <div class="cred-row"><span class="label">Password</span><span class="value" id="credPass">-</span></div>
                 <div class="cred-row"><span class="label">Plan</span><span class="value" id="credPlanName">-</span></div>
             </div>
-            <button class="btn btn-secondary" onclick="resetApp()">Disconnect / Back</button>
+            <p style="font-size:12px;color:var(--text-muted);text-align:center;margin-top:8px;">⏳ Connecting to internet...</p>
         </div>
     </div>
 
-    <!-- ============================================================
-    ADMIN PANEL
-    ============================================================ -->
+    <!-- ADMIN PANEL -->
     <div id="adminPanel">
         <div class="card" style="border-color:var(--brand-primary);">
             <h2 style="color:var(--brand-primary);">🔧 Admin Panel</h2>
             <button class="btn btn-secondary back-to-user" onclick="closeAdmin()">← Back to User View</button>
         </div>
 
-        <!-- ===== THEME CUSTOMIZER ===== -->
         <div class="admin-section">
             <h2>🎨 Theme Customizer</h2>
             <p style="font-size:13px;color:var(--text-secondary);margin-bottom:10px;">Pick a theme to change the look and feel</p>
@@ -636,7 +579,6 @@
             </div>
         </div>
 
-        <!-- ===== LOGO & BRANDING ===== -->
         <div class="admin-section">
             <h2>🏷️ Branding</h2>
             <div class="logo-upload-area" onclick="document.getElementById('logoUpload').click()">
@@ -669,7 +611,6 @@
             <div id="brandingResult" style="margin-top:8px;font-size:13px;color:var(--text-secondary);"></div>
         </div>
 
-        <!-- ===== PLAN MANAGER ===== -->
         <div class="admin-section">
             <h2>📦 Plan Manager</h2>
             <p style="font-size:13px;color:var(--text-secondary);margin-bottom:8px;">Update plan prices</p>
@@ -678,7 +619,6 @@
             <div id="planManagerResult" style="margin-top:8px;font-size:13px;color:var(--text-secondary);"></div>
         </div>
 
-        <!-- ===== VOUCHER GENERATOR ===== -->
         <div class="admin-section">
             <h2>🎟️ Generate Vouchers</h2>
             <div class="row">
@@ -689,14 +629,12 @@
             <div id="voucherGenerateResult" style="margin-top:8px;font-size:13px;color:var(--text-secondary);"></div>
         </div>
 
-        <!-- ===== VOUCHERS LIST ===== -->
         <div class="admin-section">
             <h2>🎟️ Vouchers</h2>
             <button class="btn btn-secondary" onclick="loadVouchers()" style="width:auto;padding:6px 16px;font-size:13px;">Refresh</button>
             <div id="vouchersList" style="margin-top:8px;overflow-x:auto;"><p style="color:var(--text-secondary);font-size:13px;">Loading vouchers...</p></div>
         </div>
 
-        <!-- ===== TRANSACTIONS ===== -->
         <div class="admin-section">
             <h2>📊 Transactions</h2>
             <button class="btn btn-secondary" onclick="loadTransactions()" style="width:auto;padding:6px 16px;font-size:13px;">Refresh</button>
@@ -704,16 +642,13 @@
         </div>
     </div>
 
-    <!-- ===== FOOTER ===== -->
     <div class="footer">
         Powered by <span class="brand">GICH WiFi</span> • Secure • Fast • Reliable
         <br><span id="supportInfo" style="font-size:11px;color:var(--text-muted);"></span>
     </div>
 </div>
 
-<!-- ============================================================
-MODAL
-============================================================ -->
+<!-- MODAL -->
 <div id="paymentModal" class="modal-overlay">
     <div class="modal">
         <button class="modal-close" onclick="closeModal()">✕</button>
@@ -730,11 +665,41 @@ MODAL
 
 <script>
     // ============================================================
-    // CONFIGURATION - NO SENSITIVE DATA HERE!
-    // All sensitive data is stored on the backend (Render environment)
+    // CONFIGURATION - AUTO-DETECT ENVIRONMENT
     // ============================================================
+    console.log('🌐 GICH WiFi System Starting...');
+    console.log('📡 Current Host:', window.location.hostname);
+    console.log('📁 Protocol:', window.location.protocol);
+
+    // Auto-detect environment
     const RENDER_URL = 'https://billing-system-fm9a.onrender.com';
-    const API_URL = RENDER_URL + '/api';
+    const currentHost = window.location.hostname;
+    const isFileProtocol = window.location.protocol === 'file:';
+    const isLocalhost = currentHost === 'localhost' || currentHost === '127.0.0.1' || currentHost === '';
+    const isMikroTik = currentHost === '192.168.88.1' || currentHost.includes('192.168') || currentHost.includes('10.0');
+
+    // Determine API URL
+    let API_URL;
+    if (isFileProtocol) {
+        // File:// protocol - use Render URL directly
+        API_URL = RENDER_URL + '/api';
+        console.log('🏠 Running as local file - using Render URL');
+    } else if (isLocalhost) {
+        // Local testing (VS Code Live Server, Python HTTP server)
+        API_URL = RENDER_URL + '/api';
+        console.log('🏠 Running on localhost - using Render URL');
+    } else if (isMikroTik) {
+        // MikroTik router environment
+        API_URL = RENDER_URL + '/api';
+        console.log('🔗 Running on MikroTik router - using Render URL');
+    } else {
+        // On Render or custom domain
+        API_URL = 'https://' + currentHost + '/api';
+        console.log('🌍 Running on Render - using current hostname');
+    }
+
+    console.log('📡 API URL:', API_URL);
+    console.log('📡 Render URL:', RENDER_URL);
 
     // ============================================================
     // STATE
@@ -747,9 +712,16 @@ MODAL
     let currentSettings = {};
     let currentThemes = [];
     let currentPlans = [];
-
-    // Admin token storage (stored in memory, not in HTML)
     let adminToken = null;
+
+    // ============================================================
+    // GET URL PARAMETERS (from MikroTik)
+    // ============================================================
+    const urlParams = new URLSearchParams(window.location.search);
+    const linkLogin = urlParams.get('link-login') || '';
+    const linkOrig = urlParams.get('link-orig') || '';
+    const macAddress = urlParams.get('mac') || '';
+    const ip = urlParams.get('ip') || '';
 
     // ============================================================
     // DOM REFS
@@ -866,15 +838,11 @@ MODAL
     // APPLY SETTINGS TO UI
     // ============================================================
     function applySettings(settings) {
-        // Update text
         businessNameEl.textContent = settings.businessName || 'GICH WIFI';
         businessTaglineEl.textContent = settings.businessTagline || 'Fast • Secure • Reliable';
         pageTitle.textContent = settings.businessName + ' HOTSPOT';
-
-        // Update support info
         supportInfo.textContent = '📞 ' + (settings.supportPhone || '') + ' • ✉️ ' + (settings.supportEmail || '');
 
-        // Update logo
         if (settings.logo && settings.logo.startsWith('data:image')) {
             logoImage.src = settings.logo;
             logoImage.style.display = 'block';
@@ -884,13 +852,11 @@ MODAL
             logoEmoji.style.display = 'block';
         }
 
-        // Update admin fields
         editBusinessName.value = settings.businessName || '';
         editTagline.value = settings.businessTagline || '';
         editPhone.value = settings.supportPhone || '';
         editEmail.value = settings.supportEmail || '';
 
-        // Apply colors
         if (settings.primaryColor) {
             document.documentElement.style.setProperty('--brand-primary', settings.primaryColor);
             customColorPicker.value = settings.primaryColor;
@@ -911,7 +877,6 @@ MODAL
             document.documentElement.style.setProperty('--button-text', settings.buttonTextColor);
         }
 
-        // Apply gradient if theme is set
         const theme = currentThemes.find(t => t.id === settings.theme);
         if (theme) {
             document.body.style.background = theme.gradient;
@@ -919,13 +884,14 @@ MODAL
     }
 
     // ============================================================
-    // RENDER THEMES
+    // RENDER THEMES - FIXED
     // ============================================================
     function renderThemes(themes) {
         themeGrid.innerHTML = '';
         themes.forEach(theme => {
             const div = document.createElement('div');
             div.className = 'theme-option' + (currentSettings.theme === theme.id ? ' active' : '');
+            div.dataset.themeId = theme.id;
             div.innerHTML = `
                 <span class="preview">${theme.preview || '🎨'}</span>
                 <span class="name">${theme.name}</span>
@@ -935,6 +901,9 @@ MODAL
         });
     }
 
+    // ============================================================
+    // APPLY THEME - FIXED
+    // ============================================================
     async function applyTheme(themeId) {
         if (!adminToken) {
             alert('Please login to admin first');
@@ -944,7 +913,6 @@ MODAL
         const theme = currentThemes.find(t => t.id === themeId);
         if (!theme) return;
 
-        // Update UI
         document.body.style.background = theme.gradient;
         document.documentElement.style.setProperty('--brand-primary', theme.colors.primary);
         document.documentElement.style.setProperty('--brand-secondary', theme.colors.secondary);
@@ -952,12 +920,13 @@ MODAL
         document.documentElement.style.setProperty('--text-primary', theme.colors.text);
         document.documentElement.style.setProperty('--header-text', theme.colors.headerText);
 
-        // Update active state
         document.querySelectorAll('.theme-option').forEach(el => el.classList.remove('active'));
-        const clickedEl = document.querySelector(`.theme-option .preview:contains("${theme.preview}")`);
-        if (clickedEl) clickedEl.closest('.theme-option').classList.add('active');
+        document.querySelectorAll('.theme-option').forEach(el => {
+            if (el.dataset.themeId === themeId) {
+                el.classList.add('active');
+            }
+        });
 
-        // Save theme to settings
         await saveThemeToServer(themeId);
     }
 
@@ -1344,13 +1313,11 @@ MODAL
                 adminPanel.classList.add('active');
                 userView.style.display = 'none';
                 
-                // Load all admin data
                 await loadVouchers();
                 await loadTransactions();
                 await loadPlans();
                 await loadThemes();
                 
-                // Load settings into admin fields
                 editBusinessName.value = currentSettings.businessName || '';
                 editTagline.value = currentSettings.businessTagline || '';
                 editPhone.value = currentSettings.supportPhone || '';
@@ -1372,10 +1339,8 @@ MODAL
     function closeAdmin() {
         adminPanel.classList.remove('active');
         userView.style.display = 'block';
-        // Don't clear adminToken - keep it for the session
     }
 
-    // Close dropdown when clicking outside
     document.addEventListener('click', function(e) {
         if (!e.target.closest('.menu-btn') && !e.target.closest('.dropdown')) {
             dropdownMenu.classList.remove('active');
@@ -1522,7 +1487,7 @@ MODAL
     function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
     // ============================================================
-    // SHOW CONNECTED STATE
+    // SHOW CONNECTED STATE - WITH AUTO-CLOSE
     // ============================================================
     function showConnected() {
         hideLoading();
@@ -1534,6 +1499,86 @@ MODAL
         credPlanName.textContent = credentials.planName || selectedPlan.name;
 
         startCountdown(credentials.expiresAt);
+        console.log('🌐 Auto-connecting to internet...');
+
+        setTimeout(() => {
+            connectToInternet();
+        }, 1500);
+    }
+
+    // ============================================================
+    // CONNECT TO INTERNET - WITH AUTO-CLOSE
+    // ============================================================
+    function connectToInternet() {
+        if (!credentials) {
+            alert('⏳ Please wait for your credentials to be ready...');
+            return;
+        }
+
+        console.log('🌐 Connecting to internet...');
+        console.log('   👤 Username:', credentials.username);
+        console.log('   🔑 Password:', credentials.password);
+        console.log('   🔗 link-login:', linkLogin);
+
+        const mac = urlParams.get('mac') || '';
+        const ip = urlParams.get('ip') || '';
+        const linkLogin = urlParams.get('link-login') || '';
+        const linkOrig = urlParams.get('link-orig') || '';
+
+        let loginUrl = linkLogin;
+        if (!loginUrl) {
+            const hostname = window.location.hostname;
+            if (hostname && hostname !== 'localhost' && hostname !== '127.0.0.1') {
+                loginUrl = 'http://' + hostname + '/login';
+            } else {
+                loginUrl = 'http://192.168.88.1/login';
+            }
+        }
+
+        console.log('🔗 Login URL:', loginUrl);
+
+        const loginForm = document.createElement('form');
+        loginForm.method = 'POST';
+        loginForm.action = loginUrl;
+        loginForm.target = '_top';
+
+        const fields = {
+            'username': credentials.username,
+            'password': credentials.password,
+            'dst': linkOrig || '',
+            'mac': mac || '',
+            'link-login': linkLogin || '',
+            'popup': 'true'
+        };
+
+        for (const [key, value] of Object.entries(fields)) {
+            const input = document.createElement('input');
+            input.type = 'hidden';
+            input.name = key;
+            input.value = value || '';
+            loginForm.appendChild(input);
+        }
+
+        document.body.appendChild(loginForm);
+        console.log('📤 Submitting login form...');
+        loginForm.submit();
+
+        setTimeout(() => {
+            try {
+                if (window.opener) {
+                    window.close();
+                }
+                if (!window.closed) {
+                    window.location.href = 'about:blank';
+                }
+            } catch (e) {
+                console.log('Window close not supported in this context');
+                const statusUrl = window.location.href.split('?')[0].replace('GICH_wifi.html', 'status.html');
+                if (statusUrl !== window.location.href) {
+                    window.location.href = statusUrl;
+                }
+            }
+        }, 3000);
     }
 
     // ============================================================
@@ -1681,7 +1726,10 @@ MODAL
         setInterval(checkServerStatus, 30000);
         console.log('🌐 GICH WiFi System Initialized');
         console.log('📡 API URL:', API_URL);
+        console.log('📍 Environment:', window.location.hostname || 'local');
         console.log('🔐 Admin PIN: Enter when prompted (stored securely on backend)');
+        console.log('📱 MAC Address:', macAddress);
+        console.log('🌐 IP Address:', ip);
     });
 </script>
 
