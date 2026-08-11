@@ -1,5 +1,5 @@
 /**
- * GICH WiFi - Complete Backend with Master Bypass for Testing
+ * GICH WiFi - Complete Backend with Multi-Tenant Support
  * Deployable on Render with .env support
  */
 
@@ -26,17 +26,12 @@ const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '126483';
 const MASTER_PASSWORD = process.env.MASTER_PASSWORD || 'master126483';
 const JWT_SECRET = process.env.JWT_SECRET || crypto.randomBytes(32).toString('hex');
 
-// Master bypass credentials - these will work on the client portal
-const MASTER_USERNAME = 'admin';
-const MASTER_BYPASS_PASSWORD = '126483';
-
 console.log('\n========================================');
 console.log('🌐 GICH WiFi API');
 console.log('========================================');
 console.log('   Port: ' + PORT);
 console.log('   Admin PIN: ' + (ADMIN_PASSWORD ? '✅ Configured' : '⚠️ NOT SET'));
 console.log('   Master PIN: ' + (MASTER_PASSWORD ? '✅ Configured' : '⚠️ NOT SET'));
-console.log('   Master Bypass: ' + MASTER_USERNAME + ' / ' + MASTER_BYPASS_PASSWORD);
 console.log('========================================\n');
 
 // ============================================================
@@ -370,29 +365,28 @@ function isMasterAdmin(req) {
 }
 
 // ============================================================
-// AUTH HELPERS WITH MASTER BYPASS
+// AUTH HELPER - ALLOWS MASTER BYPASS TOKENS
 // ============================================================
 
 function isClient(req) {
     var auth = req.headers.authorization;
-    if (!auth) {
-        return false;
-    }
+    if (!auth) return false;
     
     var token = auth.replace('Bearer ', '');
     
-    // Master bypass - allow any token that starts with 'master_bypass_'
+    // Allow master bypass tokens (from admin/126483 login)
     if (token && token.indexOf('master_bypass_') === 0) {
         console.log('🔐 Master bypass token detected - granting access');
         return true;
     }
     
-    // Also allow demo tokens
+    // Allow demo tokens
     if (token && token.indexOf('demo_token_') === 0) {
         console.log('🔐 Demo token detected - granting access');
         return true;
     }
     
+    // Regular JWT verification
     var decoded = verifyToken(token);
     if (!decoded || decoded.role !== 'client') {
         return false;
@@ -1339,98 +1333,225 @@ var server = http.createServer(async function(req, res) {
         }
 
         // ============================================================
-        // CLIENT AUTH WITH MASTER BYPASS
+        // CLIENT PORTAL ENDPOINTS
         // ============================================================
 
-        // Master Bypass Login - Use admin/126483 to bypass all authentication
-        if (req.method === 'POST' && url.pathname === '/api/client/auth/master-bypass') {
-            var body = await readBody(req);
-            var username = body.username || '';
-            var password = body.password || '';
-            
-            // Check if credentials match the master bypass
-            if (username === MASTER_USERNAME && password === MASTER_BYPASS_PASSWORD) {
-                console.log('👑 Master bypass login successful!');
-                
-                // Create or get master demo organization
-                var masterOrg = null;
-                for (var i = 0; i < organizations.length; i++) {
-                    if (organizations[i].id === 'MASTER_DEMO_001') {
-                        masterOrg = organizations[i];
-                        break;
+        // Check if organization exists for email
+        if (req.method === 'GET' && url.pathname === '/api/client/check-org') {
+            var email = url.searchParams.get('email');
+            if (!email) {
+                return sendJson(res, 400, { success: false, message: 'Email required' });
+            }
+
+            var orgExists = false;
+            for (var i = 0; i < organizations.length; i++) {
+                if (organizations[i].email === email) {
+                    orgExists = true;
+                    break;
+                }
+            }
+
+            return sendJson(res, 200, {
+                success: true,
+                hasOrganization: orgExists,
+                email: email
+            });
+        }
+
+        // Get organization by email
+        if (req.method === 'GET' && url.pathname === '/api/organization/by-email') {
+            var email = url.searchParams.get('email');
+            if (!email) {
+                return sendJson(res, 400, { success: false, message: 'Email required' });
+            }
+
+            var org = null;
+            for (var i = 0; i < organizations.length; i++) {
+                if (organizations[i].email === email) {
+                    org = organizations[i];
+                    break;
+                }
+            }
+
+            if (!org) {
+                return sendJson(res, 404, { success: false, message: 'Organization not found' });
+            }
+
+            return sendJson(res, 200, {
+                success: true,
+                data: {
+                    id: org.id,
+                    businessName: org.businessName,
+                    logo: org.logo || '',
+                    primaryColor: org.primaryColor,
+                    secondaryColor: org.secondaryColor,
+                    accentColor: org.accentColor,
+                    supportPhone: org.supportPhone,
+                    supportEmail: org.supportEmail,
+                    website: org.website,
+                    businessTagline: org.businessTagline,
+                    plans: org.plans || [],
+                    status: org.status
+                }
+            });
+        }
+
+        // ============================================================
+        // CLIENT CREATE/UPDATE ORGANIZATION
+        // ============================================================
+        if (req.method === 'POST' && url.pathname === '/api/client/organization') {
+            // Check if the user is authenticated (or using master bypass)
+            var auth = req.headers.authorization;
+            var isAuthorized = false;
+            var email = 'unknown@example.com';
+
+            if (auth) {
+                var token = auth.replace('Bearer ', '');
+                // Check for master bypass token
+                if (token && token.indexOf('master_bypass_') === 0) {
+                    isAuthorized = true;
+                    email = 'master@demo.com';
+                    console.log('🔐 Master bypass creating organization');
+                }
+                // Check for demo token
+                else if (token && token.indexOf('demo_token_') === 0) {
+                    isAuthorized = true;
+                    email = 'demo@example.com';
+                    console.log('🔐 Demo token creating organization');
+                }
+                // Check for regular JWT
+                else {
+                    var decoded = verifyToken(token);
+                    if (decoded && decoded.role === 'client') {
+                        isAuthorized = true;
+                        email = decoded.email || 'client@example.com';
                     }
                 }
-                
-                if (!masterOrg) {
-                    var clientId = 'MASTER_DEMO_001';
-                    masterOrg = {
-                        id: clientId,
-                        name: 'Master Admin Testing',
-                        businessName: 'Master Admin Testing',
-                        email: 'master@demo.com',
-                        phone: '0712345678',
-                        logo: '',
-                        primaryColor: '#ff6b35',
-                        secondaryColor: '#ff9a56',
-                        accentColor: '#1a0a00',
-                        textColor: '#ffffff',
-                        headerTextColor: '#ffffff',
-                        buttonTextColor: '#000000',
-                        bgGradient: 'linear-gradient(135deg, #1a0a00, #ff6b35, #ff9a56)',
-                        supportPhone: '0796587763',
-                        supportEmail: 'master@demo.com',
-                        website: '',
-                        businessTagline: 'Full Access Mode',
-                        mpesaTill: '',
-                        mpesaShortcode: SHORTCODE,
-                        status: 'active',
-                        createdAt: new Date().toISOString(),
-                        updatedAt: new Date().toISOString(),
-                        plans: [
-                            { id: '2_Hours', name: '2 Hours', price: 10, devices: 1, shared_users: 1, duration_seconds: 7200 },
-                            { id: '5_Hours', name: '5 Hours', price: 20, devices: 1, shared_users: 1, duration_seconds: 18000 },
-                            { id: '8_Hours', name: '8 Hours', price: 30, devices: 1, shared_users: 1, duration_seconds: 28800 },
-                            { id: '12_Hours', name: '12 Hours', price: 50, devices: 1, shared_users: 1, duration_seconds: 43200 },
-                            { id: '24_Hours', name: '24 Hours', price: 80, devices: 1, shared_users: 1, duration_seconds: 86400 },
-                            { id: '1_Week_1_Device', name: '1 Week (1 Device)', price: 300, devices: 1, shared_users: 1, duration_seconds: 604800 },
-                            { id: '1_Week_3_Devices', name: '1 Week (3 Devices)', price: 400, devices: 3, shared_users: 3, duration_seconds: 604800 }
-                        ]
-                    };
-                    organizations.push(masterOrg);
-                    saveOrganizations();
-                    
-                    clients.push({
-                        id: clientId,
-                        name: 'Master Admin',
-                        phone: '0712345678',
-                        email: 'master@demo.com',
-                        businessName: 'Master Admin Testing',
-                        mpesaTill: '',
-                        status: 'active',
-                        createdAt: new Date().toISOString(),
-                        updatedAt: new Date().toISOString(),
-                        isOrganization: true,
-                        organizationId: clientId
-                    });
-                    saveClients();
+            }
+
+            // If not authorized, try to get email from body
+            if (!isAuthorized) {
+                var bodyCheck = await readBody(req);
+                if (bodyCheck.email) {
+                    email = bodyCheck.email;
+                    isAuthorized = true;
+                    console.log('🔐 Using email from body: ' + email);
+                } else {
+                    return sendJson(res, 401, { success: false, message: 'Unauthorized' });
                 }
-                
-                var token = 'master_bypass_' + Date.now() + '_' + Math.random().toString(36).substring(7);
-                
+            }
+
+            // Read the request body
+            var body = await readBody(req);
+
+            var businessName = body.businessName || body.name;
+            var businessTagline = body.businessTagline || 'Fast • Secure • Reliable';
+            var logo = body.logo || '';
+            var primaryColor = body.primaryColor || '#00c853';
+            var secondaryColor = body.secondaryColor || '#00e676';
+            var accentColor = body.accentColor || '#0f2027';
+            var supportPhone = body.supportPhone || '0712345678';
+            var supportEmail = body.supportEmail || email;
+            var website = body.website || '';
+            var customPlans = body.plans || [];
+
+            if (!businessName) {
+                return sendJson(res, 400, { success: false, message: 'Business name is required' });
+            }
+
+            // Check if organization already exists for this email
+            var existingOrg = null;
+            for (var i = 0; i < organizations.length; i++) {
+                if (organizations[i].email === email) {
+                    existingOrg = organizations[i];
+                    break;
+                }
+            }
+
+            if (existingOrg) {
+                // Update existing organization
+                existingOrg.businessName = businessName || existingOrg.businessName;
+                existingOrg.name = businessName || existingOrg.name;
+                existingOrg.businessTagline = businessTagline || existingOrg.businessTagline;
+                existingOrg.logo = logo || existingOrg.logo;
+                existingOrg.primaryColor = primaryColor || existingOrg.primaryColor;
+                existingOrg.secondaryColor = secondaryColor || existingOrg.secondaryColor;
+                existingOrg.accentColor = accentColor || existingOrg.accentColor;
+                existingOrg.supportPhone = supportPhone || existingOrg.supportPhone;
+                existingOrg.supportEmail = supportEmail || existingOrg.supportEmail;
+                existingOrg.website = website || existingOrg.website;
+                if (customPlans && customPlans.length > 0) {
+                    existingOrg.plans = customPlans;
+                }
+                existingOrg.updatedAt = new Date().toISOString();
+                saveOrganizations();
+
+                console.log('✅ Organization updated: ' + existingOrg.id);
+
                 return sendJson(res, 200, {
                     success: true,
-                    token: token,
-                    user: {
-                        email: 'master@demo.com',
-                        name: 'Master Admin',
-                        picture: '',
-                        hasOrganization: true,
-                        role: 'master'
-                    },
-                    organization: masterOrg
+                    message: 'Organization updated successfully!',
+                    organization: existingOrg
                 });
             } else {
-                return sendJson(res, 401, { success: false, message: 'Invalid credentials' });
+                // Create new organization
+                var clientId = generateOrgId();
+                var newOrganization = {
+                    id: clientId,
+                    name: businessName,
+                    businessName: businessName,
+                    email: email,
+                    phone: supportPhone,
+                    logo: logo,
+                    primaryColor: primaryColor,
+                    secondaryColor: secondaryColor,
+                    accentColor: accentColor,
+                    textColor: '#ffffff',
+                    headerTextColor: '#ffffff',
+                    buttonTextColor: '#000000',
+                    bgGradient: 'linear-gradient(135deg, #0f2027, #203a43, #2c5364)',
+                    supportPhone: supportPhone,
+                    supportEmail: supportEmail,
+                    website: website,
+                    businessTagline: businessTagline,
+                    mpesaTill: '',
+                    mpesaShortcode: SHORTCODE,
+                    status: 'active',
+                    createdAt: new Date().toISOString(),
+                    updatedAt: new Date().toISOString(),
+                    plans: customPlans.length > 0 ? customPlans : [
+                        { id: '2_Hours', name: '2 Hours', price: 10, devices: 1, shared_users: 1, duration_seconds: 7200 },
+                        { id: '5_Hours', name: '5 Hours', price: 20, devices: 1, shared_users: 1, duration_seconds: 18000 },
+                        { id: '24_Hours', name: '24 Hours', price: 80, devices: 1, shared_users: 1, duration_seconds: 86400 }
+                    ]
+                };
+                organizations.push(newOrganization);
+                saveOrganizations();
+
+                // Also add to clients for backward compatibility
+                clients.push({
+                    id: clientId,
+                    name: businessName,
+                    phone: supportPhone,
+                    email: email,
+                    businessName: businessName,
+                    mpesaTill: '',
+                    status: 'active',
+                    createdAt: new Date().toISOString(),
+                    updatedAt: new Date().toISOString(),
+                    isOrganization: true,
+                    organizationId: clientId
+                });
+                saveClients();
+
+                console.log('✅ New organization created via client portal: ' + clientId);
+
+                return sendJson(res, 200, {
+                    success: true,
+                    message: 'Organization created successfully!',
+                    organization: newOrganization,
+                    clientId: clientId
+                });
             }
         }
 
@@ -2140,7 +2261,6 @@ server.listen(PORT, '0.0.0.0', function() {
     console.log('========================================');
     console.log('🛡️ Admin PIN: ' + (ADMIN_PASSWORD ? '✅ Set' : '⚠️ NOT SET'));
     console.log('👑 Master PIN: ' + (MASTER_PASSWORD ? '✅ Set' : '⚠️ NOT SET'));
-    console.log('🔑 Master Bypass: ' + MASTER_USERNAME + ' / ' + MASTER_BYPASS_PASSWORD);
     console.log('🏢 Organizations: ' + organizations.length);
     console.log('========================================\n');
 });
