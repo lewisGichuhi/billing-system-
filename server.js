@@ -1,9 +1,8 @@
 /**
- * GICH WiFi - Complete Backend with Admin Dashboard & Multi-Tenant Support
+ * GICH WiFi - Complete Backend with Multi-Tenant Support
  * Deployable on Render with .env support
  */
 
-// Load environment variables from .env file
 require('dotenv').config();
 
 const http = require('http');
@@ -14,7 +13,7 @@ const path = require('path');
 const crypto = require('crypto');
 
 // ============================================================
-// ===================== CONFIGURATION =====================
+// CONFIGURATION
 // ============================================================
 
 const SHORTCODE = process.env.SHORTCODE || '174379';
@@ -28,20 +27,16 @@ const MASTER_PASSWORD = process.env.MASTER_PASSWORD || 'master126483';
 const JWT_SECRET = process.env.JWT_SECRET || crypto.randomBytes(32).toString('hex');
 
 console.log('\n========================================');
-console.log('🌐 GICH WiFi API - Multi-Tenant System');
+console.log('🌐 GICH WiFi API');
 console.log('========================================');
 console.log('📋 Configuration loaded:');
-console.log(`   Consumer Key: ${CONSUMER_KEY ? CONSUMER_KEY.substring(0, 10) + '...' : 'NOT SET'}`);
-console.log(`   Shortcode: ${SHORTCODE}`);
-console.log(`   Callback URL: ${CALLBACK_URL}`);
 console.log(`   Port: ${PORT}`);
 console.log(`   Admin PIN: ${ADMIN_PASSWORD ? '✅ Configured' : '⚠️ NOT SET'}`);
 console.log(`   Master PIN: ${MASTER_PASSWORD ? '✅ Configured' : '⚠️ NOT SET'}`);
-console.log(`   JWT Secret: ${JWT_SECRET ? '✅ Set' : '⚠️ NOT SET'}`);
 console.log('========================================\n');
 
 // ============================================================
-// ===================== JWT HELPER =====================
+// JWT HELPER
 // ============================================================
 
 function generateToken(payload) {
@@ -59,9 +54,7 @@ function verifyToken(token) {
         const expectedSignature = crypto.createHmac('sha256', JWT_SECRET)
             .update(header + '.' + body)
             .digest('base64url');
-        if (signature !== expectedSignature) {
-            return null;
-        }
+        if (signature !== expectedSignature) return null;
         return JSON.parse(Buffer.from(body, 'base64url').toString());
     } catch (error) {
         return null;
@@ -69,7 +62,7 @@ function verifyToken(token) {
 }
 
 // ============================================================
-// ===================== HTTPS AGENT =====================
+// HTTPS AGENT
 // ============================================================
 
 const agent = new https.Agent({
@@ -79,7 +72,7 @@ const agent = new https.Agent({
 });
 
 // ============================================================
-// ===================== DATA STORAGE =====================
+// DATA STORAGE
 // ============================================================
 
 const TRANSACTIONS_FILE = path.join(__dirname, 'transactions.json');
@@ -103,7 +96,7 @@ let organizations = [];
 let masterSettings = {};
 
 // ============================================================
-// ===================== DEFAULT SETTINGS =====================
+// DEFAULT SETTINGS
 // ============================================================
 
 const DEFAULT_SETTINGS = {
@@ -134,126 +127,22 @@ const DEFAULT_MASTER_SETTINGS = {
 };
 
 // ============================================================
-// ===================== DEFAULT THEMES =====================
+// DEFAULT THEMES
 // ============================================================
 
 const DEFAULT_THEMES = [
-    {
-        id: 'default',
-        name: 'Default Green',
-        preview: '🌿',
-        colors: {
-            primary: '#00c853',
-            secondary: '#00e676',
-            accent: '#0f2027',
-            text: '#ffffff',
-            headerText: '#ffffff',
-            buttonText: '#000000'
-        },
-        gradient: 'linear-gradient(135deg, #0f2027, #203a43, #2c5364)'
-    },
-    {
-        id: 'ocean',
-        name: 'Ocean Blue',
-        preview: '🌊',
-        colors: {
-            primary: '#0077be',
-            secondary: '#00b4d8',
-            accent: '#03045e',
-            text: '#ffffff',
-            headerText: '#ffffff',
-            buttonText: '#000000'
-        },
-        gradient: 'linear-gradient(135deg, #03045e, #0077be, #00b4d8)'
-    },
-    {
-        id: 'sunset',
-        name: 'Sunset Orange',
-        preview: '🌅',
-        colors: {
-            primary: '#ff6b35',
-            secondary: '#ff9a56',
-            accent: '#1a0a00',
-            text: '#ffffff',
-            headerText: '#ffffff',
-            buttonText: '#000000'
-        },
-        gradient: 'linear-gradient(135deg, #1a0a00, #ff6b35, #ff9a56)'
-    },
-    {
-        id: 'midnight',
-        name: 'Midnight Purple',
-        preview: '🌙',
-        colors: {
-            primary: '#7c3aed',
-            secondary: '#a78bfa',
-            accent: '#0c0a1a',
-            text: '#ffffff',
-            headerText: '#ffffff',
-            buttonText: '#000000'
-        },
-        gradient: 'linear-gradient(135deg, #0c0a1a, #4c1d95, #7c3aed)'
-    },
-    {
-        id: 'forest',
-        name: 'Forest Green',
-        preview: '🌲',
-        colors: {
-            primary: '#2d6a4f',
-            secondary: '#40916c',
-            accent: '#081c15',
-            text: '#ffffff',
-            headerText: '#ffffff',
-            buttonText: '#000000'
-        },
-        gradient: 'linear-gradient(135deg, #081c15, #2d6a4f, #40916c)'
-    },
-    {
-        id: 'rose',
-        name: 'Rose Pink',
-        preview: '🌹',
-        colors: {
-            primary: '#e91e63',
-            secondary: '#f06292',
-            accent: '#1a0a12',
-            text: '#ffffff',
-            headerText: '#ffffff',
-            buttonText: '#000000'
-        },
-        gradient: 'linear-gradient(135deg, #1a0a12, #c2185b, #e91e63)'
-    },
-    {
-        id: 'gold',
-        name: 'Gold Premium',
-        preview: '✨',
-        colors: {
-            primary: '#f9a825',
-            secondary: '#fdd835',
-            accent: '#1a1500',
-            text: '#ffffff',
-            headerText: '#ffffff',
-            buttonText: '#000000'
-        },
-        gradient: 'linear-gradient(135deg, #1a1500, #f9a825, #fdd835)'
-    },
-    {
-        id: 'nebula',
-        name: 'Nebula Cosmic',
-        preview: '🌌',
-        colors: {
-            primary: '#e040fb',
-            secondary: '#7c4dff',
-            accent: '#0a0a1a',
-            text: '#ffffff',
-            headerText: '#ffffff',
-            buttonText: '#000000'
-        },
-        gradient: 'linear-gradient(135deg, #0a0a1a, #7c4dff, #e040fb)'
-    }
+    { id: 'default', name: 'Default Green', preview: '🌿', colors: { primary: '#00c853', secondary: '#00e676', accent: '#0f2027', text: '#ffffff', headerText: '#ffffff', buttonText: '#000000' }, gradient: 'linear-gradient(135deg, #0f2027, #203a43, #2c5364)' },
+    { id: 'ocean', name: 'Ocean Blue', preview: '🌊', colors: { primary: '#0077be', secondary: '#00b4d8', accent: '#03045e', text: '#ffffff', headerText: '#ffffff', buttonText: '#000000' }, gradient: 'linear-gradient(135deg, #03045e, #0077be, #00b4d8)' },
+    { id: 'sunset', name: 'Sunset Orange', preview: '🌅', colors: { primary: '#ff6b35', secondary: '#ff9a56', accent: '#1a0a00', text: '#ffffff', headerText: '#ffffff', buttonText: '#000000' }, gradient: 'linear-gradient(135deg, #1a0a00, #ff6b35, #ff9a56)' },
+    { id: 'midnight', name: 'Midnight Purple', preview: '🌙', colors: { primary: '#7c3aed', secondary: '#a78bfa', accent: '#0c0a1a', text: '#ffffff', headerText: '#ffffff', buttonText: '#000000' }, gradient: 'linear-gradient(135deg, #0c0a1a, #4c1d95, #7c3aed)' },
+    { id: 'forest', name: 'Forest Green', preview: '🌲', colors: { primary: '#2d6a4f', secondary: '#40916c', accent: '#081c15', text: '#ffffff', headerText: '#ffffff', buttonText: '#000000' }, gradient: 'linear-gradient(135deg, #081c15, #2d6a4f, #40916c)' },
+    { id: 'rose', name: 'Rose Pink', preview: '🌹', colors: { primary: '#e91e63', secondary: '#f06292', accent: '#1a0a12', text: '#ffffff', headerText: '#ffffff', buttonText: '#000000' }, gradient: 'linear-gradient(135deg, #1a0a12, #c2185b, #e91e63)' },
+    { id: 'gold', name: 'Gold Premium', preview: '✨', colors: { primary: '#f9a825', secondary: '#fdd835', accent: '#1a1500', text: '#ffffff', headerText: '#ffffff', buttonText: '#000000' }, gradient: 'linear-gradient(135deg, #1a1500, #f9a825, #fdd835)' },
+    { id: 'nebula', name: 'Nebula Cosmic', preview: '🌌', colors: { primary: '#e040fb', secondary: '#7c4dff', accent: '#0a0a1a', text: '#ffffff', headerText: '#ffffff', buttonText: '#000000' }, gradient: 'linear-gradient(135deg, #0a0a1a, #7c4dff, #e040fb)' }
 ];
 
 // ============================================================
-// ===================== DEFAULT PLANS =====================
+// DEFAULT PLANS
 // ============================================================
 
 const DEFAULT_PLANS = [
@@ -269,350 +158,94 @@ const DEFAULT_PLANS = [
 ];
 
 // ============================================================
-// ===================== LOAD DATA =====================
+// LOAD DATA
 // ============================================================
 
-// Load transactions
-if (fs.existsSync(TRANSACTIONS_FILE)) {
-    try {
-        const data = fs.readFileSync(TRANSACTIONS_FILE, 'utf8');
-        transactions = JSON.parse(data);
-        console.log(`📂 Loaded ${transactions.length} transactions`);
-    } catch (error) {
-        console.error('Error loading transactions:', error);
+function loadAllData() {
+    // Load transactions
+    if (fs.existsSync(TRANSACTIONS_FILE)) {
+        try { transactions = JSON.parse(fs.readFileSync(TRANSACTIONS_FILE, 'utf8')); console.log(`📂 Loaded ${transactions.length} transactions`); } catch (e) { console.error('Error loading transactions:', e); }
     }
-}
-
-// Load vouchers
-if (fs.existsSync(VOUCHERS_FILE)) {
-    try {
-        const data = fs.readFileSync(VOUCHERS_FILE, 'utf8');
-        vouchers = JSON.parse(data);
-        console.log(`🎟️ Loaded ${vouchers.length} vouchers`);
-    } catch (error) {
-        console.error('Error loading vouchers:', error);
+    // Load vouchers
+    if (fs.existsSync(VOUCHERS_FILE)) {
+        try { vouchers = JSON.parse(fs.readFileSync(VOUCHERS_FILE, 'utf8')); console.log(`🎟️ Loaded ${vouchers.length} vouchers`); } catch (e) { console.error('Error loading vouchers:', e); }
     }
-}
-
-// Load plans
-if (fs.existsSync(PLANS_FILE)) {
-    try {
-        const data = fs.readFileSync(PLANS_FILE, 'utf8');
-        plans = JSON.parse(data);
-        console.log(`📦 Loaded ${plans.length} plans`);
-    } catch (error) {
-        console.error('Error loading plans:', error);
-        plans = DEFAULT_PLANS;
-    }
-} else {
-    plans = DEFAULT_PLANS;
-    savePlans();
-}
-
-// Load settings
-if (fs.existsSync(SETTINGS_FILE)) {
-    try {
-        const data = fs.readFileSync(SETTINGS_FILE, 'utf8');
-        settings = JSON.parse(data);
-        console.log(`⚙️ Loaded settings`);
-    } catch (error) {
-        console.error('Error loading settings:', error);
-        settings = DEFAULT_SETTINGS;
-    }
-} else {
-    settings = DEFAULT_SETTINGS;
-    saveSettings();
-}
-
-// Load themes
-if (fs.existsSync(THEMES_FILE)) {
-    try {
-        const data = fs.readFileSync(THEMES_FILE, 'utf8');
-        themes = JSON.parse(data);
-        console.log(`🎨 Loaded ${themes.length} themes`);
-    } catch (error) {
-        console.error('Error loading themes:', error);
-        themes = DEFAULT_THEMES;
-    }
-} else {
-    themes = DEFAULT_THEMES;
-    saveThemes();
-}
-
-// Load clients
-if (fs.existsSync(CLIENTS_FILE)) {
-    try {
-        const data = fs.readFileSync(CLIENTS_FILE, 'utf8');
-        clients = JSON.parse(data);
-        console.log(`👤 Loaded ${clients.length} clients`);
-    } catch (error) {
-        console.error('Error loading clients:', error);
-        clients = [];
-    }
-} else {
-    clients = [];
-    saveClients();
-}
-
-// Load products
-if (fs.existsSync(PRODUCTS_FILE)) {
-    try {
-        const data = fs.readFileSync(PRODUCTS_FILE, 'utf8');
-        products = JSON.parse(data);
-        console.log(`📦 Loaded ${products.length} products`);
-    } catch (error) {
-        console.error('Error loading products:', error);
-        products = [];
-    }
-} else {
-    products = [];
-    saveProducts();
-}
-
-// Load organizations (Multi-Tenant)
-if (fs.existsSync(ORGANIZATIONS_FILE)) {
-    try {
-        const data = fs.readFileSync(ORGANIZATIONS_FILE, 'utf8');
-        organizations = JSON.parse(data);
-        console.log(`🏢 Loaded ${organizations.length} organizations`);
-    } catch (error) {
-        console.error('Error loading organizations:', error);
-        organizations = [];
-    }
-} else {
-    // Create a demo organization
-    organizations = [{
-        id: 'CLIENT_DEMO001',
-        name: 'Demo WiFi Cafe',
-        businessName: 'Demo WiFi Cafe',
-        email: 'demo@example.com',
-        phone: '0712345678',
-        logo: '',
-        primaryColor: '#00c853',
-        secondaryColor: '#00e676',
-        accentColor: '#0f2027',
-        textColor: '#ffffff',
-        headerTextColor: '#ffffff',
-        buttonTextColor: '#000000',
-        bgGradient: 'linear-gradient(135deg, #0f2027, #203a43, #2c5364)',
-        supportPhone: '0796587763',
-        supportEmail: 'support@democafe.co.ke',
-        website: 'https://democafe.co.ke',
-        businessTagline: 'Fast • Secure • Reliable',
-        mpesaTill: '123456',
-        mpesaShortcode: SHORTCODE,
-        status: 'active',
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        plans: [
-            { id: '2_Hours', name: '2 Hours', price: 10, devices: 1, shared_users: 1, duration_seconds: 7200 },
-            { id: '5_Hours', name: '5 Hours', price: 20, devices: 1, shared_users: 1, duration_seconds: 18000 },
-            { id: '24_Hours', name: '24 Hours', price: 80, devices: 1, shared_users: 1, duration_seconds: 86400 },
-            { id: '1_Week_1_Device', name: '1 Week (1 Device)', price: 300, devices: 1, shared_users: 1, duration_seconds: 604800 }
-        ]
-    }];
-    saveOrganizations();
-}
-
-// Load master settings
-if (fs.existsSync(MASTER_SETTINGS_FILE)) {
-    try {
-        const data = fs.readFileSync(MASTER_SETTINGS_FILE, 'utf8');
-        masterSettings = JSON.parse(data);
-        console.log(`⚙️ Loaded master settings`);
-    } catch (error) {
-        console.error('Error loading master settings:', error);
-        masterSettings = DEFAULT_MASTER_SETTINGS;
-    }
-} else {
-    masterSettings = DEFAULT_MASTER_SETTINGS;
-    saveMasterSettings();
+    // Load plans
+    if (fs.existsSync(PLANS_FILE)) {
+        try { plans = JSON.parse(fs.readFileSync(PLANS_FILE, 'utf8')); console.log(`📦 Loaded ${plans.length} plans`); } catch (e) { console.error('Error loading plans:', e); plans = DEFAULT_PLANS; }
+    } else { plans = DEFAULT_PLANS; savePlans(); }
+    // Load settings
+    if (fs.existsSync(SETTINGS_FILE)) {
+        try { settings = JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8')); console.log(`⚙️ Loaded settings`); } catch (e) { console.error('Error loading settings:', e); settings = DEFAULT_SETTINGS; }
+    } else { settings = DEFAULT_SETTINGS; saveSettings(); }
+    // Load themes
+    if (fs.existsSync(THEMES_FILE)) {
+        try { themes = JSON.parse(fs.readFileSync(THEMES_FILE, 'utf8')); console.log(`🎨 Loaded ${themes.length} themes`); } catch (e) { console.error('Error loading themes:', e); themes = DEFAULT_THEMES; }
+    } else { themes = DEFAULT_THEMES; saveThemes(); }
+    // Load clients
+    if (fs.existsSync(CLIENTS_FILE)) {
+        try { clients = JSON.parse(fs.readFileSync(CLIENTS_FILE, 'utf8')); console.log(`👤 Loaded ${clients.length} clients`); } catch (e) { console.error('Error loading clients:', e); clients = []; }
+    } else { clients = []; saveClients(); }
+    // Load products
+    if (fs.existsSync(PRODUCTS_FILE)) {
+        try { products = JSON.parse(fs.readFileSync(PRODUCTS_FILE, 'utf8')); console.log(`📦 Loaded ${products.length} products`); } catch (e) { console.error('Error loading products:', e); products = []; }
+    } else { products = []; saveProducts(); }
+    // Load organizations
+    if (fs.existsSync(ORGANIZATIONS_FILE)) {
+        try { organizations = JSON.parse(fs.readFileSync(ORGANIZATIONS_FILE, 'utf8')); console.log(`🏢 Loaded ${organizations.length} organizations`); } catch (e) { console.error('Error loading organizations:', e); organizations = []; }
+    } else { organizations = []; saveOrganizations(); }
+    // Load master settings
+    if (fs.existsSync(MASTER_SETTINGS_FILE)) {
+        try { masterSettings = JSON.parse(fs.readFileSync(MASTER_SETTINGS_FILE, 'utf8')); console.log(`⚙️ Loaded master settings`); } catch (e) { console.error('Error loading master settings:', e); masterSettings = DEFAULT_MASTER_SETTINGS; }
+    } else { masterSettings = DEFAULT_MASTER_SETTINGS; saveMasterSettings(); }
 }
 
 // ============================================================
-// ===================== SAVE FUNCTIONS =====================
+// SAVE FUNCTIONS
 // ============================================================
 
-function saveTransactions() {
-    try {
-        fs.writeFileSync(TRANSACTIONS_FILE, JSON.stringify(transactions, null, 2));
-        console.log('💾 Transactions saved');
-    } catch (error) {
-        console.error('⚠️ Could not save transactions:', error.message);
-    }
-}
-
-function saveVouchers() {
-    try {
-        fs.writeFileSync(VOUCHERS_FILE, JSON.stringify(vouchers, null, 2));
-        console.log('💾 Vouchers saved');
-    } catch (error) {
-        console.error('⚠️ Could not save vouchers:', error.message);
-    }
-}
-
-function savePlans() {
-    try {
-        fs.writeFileSync(PLANS_FILE, JSON.stringify(plans, null, 2));
-        console.log('💾 Plans saved');
-    } catch (error) {
-        console.error('⚠️ Could not save plans:', error.message);
-    }
-}
-
-function saveSettings() {
-    try {
-        fs.writeFileSync(SETTINGS_FILE, JSON.stringify(settings, null, 2));
-        console.log('💾 Settings saved');
-    } catch (error) {
-        console.error('⚠️ Could not save settings:', error.message);
-    }
-}
-
-function saveThemes() {
-    try {
-        fs.writeFileSync(THEMES_FILE, JSON.stringify(themes, null, 2));
-        console.log('💾 Themes saved');
-    } catch (error) {
-        console.error('⚠️ Could not save themes:', error.message);
-    }
-}
-
-function saveClients() {
-    try {
-        fs.writeFileSync(CLIENTS_FILE, JSON.stringify(clients, null, 2));
-        console.log('💾 Clients saved');
-    } catch (error) {
-        console.error('⚠️ Could not save clients:', error.message);
-    }
-}
-
-function saveProducts() {
-    try {
-        fs.writeFileSync(PRODUCTS_FILE, JSON.stringify(products, null, 2));
-        console.log('💾 Products saved');
-    } catch (error) {
-        console.error('⚠️ Could not save products:', error.message);
-    }
-}
-
-function saveOrganizations() {
-    try {
-        fs.writeFileSync(ORGANIZATIONS_FILE, JSON.stringify(organizations, null, 2));
-        console.log('💾 Organizations saved');
-    } catch (error) {
-        console.error('⚠️ Could not save organizations:', error.message);
-    }
-}
-
-function saveMasterSettings() {
-    try {
-        fs.writeFileSync(MASTER_SETTINGS_FILE, JSON.stringify(masterSettings, null, 2));
-        console.log('💾 Master settings saved');
-    } catch (error) {
-        console.error('⚠️ Could not save master settings:', error.message);
-    }
-}
+function saveTransactions() { try { fs.writeFileSync(TRANSACTIONS_FILE, JSON.stringify(transactions, null, 2)); } catch (e) { console.error('⚠️ Could not save transactions:', e.message); } }
+function saveVouchers() { try { fs.writeFileSync(VOUCHERS_FILE, JSON.stringify(vouchers, null, 2)); } catch (e) { console.error('⚠️ Could not save vouchers:', e.message); } }
+function savePlans() { try { fs.writeFileSync(PLANS_FILE, JSON.stringify(plans, null, 2)); } catch (e) { console.error('⚠️ Could not save plans:', e.message); } }
+function saveSettings() { try { fs.writeFileSync(SETTINGS_FILE, JSON.stringify(settings, null, 2)); } catch (e) { console.error('⚠️ Could not save settings:', e.message); } }
+function saveThemes() { try { fs.writeFileSync(THEMES_FILE, JSON.stringify(themes, null, 2)); } catch (e) { console.error('⚠️ Could not save themes:', e.message); } }
+function saveClients() { try { fs.writeFileSync(CLIENTS_FILE, JSON.stringify(clients, null, 2)); } catch (e) { console.error('⚠️ Could not save clients:', e.message); } }
+function saveProducts() { try { fs.writeFileSync(PRODUCTS_FILE, JSON.stringify(products, null, 2)); } catch (e) { console.error('⚠️ Could not save products:', e.message); } }
+function saveOrganizations() { try { fs.writeFileSync(ORGANIZATIONS_FILE, JSON.stringify(organizations, null, 2)); } catch (e) { console.error('⚠️ Could not save organizations:', e.message); } }
+function saveMasterSettings() { try { fs.writeFileSync(MASTER_SETTINGS_FILE, JSON.stringify(masterSettings, null, 2)); } catch (e) { console.error('⚠️ Could not save master settings:', e.message); } }
 
 // ============================================================
-// ===================== HELPERS =====================
+// HELPERS
 // ============================================================
 
-function getPlanName(planId) {
-    const plan = plans.find(p => p.id === planId);
-    return plan ? plan.name : planId;
-}
-
-function getPlanDuration(planId) {
-    const plan = plans.find(p => p.id === planId);
-    return plan ? plan.duration_seconds : 3600;
-}
-
-function generateVoucherCode() {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-    let code = '';
-    for (let i = 0; i < 10; i++) {
-        code += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return code;
-}
-
-function normalizePhone(rawPhone) {
-    if (!rawPhone) return null;
-    let digits = String(rawPhone).trim().replace(/[^0-9+]/g, '');
-    digits = digits.replace(/^\+/, '');
-    
-    if (digits.startsWith('0')) digits = digits.substring(1);
-    if (digits.length === 9 && digits.startsWith('7')) return `254${digits}`;
-    if (digits.length === 10 && digits.startsWith('7')) return `254${digits}`;
-    if (digits.startsWith('254')) return digits;
-    
-    return digits;
-}
-
-function timestampNow() {
-    const now = new Date();
-    const pad = (n) => String(n).padStart(2, '0');
-    return `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
-}
-
-function generateClientId() {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-    let code = '';
-    for (let i = 0; i < 8; i++) {
-        code += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return 'CLIENT_' + code;
-}
-
-function generateProductId() {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-    let code = '';
-    for (let i = 0; i < 6; i++) {
-        code += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return 'PROD_' + code;
-}
-
-function generateOrgId() {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-    let code = '';
-    for (let i = 0; i < 8; i++) {
-        code += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return 'CLIENT_' + code;
-}
-
-function getOrganizationByClientId(clientId) {
-    return organizations.find(org => org.id === clientId);
-}
+function getPlanName(planId) { const plan = plans.find(p => p.id === planId); return plan ? plan.name : planId; }
+function getPlanDuration(planId) { const plan = plans.find(p => p.id === planId); return plan ? plan.duration_seconds : 3600; }
+function generateVoucherCode() { const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'; let code = ''; for (let i = 0; i < 10; i++) { code += chars.charAt(Math.floor(Math.random() * chars.length)); } return code; }
+function normalizePhone(rawPhone) { if (!rawPhone) return null; let digits = String(rawPhone).trim().replace(/[^0-9+]/g, ''); digits = digits.replace(/^\+/, ''); if (digits.startsWith('0')) digits = digits.substring(1); if (digits.length === 9 && digits.startsWith('7')) return '254' + digits; if (digits.length === 10 && digits.startsWith('7')) return '254' + digits; if (digits.startsWith('254')) return digits; return digits; }
+function timestampNow() { const now = new Date(); const pad = (n) => String(n).padStart(2, '0'); return `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`; }
+function generateClientId() { const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'; let code = ''; for (let i = 0; i < 8; i++) { code += chars.charAt(Math.floor(Math.random() * chars.length)); } return 'CLIENT_' + code; }
+function generateProductId() { const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'; let code = ''; for (let i = 0; i < 6; i++) { code += chars.charAt(Math.floor(Math.random() * chars.length)); } return 'PROD_' + code; }
+function generateOrgId() { const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'; let code = ''; for (let i = 0; i < 8; i++) { code += chars.charAt(Math.floor(Math.random() * chars.length)); } return 'CLIENT_' + code; }
+function getOrganizationByClientId(clientId) { return organizations.find(org => org.id === clientId); }
 
 // ============================================================
-// ===================== REQUEST HELPER =====================
+// REQUEST HELPER
 // ============================================================
 
 function simpleRequest(method, urlString, headers = {}, jsonBody = null) {
     return new Promise((resolve, reject) => {
         const url = new URL(urlString);
         const payload = jsonBody ? JSON.stringify(jsonBody) : null;
-
-        console.log(`\n[REQUEST] ${method} ${urlString}`);
-
         const options = {
             hostname: url.hostname,
             port: url.port || 443,
             path: url.pathname + url.search,
             method: method.toUpperCase(),
-            headers: {
-                ...headers,
-                ...(payload ? { 'Content-Length': Buffer.byteLength(payload) } : {}),
-                'Connection': 'keep-alive'
-            },
+            headers: { ...headers, ...(payload ? { 'Content-Length': Buffer.byteLength(payload) } : {}), 'Connection': 'keep-alive' },
             timeout: 60000,
             agent: agent,
             family: 4
         };
-
         const req = https.request(options, (res) => {
             let chunks = [];
             res.on('data', (chunk) => chunks.push(chunk));
@@ -620,96 +253,46 @@ function simpleRequest(method, urlString, headers = {}, jsonBody = null) {
                 const bodyText = Buffer.concat(chunks).toString('utf8');
                 let bodyJson = null;
                 try { bodyJson = JSON.parse(bodyText); } catch (_) {}
-                
-                console.log(`[RESPONSE] Status: ${res.statusCode}`);
-                if (bodyText && bodyText.length < 500) {
-                    console.log(`[RESPONSE] Body: ${bodyText}`);
-                }
-                
-                resolve({
-                    statusCode: res.statusCode,
-                    statusMessage: res.statusMessage,
-                    bodyText,
-                    bodyJson
-                });
+                resolve({ statusCode: res.statusCode, statusMessage: res.statusMessage, bodyText, bodyJson });
             });
         });
-
-        req.on('error', (err) => {
-            console.error('[REQUEST ERROR]', err.message);
-            reject(new Error(`Request failed: ${err.message}`));
-        });
-        
-        req.on('timeout', () => {
-            console.error('[REQUEST TIMEOUT]');
-            req.destroy();
-            reject(new Error('Request timed out'));
-        });
-
-        if (payload) {
-            req.write(payload);
-        }
+        req.on('error', (err) => { reject(new Error(`Request failed: ${err.message}`)); });
+        req.on('timeout', () => { req.destroy(); reject(new Error('Request timed out')); });
+        if (payload) { req.write(payload); }
         req.end();
     });
 }
 
 // ============================================================
-// ===================== OAUTH =====================
+// OAUTH
 // ============================================================
 
 async function getAccessToken() {
     console.log('\n🔑 Getting access token...');
-    
-    if (!CONSUMER_KEY || !CONSUMER_SECRET) {
-        throw new Error('Consumer Key or Secret not configured. Check .env file.');
-    }
-    
+    if (!CONSUMER_KEY || !CONSUMER_SECRET) { throw new Error('Consumer Key or Secret not configured.'); }
     const auth = Buffer.from(`${CONSUMER_KEY.trim()}:${CONSUMER_SECRET.trim()}`).toString('base64');
-
-    const res = await simpleRequest(
-        'GET',
-        'https://sandbox.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials',
-        {
-            'Authorization': `Basic ${auth}`,
-            'Accept': 'application/json'
-        }
-    );
-
-    if (res.statusCode !== 200) {
-        throw new Error(`OAuth failed (${res.statusCode}): ${res.bodyText}`);
-    }
-
-    if (!res.bodyJson || !res.bodyJson.access_token) {
-        throw new Error('No access token in response');
-    }
-
+    const res = await simpleRequest('GET', 'https://sandbox.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials', { 'Authorization': `Basic ${auth}`, 'Accept': 'application/json' });
+    if (res.statusCode !== 200) { throw new Error(`OAuth failed (${res.statusCode}): ${res.bodyText}`); }
+    if (!res.bodyJson || !res.bodyJson.access_token) { throw new Error('No access token in response'); }
     console.log('✅ Access token obtained');
     return res.bodyJson.access_token;
 }
 
 // ============================================================
-// ===================== STK PUSH =====================
+// STK PUSH
 // ============================================================
 
 async function stkPush({ phone, amount, accountReference }) {
     console.log('\n💳 Starting STK Push...');
     console.log(`📱 Phone: ${phone}`);
     console.log(`💰 Amount: ${amount}`);
-
     const numericAmount = Math.round(Number(amount));
-    if (isNaN(numericAmount) || numericAmount < 1) {
-        throw new Error('Invalid amount');
-    }
-
+    if (isNaN(numericAmount) || numericAmount < 1) { throw new Error('Invalid amount'); }
     const formattedPhone = normalizePhone(phone);
-    if (!formattedPhone || formattedPhone.length < 10) {
-        throw new Error(`Invalid phone: ${phone}`);
-    }
-
+    if (!formattedPhone || formattedPhone.length < 10) { throw new Error(`Invalid phone: ${phone}`); }
     const token = await getAccessToken();
     const timestamp = timestampNow();
     const password = Buffer.from(`${SHORTCODE}${PASSKEY}${timestamp}`).toString('base64');
-
     const payload = {
         BusinessShortCode: SHORTCODE,
         Password: password,
@@ -723,60 +306,34 @@ async function stkPush({ phone, amount, accountReference }) {
         AccountReference: accountReference || 'GICH-WIFI',
         TransactionDesc: 'GICH WiFi Payment'
     };
-
     console.log('📤 Sending STK Push to Safaricom...');
-    
-    const res = await simpleRequest(
-        'POST',
-        'https://sandbox.safaricom.co.ke/mpesa/stkpush/v1/processrequest',
-        {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json'
-        },
-        payload
-    );
-
-    if (!res.bodyJson) {
-        throw new Error('Invalid response from Safaricom');
-    }
-
+    const res = await simpleRequest('POST', 'https://sandbox.safaricom.co.ke/mpesa/stkpush/v1/processrequest', { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }, payload);
+    if (!res.bodyJson) { throw new Error('Invalid response from Safaricom'); }
     if (res.bodyJson.ResponseCode === '0') {
         console.log('✅ STK Push successful!');
-        return {
-            success: true,
-            data: res.bodyJson,
-            checkoutId: res.bodyJson.CheckoutRequestID,
-            message: res.bodyJson.CustomerMessage || 'STK Push sent'
-        };
+        return { success: true, data: res.bodyJson, checkoutId: res.bodyJson.CheckoutRequestID, message: res.bodyJson.CustomerMessage || 'STK Push sent' };
     } else {
         throw new Error(res.bodyJson.ResponseDescription || 'STK Push failed');
     }
 }
 
 // ============================================================
-// ===================== SERVER FUNCTIONS =====================
+// SERVER FUNCTIONS
 // ============================================================
 
 function sendJson(res, statusCode, obj) {
-    res.writeHead(statusCode, { 
+    res.writeHead(statusCode, {
         'Content-Type': 'application/json',
         'Access-Control-Allow-Origin': '*',
         'Access-Control-Allow-Methods': 'POST, GET, PUT, DELETE, OPTIONS',
         'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-        'Cache-Control': 'no-cache, no-store, must-revalidate',
-        'Pragma': 'no-cache',
-        'Expires': '0'
+        'Cache-Control': 'no-cache, no-store, must-revalidate'
     });
     res.end(JSON.stringify(obj, null, 2));
 }
 
 function sendHtml(res, statusCode, html) {
-    res.writeHead(statusCode, { 
-        'Content-Type': 'text/html',
-        'Cache-Control': 'no-cache, no-store, must-revalidate',
-        'Pragma': 'no-cache',
-        'Expires': '0'
-    });
+    res.writeHead(statusCode, { 'Content-Type': 'text/html', 'Cache-Control': 'no-cache, no-store, must-revalidate' });
     res.end(html);
 }
 
@@ -785,99 +342,51 @@ function readBody(req) {
         let raw = '';
         req.on('data', (chunk) => raw += chunk);
         req.on('end', () => {
-            try { resolve(raw ? JSON.parse(raw) : {}); } 
-            catch (e) { reject(new Error('Invalid JSON')); }
+            try { resolve(raw ? JSON.parse(raw) : {}); } catch (e) { reject(new Error('Invalid JSON')); }
         });
         req.on('error', reject);
     });
 }
 
-// ============================================================
-// ===================== FIND HTML FILE =====================
-// ============================================================
-
 function findHtmlFile(filename) {
-    const possiblePaths = [
-        path.join(__dirname, filename),
-        path.join(__dirname, '..', filename),
-        path.join(__dirname, 'public', filename),
-        path.join(__dirname, '..', 'public', filename),
-        path.join(__dirname, '..', '..', filename)
-    ];
-    
-    for (const p of possiblePaths) {
-        if (fs.existsSync(p)) {
-            return p;
-        }
-    }
+    const paths = [path.join(__dirname, filename), path.join(__dirname, 'public', filename)];
+    for (const p of paths) { if (fs.existsSync(p)) return p; }
     return null;
 }
 
 function serveHtmlFile(res, filename) {
     try {
         const filePath = findHtmlFile(filename);
-        if (filePath) {
-            const html = fs.readFileSync(filePath, 'utf8');
-            console.log(`📄 Serving ${filename} from: ${filePath}`);
-            sendHtml(res, 200, html);
-            return true;
-        } else {
-            console.log(`❌ ${filename} not found`);
-            return false;
-        }
-    } catch (err) {
-        console.error(`Error serving ${filename}:`, err);
-        return false;
-    }
+        if (filePath) { sendHtml(res, 200, fs.readFileSync(filePath, 'utf8')); return true; }
+    } catch (err) { console.error(`Error serving ${filename}:`, err); }
+    return false;
 }
-
-// ============================================================
-// ===================== ADMIN AUTH HELPER =====================
-// ============================================================
 
 function isAdmin(req) {
     const auth = req.headers.authorization;
-    if (!auth) {
-        console.log('🔐 No authorization header');
-        return false;
-    }
-    const token = auth.replace('Bearer ', '');
-    const decoded = verifyToken(token);
-    if (!decoded || decoded.role !== 'admin') {
-        console.log('🔐 Invalid or non-admin token');
-        return false;
-    }
-    console.log(`🔐 Admin authenticated: ${decoded.username || 'admin'}`);
-    return true;
+    if (!auth) return false;
+    const decoded = verifyToken(auth.replace('Bearer ', ''));
+    return decoded && decoded.role === 'admin';
 }
 
 function isMasterAdmin(req) {
     const auth = req.headers.authorization;
-    if (!auth) {
-        console.log('🔐 No authorization header');
-        return false;
-    }
-    const token = auth.replace('Bearer ', '');
-    const decoded = verifyToken(token);
-    if (!decoded || decoded.role !== 'master') {
-        console.log('🔐 Invalid or non-master token');
-        return false;
-    }
-    console.log(`🔐 Master Admin authenticated: ${decoded.username || 'master'}`);
-    return true;
+    if (!auth) return false;
+    const decoded = verifyToken(auth.replace('Bearer ', ''));
+    return decoded && decoded.role === 'master';
 }
 
 // ============================================================
-// ===================== CLIENT SKELETON HTML GENERATOR =====================
+// GENERATE CLIENT SKELETON HTML - FULLY FIXED
 // ============================================================
 
 function generateClientSkeletonHtml(organization) {
     const escapeHtml = (str) => {
         if (!str) return '';
         return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-                  .replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+            .replace(/"/g, '&quot;').replace(/'/g, '&#039;');
     };
-    
+
     const orgId = escapeHtml(organization.id);
     const businessName = escapeHtml(organization.businessName || organization.name || 'WiFi Service');
     const tagline = escapeHtml(organization.businessTagline || 'Fast • Secure • Reliable');
@@ -890,10 +399,9 @@ function generateClientSkeletonHtml(organization) {
     const bgGradient = escapeHtml(organization.bgGradient || 'linear-gradient(135deg, #0f2027, #203a43, #2c5364)');
     const supportPhone = escapeHtml(organization.supportPhone || '0796587763');
     const supportEmail = escapeHtml(organization.supportEmail || 'support@example.com');
-    const website = escapeHtml(organization.website || '');
     const logo = escapeHtml(organization.logo || '');
     const plans = organization.plans || [];
-    
+
     let plansHtml = '';
     if (plans.length > 0) {
         plansHtml = plans.map(p => {
@@ -918,10 +426,7 @@ function generateClientSkeletonHtml(organization) {
     } else {
         plansHtml = `<div style="text-align:center;padding:40px;color:#666;">No plans available</div>`;
     }
-    
-    // ============================================================
-    // GENERATE THE COMPLETE CLIENT PAGE WITH FIXES
-    // ============================================================
+
     return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -955,7 +460,7 @@ function generateClientSkeletonHtml(organization) {
             max-width: 150px;
             max-height: 80px;
             margin-bottom: 10px;
-            display: none;
+            ${logo ? '' : 'display: none;'}
         }
         .header h1 { font-size: 32px; color: var(--primary-color); }
         .header p { color: var(--header-text-color); font-size: 16px; margin-top: 4px; opacity: 0.8; }
@@ -996,6 +501,87 @@ function generateClientSkeletonHtml(organization) {
             background: rgba(0,200,83,0.2); color: var(--primary-color);
             padding: 2px 12px; border-radius: 20px; font-size: 12px; font-weight: 600;
         }
+
+        .voucher-section {
+            background: rgba(255,255,255,0.05);
+            backdrop-filter: blur(10px);
+            border-radius: 16px;
+            padding: 24px;
+            margin-top: 20px;
+            border: 1px solid rgba(255,255,255,0.08);
+        }
+        .voucher-section h3 {
+            color: var(--primary-color);
+            margin-bottom: 12px;
+            font-size: 18px;
+        }
+        .voucher-section .form-row {
+            display: flex;
+            gap: 12px;
+            flex-wrap: wrap;
+        }
+        .voucher-section .form-row input {
+            flex: 1;
+            min-width: 180px;
+            padding: 12px 16px;
+            background: rgba(0,0,0,0.3);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 8px;
+            color: #fff;
+            font-size: 16px;
+            outline: none;
+        }
+        .voucher-section .form-row input:focus { border-color: var(--primary-color); }
+        .voucher-section .form-row input::placeholder { color: #555; }
+        .voucher-section .form-row .btn {
+            padding: 12px 24px;
+            background: var(--primary-color);
+            color: var(--button-text-color);
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: 0.2s;
+            font-family: inherit;
+            white-space: nowrap;
+        }
+        .voucher-section .form-row .btn:hover { opacity: 0.85; transform: scale(1.01); }
+        .voucher-section .form-row .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+        .voucher-section .voucher-result {
+            margin-top: 12px;
+            font-size: 14px;
+            color: #888;
+        }
+        .voucher-section .voucher-result.success { color: var(--primary-color); }
+        .voucher-section .voucher-result.error { color: #ff4444; }
+
+        .check-section {
+            margin-top: 20px;
+            text-align: center;
+        }
+        .check-section .btn {
+            padding: 12px 28px;
+            background: var(--primary-color);
+            color: var(--button-text-color);
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: 0.2s;
+            font-family: inherit;
+            width: auto;
+        }
+        .check-section .btn:hover { opacity: 0.85; transform: scale(1.01); }
+        .check-section .result {
+            margin-top: 12px;
+            font-size: 14px;
+            color: #888;
+        }
+        .check-section .result.success { color: var(--primary-color); }
+        .check-section .result.error { color: #ff4444; }
+
         .payment-modal-overlay {
             position: fixed; top: 0; left: 0; right: 0; bottom: 0;
             background: rgba(0,0,0,0.85); backdrop-filter: blur(8px);
@@ -1032,7 +618,7 @@ function generateClientSkeletonHtml(organization) {
             border-radius: 10px; color: #fff; font-size: 16px;
             outline: none; transition: 0.25s;
         }
-        .payment-modal .form-group input:focus { border-color: var(--primary-color); box-shadow: 0 0 0 3px rgba(0,200,83,0.06); }
+        .payment-modal .form-group input:focus { border-color: var(--primary-color); }
         .payment-modal .btn {
             width: 100%; padding: 14px;
             background: var(--primary-color); color: var(--button-text-color);
@@ -1044,6 +630,7 @@ function generateClientSkeletonHtml(organization) {
         .payment-modal .error-msg { color: #ff4444; font-size: 13px; margin-top: 8px; display: none; text-align: center; }
         .payment-modal .error-msg.show { display: block; }
         .payment-modal .test-hint { text-align: center; color: #555; font-size: 11px; margin-top: 12px; border-top: 1px solid rgba(255,255,255,0.04); padding-top: 12px; }
+
         .success-overlay {
             position: fixed; top: 0; left: 0; right: 0; bottom: 0;
             background: var(--bg-gradient);
@@ -1053,7 +640,7 @@ function generateClientSkeletonHtml(organization) {
         }
         .success-overlay.active { display: flex; }
         @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-        .success-overlay .logo { max-width: 120px; max-height: 70px; margin-bottom: 12px; display: none; }
+        .success-overlay .logo { max-width: 120px; max-height: 70px; margin-bottom: 12px; ${logo ? '' : 'display: none;'} }
         .success-overlay .icon { font-size: 72px; margin-bottom: 12px; }
         .success-overlay .title { font-size: 36px; font-weight: 700; color: var(--primary-color); text-align: center; }
         .success-overlay .subtitle { font-size: 18px; color: #aaa; text-align: center; margin-top: 4px; }
@@ -1072,12 +659,7 @@ function generateClientSkeletonHtml(organization) {
         @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
         .success-overlay .powered-by { color: #444; font-size: 12px; margin-top: 30px; }
         .success-overlay .powered-by .brand { color: var(--primary-color); font-weight: bold; }
-        .check-section { margin-top: 30px; text-align: center; }
-        .check-section .btn { padding: 10px 28px; background: rgba(255,255,255,0.08); color: #fff; border: 1px solid rgba(255,255,255,0.05); border-radius: 8px; font-size: 14px; cursor: pointer; transition: 0.2s; font-family: inherit; }
-        .check-section .btn:hover { background: rgba(255,255,255,0.12); }
-        .check-section .result { margin-top: 12px; font-size: 14px; color: #888; }
-        .check-section .result.success { color: var(--primary-color); }
-        .check-section .result.error { color: #ff4444; }
+
         .toast {
             position: fixed; bottom: 30px; right: 30px;
             padding: 14px 22px; border-radius: 12px;
@@ -1091,6 +673,20 @@ function generateClientSkeletonHtml(organization) {
         .toast.success { border-color: var(--primary-color); }
         .toast.error { border-color: #ff4444; }
         .toast.info { border-color: #2196f3; }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid rgba(255,255,255,0.1);
+            border-top-color: var(--primary-color);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            vertical-align: middle;
+            margin-right: 8px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
         @media (max-width: 600px) {
             .header h1 { font-size: 24px; }
             .plans-grid { grid-template-columns: 1fr 1fr; gap: 12px; }
@@ -1101,12 +697,13 @@ function generateClientSkeletonHtml(organization) {
             .success-overlay .timer { font-size: 38px; }
             .success-overlay .title { font-size: 28px; }
             .success-overlay .timer-container { padding: 20px; min-width: 200px; }
+            .voucher-section .form-row { flex-direction: column; }
+            .voucher-section .form-row .btn { width: 100%; }
         }
         @media (max-width: 400px) { .plans-grid { grid-template-columns: 1fr; } }
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-track { background: var(--accent-color); }
         ::-webkit-scrollbar-thumb { background: #2a2a4a; border-radius: 3px; }
-        ::-webkit-scrollbar-thumb:hover { background: #3a3a5a; }
     </style>
 </head>
 <body>
@@ -1122,18 +719,29 @@ function generateClientSkeletonHtml(organization) {
         <p style="color:#888; margin-bottom:16px;">Select a package that fits your needs</p>
         <div class="plans-grid" id="plansGrid">
             <div style="text-align:center;padding:40px;color:#888;grid-column:1/-1;">
-                <span class="loading" style="display:inline-block;width:20px;height:20px;border:3px solid rgba(255,255,255,0.1);border-top-color:var(--primary-color);border-radius:50%;animation:spin 0.8s linear infinite;vertical-align:middle;margin-right:8px;"></span>
-                Loading plans...
+                <span class="loading"></span> Loading plans...
             </div>
         </div>
+
+        <!-- VOUCHER SECTION -->
+        <div class="voucher-section" id="voucherSection">
+            <h3>🎟️ Have a Voucher?</h3>
+            <div class="form-row">
+                <input type="text" id="voucherInput" placeholder="Enter voucher code (e.g., ABC123XYZ)" autocomplete="off">
+                <input type="tel" id="voucherPhoneInput" placeholder="📱 Your phone number" autocomplete="off">
+                <button class="btn" id="voucherRedeemBtn" onclick="redeemVoucher()">🎟️ Redeem</button>
+            </div>
+            <div class="voucher-result" id="voucherResult"></div>
+        </div>
+
+        <!-- CHECK & CONNECT -->
         <div class="check-section">
-            <button class="btn" onclick="checkAndConnect()" style="background:var(--primary-color);color:var(--button-text-color);padding:12px 28px;border:none;border-radius:8px;font-size:16px;font-weight:bold;cursor:pointer;transition:0.2s;width:auto;margin:0 auto;">
-                🔌 Check & Connect
-            </button>
+            <button class="btn" onclick="checkAndConnect()">🔌 Check & Connect</button>
             <div class="result" id="checkResult"></div>
         </div>
     </div>
 
+    <!-- PAYMENT MODAL -->
     <div class="payment-modal-overlay" id="paymentModal">
         <div class="payment-modal">
             <button class="modal-close" onclick="closePaymentModal()">✕</button>
@@ -1152,19 +760,7 @@ function generateClientSkeletonHtml(organization) {
         </div>
     </div>
 
-    <div class="payment-modal-overlay" id="checkModal">
-        <div class="payment-modal">
-            <button class="modal-close" onclick="closeCheckModal()">✕</button>
-            <h2 style="color:var(--primary-color);text-align:center;margin-bottom:16px;">🔍 Check Active Plan</h2>
-            <div class="form-group">
-                <label>📱 Phone Number</label>
-                <input type="tel" id="checkPhone" placeholder="0712345678">
-            </div>
-            <button class="btn" onclick="checkActivePlan()">🔍 Check Status</button>
-            <div id="checkModalResult" style="margin-top:12px;font-size:14px;text-align:center;color:#888;"></div>
-        </div>
-    </div>
-
+    <!-- SUCCESS OVERLAY -->
     <div class="success-overlay" id="successOverlay">
         ${logo ? `<img src="${logo}" alt="${businessName}" class="logo">` : ''}
         <div class="icon">🎉</div>
@@ -1192,69 +788,36 @@ function generateClientSkeletonHtml(organization) {
 
     <script>
         // ============================================================
-        // CONFIGURATION - FIXED FOR LOCAL & REMOTE
+        // CONFIGURATION - WORKS EVERYWHERE
         // ============================================================
-        console.log('🌐 Customer Page Loading...');
-        console.log('📡 Current Host:', window.location.hostname);
-
-        // THE RENDER URL - CHANGE THIS TO YOUR ACTUAL URL
         const RENDER_URL = 'https://billing-system-fm9a.onrender.com';
-
         const currentHost = window.location.hostname;
-        const isLocal = currentHost === 'localhost' || 
-                       currentHost === '127.0.0.1' || 
-                       currentHost === '' || 
-                       currentHost === '192.168.88.1' ||
-                       currentHost === '192.168.1.1' ||
-                       window.location.protocol === 'file:';
+        const isLocal = currentHost === 'localhost' || currentHost === '127.0.0.1' || currentHost === '' ||
+                        currentHost === '192.168.88.1' || currentHost === '192.168.1.1' ||
+                        window.location.protocol === 'file:';
 
-        let API_URL;
-        if (isLocal) {
-            API_URL = RENDER_URL + '/api';
-            console.log('📍 LOCAL/MIKROTIK MODE: Using Render API:', API_URL);
-        } else {
-            API_URL = window.location.origin + '/api';
-            console.log('📍 SERVER MODE: Using relative API:', API_URL);
-        }
-
+        let API_URL = isLocal ? RENDER_URL + '/api' : window.location.origin + '/api';
         console.log('📡 API URL:', API_URL);
 
         // ============================================================
-        // ORGANIZATION ID - FIXED WITH MULTIPLE DETECTION METHODS
+        // ORGANIZATION ID - MULTIPLE DETECTION METHODS
         // ============================================================
-        let ORG_ID = '';
-
-        // Method 1: Use the embedded ID from the server (MOST RELIABLE)
-        ORG_ID = '${orgId}';
-        
-        // Method 2: Check URL path for CLIENT_ pattern
+        let ORG_ID = '${orgId}';
         if (!ORG_ID || ORG_ID === '') {
             const pathParts = window.location.pathname.split('/');
             for (const part of pathParts) {
-                if (part.startsWith('CLIENT_')) {
-                    ORG_ID = part;
-                    break;
-                }
+                if (part.startsWith('CLIENT_')) { ORG_ID = part; break; }
             }
         }
-
-        // Method 3: Check URL query parameters
         if (!ORG_ID || ORG_ID === '') {
             const urlParams = new URLSearchParams(window.location.search);
             ORG_ID = urlParams.get('org') || urlParams.get('client') || '';
         }
-
-        // Method 4: Check localStorage for saved org ID
         if (!ORG_ID || ORG_ID === '') {
             ORG_ID = localStorage.getItem('client_org_id') || '';
         }
-
-        console.log('🏢 Organization ID detected:', ORG_ID);
-
-        // Save to localStorage for next time
-        if (ORG_ID && ORG_ID !== '') {
-            localStorage.setItem('client_org_id', ORG_ID);
-        }
+        console.log('🏢 Organization ID:', ORG_ID);
+        if (ORG_ID && ORG_ID !== '') { localStorage.setItem('client_org_id', ORG_ID); }
 
         // ============================================================
         // STATE
@@ -1267,143 +830,53 @@ function generateClientSkeletonHtml(organization) {
         let credentials = null;
         let pollingActive = false;
 
-        // ============================================================
-        // DOM REFS
-        // ============================================================
         const plansGrid = document.getElementById('plansGrid');
-        const paymentModal = document.getElementById('paymentModal');
-        const checkModal = document.getElementById('checkModal');
-        const successOverlay = document.getElementById('successOverlay');
-        const toast = document.getElementById('toast');
-        const toastMsg = document.getElementById('toastMessage');
-        const toastIcon = document.getElementById('toastIcon');
 
         // ============================================================
         // INIT
         // ============================================================
         document.addEventListener('DOMContentLoaded', () => {
-            console.log('🚀 Customer Page Initialized');
-            
             if (ORG_ID && ORG_ID !== '') {
                 loadOrganizationData();
             } else {
-                plansGrid.innerHTML = \`
-                    <div style="text-align:center;padding:40px;color:#ff4444;grid-column:1/-1;">
-                        ❌ Organization ID not found<br>
-                        <small style="color:#666;font-size:12px;">
-                            Please make sure the URL contains your organization ID.<br>
-                            Example: <code>https://your-site.com/CLIENT_XXXXX/</code>
-                        </small>
-                        <br><br>
-                        <button onclick="manualOrgEntry()" style="padding:8px 20px;background:var(--primary-color);color:#000;border:none;border-radius:6px;cursor:pointer;">
-                            🔑 Enter Organization ID Manually
-                        </button>
-                    </div>
-                \`;
+                plansGrid.innerHTML = '<div style="text-align:center;padding:40px;color:#ff4444;grid-column:1/-1;">❌ Organization ID not found</div>';
             }
         });
-
-        // ============================================================
-        // MANUAL ORG ID ENTRY
-        // ============================================================
-        function manualOrgEntry() {
-            const id = prompt('Enter your Organization ID (e.g., CLIENT_DEMO001):');
-            if (id && id.trim()) {
-                ORG_ID = id.trim();
-                localStorage.setItem('client_org_id', ORG_ID);
-                console.log('🏢 Manual Org ID entered:', ORG_ID);
-                plansGrid.innerHTML = \`
-                    <div style="text-align:center;padding:40px;color:#888;grid-column:1/-1;">
-                        <span class="loading" style="display:inline-block;width:20px;height:20px;border:3px solid rgba(255,255,255,0.1);border-top-color:var(--primary-color);border-radius:50%;animation:spin 0.8s linear infinite;vertical-align:middle;margin-right:8px;"></span>
-                        Loading plans...
-                    </div>
-                \`;
-                loadOrganizationData();
-            }
-        }
 
         // ============================================================
         // LOAD ORGANIZATION DATA
         // ============================================================
         function loadOrganizationData() {
-            const url = API_URL + '/organization/' + ORG_ID;
-            console.log('📥 Fetching organization data from:', url);
-
-            fetch(url)
-                .then(r => {
-                    console.log('📥 Response status:', r.status);
-                    if (!r.ok) {
-                        throw new Error('HTTP ' + r.status + ': ' + r.statusText);
-                    }
-                    return r.json();
-                })
+            fetch(API_URL + '/organization/' + ORG_ID)
+                .then(r => r.json())
                 .then(data => {
-                    console.log('📥 Organization data:', data);
                     if (data.success) {
                         const org = data.data;
                         plans = org.plans || [];
-                        console.log('📦 Plans loaded:', plans.length);
-
-                        // Apply branding
                         if (org.primaryColor) {
                             document.documentElement.style.setProperty('--primary-color', org.primaryColor);
-                        }
-                        if (org.secondaryColor) {
-                            document.documentElement.style.setProperty('--secondary-color', org.secondaryColor);
-                        }
-                        if (org.accentColor) {
-                            document.documentElement.style.setProperty('--accent-color', org.accentColor);
-                        }
-                        if (org.bgGradient) {
-                            document.documentElement.style.setProperty('--bg-gradient', org.bgGradient);
-                            document.querySelector('.header').style.background = org.bgGradient;
                         }
                         if (org.businessName) {
                             document.querySelector('.header h1').textContent = '🌐 ' + org.businessName;
                             document.getElementById('successBusinessName').textContent = org.businessName;
                             document.getElementById('brandName').textContent = org.businessName;
-                            document.title = org.businessName + ' - WiFi Services';
                         }
                         if (org.businessTagline) {
                             document.getElementById('tagline').textContent = org.businessTagline;
                         }
                         if (org.logo) {
-                            const logoImg = document.querySelector('.header .logo');
-                            if (logoImg) {
-                                logoImg.src = org.logo;
-                                logoImg.style.display = 'block';
-                            }
+                            document.querySelector('.header .logo').src = org.logo;
+                            document.querySelector('.header .logo').style.display = 'block';
                             document.getElementById('successLogo').src = org.logo;
                             document.getElementById('successLogo').style.display = 'block';
                         }
-
                         renderPlans();
                     } else {
-                        console.error('❌ Failed to load organization:', data.message);
-                        plansGrid.innerHTML = \`
-                            <div style="text-align:center;padding:40px;color:#ff4444;grid-column:1/-1;">
-                                ❌ \${data.message || 'Failed to load plans'}<br>
-                                <small style="color:#666;font-size:12px;">Organization ID: \${ORG_ID}</small>
-                                <br><br>
-                                <button onclick="loadOrganizationData()" style="padding:8px 20px;background:var(--primary-color);color:#000;border:none;border-radius:6px;cursor:pointer;">🔄 Retry</button>
-                                <br><br>
-                                <button onclick="manualOrgEntry()" style="padding:8px 20px;background:var(--primary-color);color:#000;border:none;border-radius:6px;cursor:pointer;">🔑 Change Organization ID</button>
-                            </div>
-                        \`;
+                        plansGrid.innerHTML = '<div style="text-align:center;padding:40px;color:#ff4444;grid-column:1/-1;">❌ ' + (data.message || 'Failed to load plans') + '</div>';
                     }
                 })
                 .catch(err => {
-                    console.error('❌ Network error loading plans:', err);
-                    plansGrid.innerHTML = \`
-                        <div style="text-align:center;padding:40px;color:#ff4444;grid-column:1/-1;">
-                            ❌ Network error loading plans<br>
-                            <small style="color:#666;font-size:12px;">\${err.message}</small>
-                            <br><br>
-                            <button onclick="loadOrganizationData()" style="padding:8px 20px;background:var(--primary-color);color:#000;border:none;border-radius:6px;cursor:pointer;">🔄 Retry</button>
-                            <br><br>
-                            <button onclick="manualOrgEntry()" style="padding:8px 20px;background:var(--primary-color);color:#000;border:none;border-radius:6px;cursor:pointer;">🔑 Change Organization ID</button>
-                        </div>
-                    \`;
+                    plansGrid.innerHTML = '<div style="text-align:center;padding:40px;color:#ff4444;grid-column:1/-1;">❌ Network error loading plans<br><button onclick="loadOrganizationData()" style="padding:8px 20px;background:var(--primary-color);color:#000;border:none;border-radius:6px;cursor:pointer;">🔄 Retry</button></div>';
                 });
         }
 
@@ -1415,12 +888,11 @@ function generateClientSkeletonHtml(organization) {
                 plansGrid.innerHTML = '<div style="text-align:center;padding:40px;color:#666;grid-column:1/-1;">No plans available</div>';
                 return;
             }
-
             plansGrid.innerHTML = plans.map(p => {
                 const duration = p.duration_seconds || 3600;
                 const hours = Math.floor(duration / 3600);
                 const days = Math.floor(duration / 86400);
-                const durationStr = days > 0 ? \`\${days} day\${days > 1 ? 's' : ''}\` : \`\${hours} hour\${hours > 1 ? 's' : ''}\`;
+                const durationStr = days > 0 ? `${days} day${days > 1 ? 's' : ''}` : `${hours} hour${hours > 1 ? 's' : ''}`;
                 const isPopular = p.id === '1_Week_1_Device' || p.id === '24_Hours';
                 return \`
                     <div class="plan-card" onclick="openPaymentModal('\${p.id}')" data-plan-id="\${p.id}">
@@ -1435,12 +907,10 @@ function generateClientSkeletonHtml(organization) {
                     </div>
                 \`;
             }).join('');
-
-            console.log('✅ Plans rendered successfully');
         }
 
         // ============================================================
-        // CHECK & CONNECT - ONE CLICK SOLUTION
+        // CHECK & CONNECT - ONE CLICK
         // ============================================================
         function checkAndConnect() {
             const phone = prompt('📱 Enter your phone number to check for active plan:');
@@ -1448,17 +918,16 @@ function generateClientSkeletonHtml(organization) {
                 showToast('Please enter a valid phone number', 'error');
                 return;
             }
-
             const resultEl = document.getElementById('checkResult');
-            resultEl.innerHTML = '<span class="loading" style="display:inline-block;width:16px;height:16px;border:2px solid rgba(255,255,255,0.1);border-top-color:var(--primary-color);border-radius:50%;animation:spin 0.8s linear infinite;vertical-align:middle;margin-right:8px;"></span> Checking for active plan...';
+            resultEl.innerHTML = '<span class="loading"></span> Checking...';
             resultEl.style.color = '#888';
 
             fetch(API_URL + '/check-active?phone=' + encodeURIComponent(phone))
                 .then(r => r.json())
                 .then(data => {
                     if (data.success && data.active) {
-                        resultEl.innerHTML = '✅ <strong>Active Plan Found!</strong> Connecting...';
-                        resultEl.style.color = '#00c853';
+                        resultEl.innerHTML = '✅ Active Plan Found! Connecting...';
+                        resultEl.className = 'result success';
                         credentials = {
                             username: data.data.username,
                             password: data.data.password,
@@ -1468,16 +937,73 @@ function generateClientSkeletonHtml(organization) {
                         showSuccessScreen(credentials);
                     } else {
                         resultEl.innerHTML = '❌ No active plan found. Please purchase a plan below.';
-                        resultEl.style.color = '#ff4444';
+                        resultEl.className = 'result error';
                         showToast('No active plan found. Please purchase a plan.', 'error');
                     }
                 })
                 .catch(err => {
-                    console.error(err);
                     resultEl.innerHTML = '❌ Network error checking status';
-                    resultEl.style.color = '#ff4444';
-                    showToast('Network error', 'error');
+                    resultEl.className = 'result error';
                 });
+        }
+
+        // ============================================================
+        // REDEEM VOUCHER - VISIBLE ON PAGE
+        // ============================================================
+        function redeemVoucher() {
+            const code = document.getElementById('voucherInput').value.trim().toUpperCase();
+            const phone = document.getElementById('voucherPhoneInput').value.trim();
+            const resultEl = document.getElementById('voucherResult');
+            const btn = document.getElementById('voucherRedeemBtn');
+
+            if (!code) {
+                resultEl.textContent = '❌ Please enter a voucher code';
+                resultEl.className = 'voucher-result error';
+                return;
+            }
+            if (!phone || phone.length < 10) {
+                resultEl.textContent = '❌ Please enter a valid phone number';
+                resultEl.className = 'voucher-result error';
+                return;
+            }
+
+            btn.disabled = true;
+            btn.innerHTML = '<span class="loading"></span> Processing...';
+            resultEl.innerHTML = '<span class="loading"></span> Redeeming...';
+            resultEl.className = 'voucher-result';
+
+            fetch(API_URL + '/voucher/redeem', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ code: code, phoneNumber: phone })
+            })
+            .then(r => r.json())
+            .then(data => {
+                btn.disabled = false;
+                btn.innerHTML = '🎟️ Redeem';
+                if (data.success) {
+                    resultEl.textContent = '✅ Voucher redeemed successfully! Connecting...';
+                    resultEl.className = 'voucher-result success';
+                    showToast('🎟️ Voucher redeemed!', 'success');
+                    credentials = {
+                        username: data.data.username || 'voucher_user',
+                        password: data.data.password || 'pass_' + Date.now(),
+                        plan: data.data.planName || 'Voucher Plan',
+                        expiresAt: data.data.expiresAt || new Date(Date.now() + 3600000).toISOString()
+                    };
+                    showSuccessScreen(credentials);
+                } else {
+                    resultEl.textContent = '❌ ' + (data.message || 'Invalid voucher');
+                    resultEl.className = 'voucher-result error';
+                    showToast('❌ ' + data.message, 'error');
+                }
+            })
+            .catch(err => {
+                btn.disabled = false;
+                btn.innerHTML = '🎟️ Redeem';
+                resultEl.textContent = '❌ Network error';
+                resultEl.className = 'voucher-result error';
+            });
         }
 
         // ============================================================
@@ -1485,36 +1011,27 @@ function generateClientSkeletonHtml(organization) {
         // ============================================================
         function openPaymentModal(planId) {
             const plan = plans.find(p => p.id === planId);
-            if (!plan) {
-                showToast('Plan not found', 'error');
-                return;
-            }
-
+            if (!plan) { showToast('Plan not found', 'error'); return; }
             selectedPlan = plan;
-
             const duration = plan.duration_seconds || 3600;
             const hours = Math.floor(duration / 3600);
             const days = Math.floor(duration / 86400);
-            const durationStr = days > 0 ? \`\${days} day\${days > 1 ? 's' : ''}\` : \`\${hours} hour\${hours > 1 ? 's' : ''}\`;
-
+            const durationStr = days > 0 ? `${days} day${days > 1 ? 's' : ''}` : `${hours} hour${hours > 1 ? 's' : ''}`;
             document.getElementById('modalPlanName').textContent = plan.name;
             document.getElementById('modalPlanPrice').textContent = 'KES ' + plan.price;
             document.getElementById('modalPlanDuration').textContent = 'Valid for ' + durationStr;
             document.getElementById('modalPhone').value = '';
             document.getElementById('modalError').classList.remove('show');
-
-            paymentModal.classList.add('active');
-            setTimeout(() => {
-                document.getElementById('modalPhone').focus();
-            }, 300);
+            document.getElementById('paymentModal').classList.add('active');
+            setTimeout(() => { document.getElementById('modalPhone').focus(); }, 300);
         }
 
         function closePaymentModal() {
-            paymentModal.classList.remove('active');
+            document.getElementById('paymentModal').classList.remove('active');
             document.getElementById('modalError').classList.remove('show');
         }
 
-        paymentModal.addEventListener('click', function(e) {
+        document.getElementById('paymentModal').addEventListener('click', function(e) {
             if (e.target === this) closePaymentModal();
         });
 
@@ -1528,36 +1045,25 @@ function generateClientSkeletonHtml(organization) {
         function modalPay() {
             const phone = document.getElementById('modalPhone').value.trim();
             const errorEl = document.getElementById('modalError');
-
             if (!phone || phone.length < 10) {
-                errorEl.textContent = '📱 Please enter a valid phone number (e.g. 0712345678)';
+                errorEl.textContent = '📱 Please enter a valid phone number';
                 errorEl.classList.add('show');
                 return;
             }
-
             errorEl.classList.remove('show');
-
             const btn = document.getElementById('modalPayBtn');
             btn.disabled = true;
-            btn.innerHTML = '<span class="loading" style="display:inline-block;width:20px;height:20px;border:3px solid rgba(0,0,0,0.1);border-top-color:#000;border-radius:50%;animation:spin 0.8s linear infinite;vertical-align:middle;margin-right:8px;"></span> Processing...';
+            btn.innerHTML = '<span class="loading"></span> Processing...';
 
-            const url = API_URL + '/payment/initiate';
-            console.log('📤 Sending payment to:', url);
-
-            fetch(url, {
+            fetch(API_URL + '/payment/initiate', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    phoneNumber: phone,
-                    amount: selectedPlan.price,
-                    planId: selectedPlan.id
-                })
+                body: JSON.stringify({ phoneNumber: phone, amount: selectedPlan.price, planId: selectedPlan.id })
             })
             .then(r => r.json())
             .then(data => {
                 btn.disabled = false;
                 btn.innerHTML = '💳 Pay Now';
-
                 if (data.success) {
                     if (data.isFree) {
                         closePaymentModal();
@@ -1565,101 +1071,61 @@ function generateClientSkeletonHtml(organization) {
                         fetchCredentials(data.transactionId);
                         return;
                     }
-
                     currentTransactionId = data.transactionId;
                     closePaymentModal();
                     showToast('📱 STK Push sent! Check your phone.', 'info');
                     startPolling(data.transactionId);
-
                 } else {
-                    errorEl.textContent = '❌ ' + (data.message || 'Payment failed. Please try again.');
+                    errorEl.textContent = '❌ ' + (data.message || 'Payment failed');
                     errorEl.classList.add('show');
                     showToast('❌ Payment failed', 'error');
                 }
             })
             .catch(err => {
-                console.error('Payment error:', err);
                 btn.disabled = false;
                 btn.innerHTML = '💳 Pay Now';
-                errorEl.textContent = '❌ Network error. Please try again.';
+                errorEl.textContent = '❌ Network error';
                 errorEl.classList.add('show');
-                showToast('❌ Network error', 'error');
             });
         }
 
         // ============================================================
-        // POLLING - FIXED VERSION
+        // POLLING - FIXED WITH CANCELLATION HANDLING
         // ============================================================
         function startPolling(transactionId) {
-            if (pollingInterval) {
-                clearInterval(pollingInterval);
-                pollingInterval = null;
-            }
-
-            if (pollingActive) {
-                console.log('⚠️ Polling already active, stopping previous...');
-                return;
-            }
-
+            if (pollingInterval) { clearInterval(pollingInterval); pollingInterval = null; }
+            if (pollingActive) return;
             pollingActive = true;
             let attempts = 0;
             const maxAttempts = 40;
-
             showToast('⏳ Waiting for payment confirmation...', 'info');
 
             pollingInterval = setInterval(() => {
                 attempts++;
-                console.log(\`⏳ Polling attempt \${attempts}/\${maxAttempts} for transaction: \${transactionId}\`);
-
                 if (attempts > maxAttempts) {
-                    clearInterval(pollingInterval);
-                    pollingInterval = null;
-                    pollingActive = false;
-                    showToast('⏱️ Payment timed out. Please check your transaction status.', 'error');
+                    clearInterval(pollingInterval); pollingInterval = null; pollingActive = false;
+                    showToast('⏱️ Payment timed out.', 'error');
                     return;
                 }
-
                 fetch(API_URL + '/transaction/' + transactionId)
                     .then(r => r.json())
                     .then(data => {
-                        console.log('📥 Polling response:', data);
-                        
                         if (data.success) {
                             const tx = data.data;
-                            console.log('📊 Transaction status:', tx.status);
-                            
                             if (tx.status === 'completed') {
-                                clearInterval(pollingInterval);
-                                pollingInterval = null;
-                                pollingActive = false;
+                                clearInterval(pollingInterval); pollingInterval = null; pollingActive = false;
                                 showToast('🎉 Payment successful!', 'success');
                                 fetchCredentials(transactionId);
-                                
                             } else if (tx.status === 'cancelled') {
-                                clearInterval(pollingInterval);
-                                pollingInterval = null;
-                                pollingActive = false;
+                                clearInterval(pollingInterval); pollingInterval = null; pollingActive = false;
                                 showToast('❌ Payment cancelled by user', 'error');
-                                console.log('⏱️ User cancelled transaction:', transactionId);
-                                
                             } else if (tx.status === 'failed') {
-                                clearInterval(pollingInterval);
-                                pollingInterval = null;
-                                pollingActive = false;
-                                const errorMsg = tx.errorDescription || 'Payment failed. Please try again.';
-                                showToast('❌ ' + errorMsg, 'error');
-                                console.log('❌ Payment failed:', errorMsg);
-                                
-                            } else if (tx.status === 'pending') {
-                                console.log('⏳ Transaction still pending...');
+                                clearInterval(pollingInterval); pollingInterval = null; pollingActive = false;
+                                showToast('❌ ' + (tx.errorDescription || 'Payment failed'), 'error');
                             }
-                        } else {
-                            console.log('⚠️ Polling API error:', data.message);
                         }
                     })
-                    .catch(err => {
-                        console.error('❌ Polling fetch error:', err);
-                    });
+                    .catch(err => { console.error('Polling error:', err); });
             }, 3000);
         }
 
@@ -1689,16 +1155,11 @@ function generateClientSkeletonHtml(organization) {
         function showSuccessScreen(cred) {
             document.getElementById('mainContainer').style.display = 'none';
             document.querySelector('.header').style.display = 'none';
-
             document.getElementById('credUsername').textContent = cred.username;
             document.getElementById('credPassword').textContent = cred.password;
             document.getElementById('credPlan').textContent = cred.plan;
-
-            successOverlay.classList.add('active');
-
-            if (cred.expiresAt) {
-                startCountdown(cred.expiresAt);
-            }
+            document.getElementById('successOverlay').classList.add('active');
+            if (cred.expiresAt) { startCountdown(cred.expiresAt); }
         }
 
         // ============================================================
@@ -1706,14 +1167,11 @@ function generateClientSkeletonHtml(organization) {
         // ============================================================
         function startCountdown(expiresAt) {
             if (countdownInterval) clearInterval(countdownInterval);
-
             const timerEl = document.getElementById('successTimer');
-
             function update() {
                 const now = Date.now();
                 const expiry = new Date(expiresAt).getTime();
                 const diff = Math.max(0, expiry - now);
-
                 if (diff <= 0) {
                     timerEl.textContent = '00:00:00';
                     timerEl.classList.add('expired');
@@ -1726,138 +1184,14 @@ function generateClientSkeletonHtml(organization) {
                     }, 3000);
                     return;
                 }
-
                 timerEl.classList.remove('expired');
                 const hours = Math.floor(diff / 3600000);
                 const mins = Math.floor((diff % 3600000) / 60000);
                 const secs = Math.floor((diff % 60000) / 1000);
-                timerEl.textContent =
-                    String(hours).padStart(2, '0') + ':' +
-                    String(mins).padStart(2, '0') + ':' +
-                    String(secs).padStart(2, '0');
+                timerEl.textContent = String(hours).padStart(2, '0') + ':' + String(mins).padStart(2, '0') + ':' + String(secs).padStart(2, '0');
             }
-
             update();
             countdownInterval = setInterval(update, 1000);
-        }
-
-        // ============================================================
-        // CHECK ACTIVE PLAN (Manual)
-        // ============================================================
-        function showCheckModal() {
-            document.getElementById('checkPhone').value = '';
-            document.getElementById('checkModalResult').textContent = '';
-            checkModal.classList.add('active');
-            setTimeout(() => {
-                document.getElementById('checkPhone').focus();
-            }, 300);
-        }
-
-        function closeCheckModal() {
-            checkModal.classList.remove('active');
-        }
-
-        checkModal.addEventListener('click', function(e) {
-            if (e.target === this) closeCheckModal();
-        });
-
-        document.getElementById('checkPhone').addEventListener('keydown', function(e) {
-            if (e.key === 'Enter') checkActivePlan();
-        });
-
-        function checkActivePlan() {
-            const phone = document.getElementById('checkPhone').value.trim();
-            const resultEl = document.getElementById('checkModalResult');
-
-            if (!phone || phone.length < 10) {
-                resultEl.textContent = '📱 Please enter a valid phone number';
-                resultEl.style.color = '#ff4444';
-                return;
-            }
-
-            resultEl.innerHTML = '<span class="loading" style="display:inline-block;width:16px;height:16px;border:2px solid rgba(255,255,255,0.1);border-top-color:var(--primary-color);border-radius:50%;animation:spin 0.8s linear infinite;vertical-align:middle;margin-right:8px;"></span> Checking...';
-            resultEl.style.color = '#888';
-
-            fetch(API_URL + '/check-active?phone=' + encodeURIComponent(phone))
-                .then(r => r.json())
-                .then(data => {
-                    if (data.success && data.active) {
-                        resultEl.innerHTML = \`
-                            ✅ <strong>Active Plan Found!</strong><br>
-                            Plan: \${data.data.planName}<br>
-                            Expires: \${new Date(data.data.expiresAt).toLocaleString()}
-                        \`;
-                        resultEl.style.color = 'var(--primary-color)';
-                        credentials = {
-                            username: data.data.username,
-                            password: data.data.password,
-                            plan: data.data.planName,
-                            expiresAt: data.data.expiresAt
-                        };
-                        closeCheckModal();
-                        showSuccessScreen(credentials);
-                    } else {
-                        resultEl.textContent = '❌ No active plan found for this number.';
-                        resultEl.style.color = '#ff4444';
-                    }
-                })
-                .catch(err => {
-                    console.error(err);
-                    resultEl.textContent = '❌ Network error checking status';
-                    resultEl.style.color = '#ff4444';
-                });
-        }
-
-        // ============================================================
-        // REDEEM VOUCHER
-        // ============================================================
-        function redeemVoucher() {
-            const code = prompt('🎟️ Enter your voucher code:');
-            if (!code || code.trim() === '') {
-                showToast('Please enter a voucher code', 'error');
-                return;
-            }
-
-            const phone = prompt('📱 Enter your phone number:');
-            if (!phone || phone.length < 10) {
-                showToast('Please enter a valid phone number', 'error');
-                return;
-            }
-
-            const statusEl = document.getElementById('checkResult');
-            statusEl.innerHTML = '<span class="loading" style="display:inline-block;width:16px;height:16px;border:2px solid rgba(255,255,255,0.1);border-top-color:var(--primary-color);border-radius:50%;animation:spin 0.8s linear infinite;vertical-align:middle;margin-right:8px;"></span> Redeeming voucher...';
-            statusEl.style.color = '#888';
-
-            fetch(API_URL + '/voucher/redeem', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ code: code.trim().toUpperCase(), phoneNumber: phone })
-            })
-            .then(r => r.json())
-            .then(data => {
-                if (data.success) {
-                    statusEl.innerHTML = '✅ Voucher redeemed successfully! Connecting...';
-                    statusEl.style.color = '#00c853';
-                    showToast('🎟️ Voucher redeemed!', 'success');
-                    credentials = {
-                        username: data.data.username || 'voucher_user',
-                        password: data.data.password || 'pass_' + Date.now(),
-                        plan: data.data.planName || 'Voucher Plan',
-                        expiresAt: data.data.expiresAt || new Date(Date.now() + 3600000).toISOString()
-                    };
-                    showSuccessScreen(credentials);
-                } else {
-                    statusEl.innerHTML = '❌ ' + (data.message || 'Invalid voucher');
-                    statusEl.style.color = '#ff4444';
-                    showToast('❌ ' + data.message, 'error');
-                }
-            })
-            .catch(err => {
-                console.error(err);
-                statusEl.innerHTML = '❌ Network error';
-                statusEl.style.color = '#ff4444';
-                showToast('Network error', 'error');
-            });
         }
 
         // ============================================================
@@ -1865,33 +1199,38 @@ function generateClientSkeletonHtml(organization) {
         // ============================================================
         function showToast(message, type = 'success') {
             const icons = { success: '✅', error: '❌', info: 'ℹ️' };
-
+            const toast = document.getElementById('toast');
             toast.className = 'toast ' + type;
-            toastIcon.textContent = icons[type] || '✅';
-            toastMsg.textContent = message;
+            document.getElementById('toastIcon').textContent = icons[type] || '✅';
+            document.getElementById('toastMessage').textContent = message;
             toast.classList.add('show');
-
             clearTimeout(toast._timeout);
-            toast._timeout = setTimeout(() => {
-                toast.classList.remove('show');
-            }, 4000);
+            toast._timeout = setTimeout(() => { toast.classList.remove('show'); }, 4000);
         }
+
+        // ============================================================
+        // ENTER KEY SUPPORT FOR VOUCHER
+        // ============================================================
+        document.getElementById('voucherInput').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') { document.getElementById('voucherPhoneInput').focus(); }
+        });
+        document.getElementById('voucherPhoneInput').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') { redeemVoucher(); }
+        });
     </script>
 </body>
 </html>`;
 }
 
 // ============================================================
-// ===================== CREATE SERVER =====================
+// CREATE SERVER
 // ============================================================
 
 const server = http.createServer(async (req, res) => {
-    // Always set CORS headers
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'POST, GET, PUT, DELETE, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
     res.setHeader('Access-Control-Allow-Credentials', 'true');
-    res.setHeader('Access-Control-Max-Age', '86400');
 
     if (req.method === 'OPTIONS') {
         res.writeHead(204);
@@ -1905,108 +1244,53 @@ const server = http.createServer(async (req, res) => {
     try {
         // ===== SERVE HTML FILES =====
         if (req.method === 'GET' && url.pathname === '/') {
-            if (serveHtmlFile(res, 'GICH_wifi.html')) {
-                return;
-            }
-            sendHtml(res, 200, `
-                <!DOCTYPE html>
-                <html>
-                <head><title>GICH WiFi</title></head>
-                <body style="font-family:Arial;padding:20px;background:#0f172a;color:white;">
-                    <h1>🌐 GICH WiFi Server</h1>
-                    <p>✅ Server is running!</p>
-                    <hr>
-                    <p><a href="/api/health">API Health</a></p>
-                    <p><a href="/api/plans">Plans</a></p>
-                    <p><a href="/api/admin/transactions">Transactions (Admin)</a></p>
-                    <p><a href="/api/admin/clients">Clients (Admin)</a></p>
-                    <p><a href="/api/admin/products">Products (Admin)</a></p>
-                    <p><a href="/api/master/organizations">Organizations (Master Admin)</a></p>
-                </body>
-                </html>
-            `);
+            if (serveHtmlFile(res, 'GICH_wifi.html')) return;
+            sendHtml(res, 200, `<h1>🌐 GICH WiFi Server</h1><p>✅ Server is running!</p>`);
             return;
         }
 
-        // Serve GICH_wifi.html
         if (req.method === 'GET' && (url.pathname === '/GICH_wifi.html' || url.pathname === '/GICH%20wifi.html')) {
-            if (serveHtmlFile(res, 'GICH_wifi.html')) {
-                return;
-            }
-            sendHtml(res, 404, `<h1>File not found</h1><p>GICH_wifi.html not found</p>`);
+            if (serveHtmlFile(res, 'GICH_wifi.html')) return;
+            sendHtml(res, 404, `<h1>File not found</h1>`);
             return;
         }
 
         // ============================================================
-        // ===================== PUBLIC API ENDPOINTS =====================
+        // PUBLIC API ENDPOINTS
         // ============================================================
 
         // Health
         if (req.method === 'GET' && url.pathname === '/api/health') {
-            return sendJson(res, 200, { 
-                status: 'ok', 
-                timestamp: new Date().toISOString()
-            });
+            return sendJson(res, 200, { status: 'ok', timestamp: new Date().toISOString() });
         }
 
-        // Get Plans (Public)
+        // Get Plans
         if (req.method === 'GET' && url.pathname === '/api/plans') {
-            return sendJson(res, 200, {
-                success: true,
-                data: plans
-            });
+            return sendJson(res, 200, { success: true, data: plans });
         }
 
-        // ===== GET SETTINGS =====
+        // Get Settings
         if (req.method === 'GET' && url.pathname === '/api/settings') {
-            const settingsData = {
-                businessName: settings.businessName || DEFAULT_SETTINGS.businessName,
-                businessTagline: settings.businessTagline || DEFAULT_SETTINGS.businessTagline,
-                supportPhone: settings.supportPhone || DEFAULT_SETTINGS.supportPhone,
-                supportEmail: settings.supportEmail || DEFAULT_SETTINGS.supportEmail,
-                theme: settings.theme || DEFAULT_SETTINGS.theme,
-                primaryColor: settings.primaryColor || DEFAULT_SETTINGS.primaryColor,
-                secondaryColor: settings.secondaryColor || DEFAULT_SETTINGS.secondaryColor,
-                accentColor: settings.accentColor || DEFAULT_SETTINGS.accentColor,
-                textColor: settings.textColor || DEFAULT_SETTINGS.textColor,
-                headerTextColor: settings.headerTextColor || DEFAULT_SETTINGS.headerTextColor,
-                buttonTextColor: settings.buttonTextColor || DEFAULT_SETTINGS.buttonTextColor,
-                bgGradient: settings.bgGradient || DEFAULT_SETTINGS.bgGradient,
-                logo: settings.logo || '',
-                website: settings.website || DEFAULT_SETTINGS.website
-            };
-            
-            return sendJson(res, 200, {
-                success: true,
-                data: settingsData
-            });
+            return sendJson(res, 200, { success: true, data: settings });
         }
 
-        // Get Themes (Public)
+        // Get Themes
         if (req.method === 'GET' && url.pathname === '/api/themes') {
-            return sendJson(res, 200, {
-                success: true,
-                data: themes
-            });
+            return sendJson(res, 200, { success: true, data: themes });
         }
 
-        // Get Products (Public)
+        // Get Products
         if (req.method === 'GET' && url.pathname === '/api/products') {
-            return sendJson(res, 200, {
-                success: true,
-                data: products
-            });
+            return sendJson(res, 200, { success: true, data: products });
         }
 
         // Get Transaction
         if (req.method === 'GET' && url.pathname.startsWith('/api/transaction/')) {
             const id = url.pathname.split('/').pop();
             const transaction = transactions.find(t => t.id === id);
-            if (!transaction) {
-                return sendJson(res, 404, { success: false, message: 'Transaction not found' });
-            }
-            return sendJson(res, 200, { 
-                success: true, 
+            if (!transaction) return sendJson(res, 404, { success: false, message: 'Transaction not found' });
+            return sendJson(res, 200, {
+                success: true,
                 data: {
                     id: transaction.id,
                     status: transaction.status,
@@ -2017,40 +1301,23 @@ const server = http.createServer(async (req, res) => {
                     mpesaCode: transaction.mpesaCode || null,
                     expiresAt: transaction.expiresAt || null,
                     mikrotikUsername: transaction.mikrotikUsername || null,
-                    mikrotikPassword: transaction.mikrotikPassword || null,
-                    completedAt: transaction.completedAt || null
+                    mikrotikPassword: transaction.mikrotikPassword || null
                 }
             });
         }
 
-        // Get All Transactions (with phone filter)
+        // Get All Transactions
         if (req.method === 'GET' && url.pathname === '/api/transactions') {
             const phone = url.searchParams.get('phone');
-            let filtered = transactions;
-            if (phone) {
-                filtered = transactions.filter(t => t.phoneNumber === phone);
-            }
-            return sendJson(res, 200, {
-                success: true,
-                data: filtered,
-                count: filtered.length
-            });
+            let filtered = phone ? transactions.filter(t => t.phoneNumber === phone) : transactions;
+            return sendJson(res, 200, { success: true, data: filtered, count: filtered.length });
         }
 
-        // ===== CHECK EXISTING PLAN =====
+        // Check Active Plan
         if (req.method === 'GET' && url.pathname === '/api/check-active') {
             const phone = url.searchParams.get('phone');
-            if (!phone) {
-                return sendJson(res, 400, { success: false, message: 'Phone number required' });
-            }
-            
-            const active = transactions.find(t =>
-                t.phoneNumber === phone &&
-                t.status === 'completed' &&
-                t.mikrotikCreated &&
-                (!t.expiresAt || new Date(t.expiresAt) > new Date())
-            );
-            
+            if (!phone) return sendJson(res, 400, { success: false, message: 'Phone number required' });
+            const active = transactions.find(t => t.phoneNumber === phone && t.status === 'completed' && t.mikrotikCreated && (!t.expiresAt || new Date(t.expiresAt) > new Date()));
             if (active) {
                 return sendJson(res, 200, {
                     success: true,
@@ -2070,155 +1337,88 @@ const server = http.createServer(async (req, res) => {
         }
 
         // ============================================================
-        // ===================== PAYMENT =====================
+        // PAYMENT
         // ============================================================
 
         // Initiate Payment
         if (req.method === 'POST' && url.pathname === '/api/payment/initiate') {
             const body = await readBody(req);
-            console.log('📥 Payment request:', body);
-            
-            const { phoneNumber, amount, planId, macAddress } = body;
-            
+            const { phoneNumber, amount, planId } = body;
             if (!phoneNumber || phoneNumber.length < 10) {
-                return sendJson(res, 400, { 
-                    success: false, 
-                    message: 'Invalid phone number. Use 0712345678 for testing.'
-                });
+                return sendJson(res, 400, { success: false, message: 'Invalid phone number' });
             }
-            
             try {
                 const transactionId = 'GICH' + Date.now() + Math.random().toString(36).substring(7);
-                const accountRef = 'GICH' + Date.now().toString().slice(-8);
                 const duration = getPlanDuration(planId);
                 const planName = getPlanName(planId);
-                
                 const transaction = {
                     id: transactionId,
                     phoneNumber,
                     amount,
                     planId,
-                    planName: planName,
+                    planName,
                     status: 'pending',
                     timestamp: new Date().toISOString(),
-                    macAddress: macAddress || null,
                     mpesaCode: null,
                     checkoutId: null,
                     expiresAt: new Date(Date.now() + duration * 1000).toISOString(),
                     mikrotikUsername: null,
                     mikrotikPassword: null,
                     mikrotikCreated: false,
-                    deviceCount: plans.find(p => p.id === planId)?.devices || 1,
-                    sharedUsers: plans.find(p => p.id === planId)?.shared_users || 1,
                     errorCode: null,
                     errorDescription: null
                 };
                 transactions.push(transaction);
                 saveTransactions();
-                
-                // For free plans (amount 0), skip STK Push
+
                 if (amount === 0) {
                     transaction.status = 'completed';
                     transaction.mpesaCode = 'FREE' + Date.now();
-                    transaction.completedAt = new Date().toISOString();
                     transaction.mikrotikUsername = 'user_' + transaction.id.substring(0, 12);
                     transaction.mikrotikPassword = 'pass_' + Date.now().toString(36);
                     transaction.mikrotikCreated = true;
                     saveTransactions();
-                    
-                    return sendJson(res, 200, {
-                        success: true,
-                        message: '✅ Free plan activated!',
-                        transactionId: transactionId,
-                        isFree: true
-                    });
+                    return sendJson(res, 200, { success: true, message: 'Free plan activated!', transactionId, isFree: true });
                 }
-                
-                const result = await stkPush({
-                    phone: phoneNumber,
-                    amount: amount,
-                    accountReference: accountRef
-                });
-                
+
+                const result = await stkPush({ phone: phoneNumber, amount, accountReference: 'GICH' + Date.now().toString().slice(-8) });
                 if (result.success) {
                     transaction.checkoutId = result.checkoutId;
-                    transaction.mpesaResponse = result.data;
                     saveTransactions();
-                    
-                    return sendJson(res, 200, {
-                        success: true,
-                        message: '✅ STK Push sent! Check your phone.',
-                        transactionId: transactionId,
-                        checkoutId: result.checkoutId,
-                        testPin: '12345'
-                    });
+                    return sendJson(res, 200, { success: true, message: 'STK Push sent!', transactionId, checkoutId: result.checkoutId });
                 } else {
-                    // STK Push failed - use mock mode
-                    console.log('⚠️ STK Push failed, using mock mode as fallback...');
                     transaction.status = 'completed';
                     transaction.mpesaCode = 'MOCK' + Date.now();
-                    transaction.completedAt = new Date().toISOString();
                     transaction.isMock = true;
                     transaction.mikrotikUsername = 'user_' + transaction.id.substring(0, 12);
                     transaction.mikrotikPassword = 'pass_' + Date.now().toString(36);
                     transaction.mikrotikCreated = true;
                     saveTransactions();
-                    
-                    return sendJson(res, 200, {
-                        success: true,
-                        message: '✅ MOCK MODE: Payment simulated.',
-                        transactionId: transactionId,
-                        mock: true
-                    });
+                    return sendJson(res, 200, { success: true, message: 'MOCK MODE: Payment simulated.', transactionId, mock: true });
                 }
-                
             } catch (error) {
-                console.error('❌ Payment error:', error.message);
-                return sendJson(res, 502, {
-                    success: false,
-                    message: 'Payment failed: ' + error.message
-                });
+                return sendJson(res, 502, { success: false, message: 'Payment failed: ' + error.message });
             }
         }
 
         // ===== MPESA CALLBACK - FIXED =====
         if (req.method === 'POST' && url.pathname === '/api/mpesa-callback') {
             const callback = await readBody(req);
-            console.log('📞 M-Pesa Callback Received:');
-            console.log(JSON.stringify(callback, null, 2));
-            
             const resultCode = callback.Body?.stkCallback?.ResultCode;
             const checkoutId = callback.Body?.stkCallback?.CheckoutRequestID;
-            const receipt = callback.Body?.stkCallback?.CallbackMetadata?.Item?.find(
-                item => item.Name === 'MpesaReceiptNumber'
-            )?.Value;
-            const amount = callback.Body?.stkCallback?.CallbackMetadata?.Item?.find(
-                item => item.Name === 'Amount'
-            )?.Value;
-            const phoneNumber = callback.Body?.stkCallback?.CallbackMetadata?.Item?.find(
-                item => item.Name === 'PhoneNumber'
-            )?.Value;
+            const receipt = callback.Body?.stkCallback?.CallbackMetadata?.Item?.find(item => item.Name === 'MpesaReceiptNumber')?.Value;
+            const amount = callback.Body?.stkCallback?.CallbackMetadata?.Item?.find(item => item.Name === 'Amount')?.Value;
+            const phoneNumber = callback.Body?.stkCallback?.CallbackMetadata?.Item?.find(item => item.Name === 'PhoneNumber')?.Value;
             const resultDesc = callback.Body?.stkCallback?.ResultDesc || 'Unknown error';
-            
-            console.log(`📊 Callback: ID=${checkoutId}, Code=${resultCode}, Receipt=${receipt}`);
-            
+
             let transaction = transactions.find(t => t.checkoutId === checkoutId);
-            
             if (!transaction) {
                 transaction = transactions.find(t => t.mpesaResponse?.CheckoutRequestID === checkoutId);
-                if (transaction) {
-                    console.log('✅ Found transaction by mpesaResponse.CheckoutRequestID');
-                }
             }
-            
             if (!transaction) {
-                console.log('❌ Transaction not found for CheckoutRequestID:', checkoutId);
-                return sendJson(res, 200, { 
-                    ResultCode: 1, 
-                    ResultDesc: 'Transaction not found' 
-                });
+                return sendJson(res, 200, { ResultCode: 1, ResultDesc: 'Transaction not found' });
             }
-            
+
             if (resultCode === 0) {
                 transaction.status = 'completed';
                 transaction.mpesaCode = receipt || 'MPESA' + Date.now();
@@ -2227,93 +1427,57 @@ const server = http.createServer(async (req, res) => {
                 if (phoneNumber) transaction.phoneNumber = phoneNumber;
                 transaction.errorCode = null;
                 transaction.errorDescription = null;
-                
                 transaction.mikrotikUsername = 'user_' + (transaction.mpesaCode || transaction.id).substring(0, 12);
                 transaction.mikrotikPassword = 'pass_' + Date.now().toString(36);
                 transaction.mikrotikCreated = true;
                 saveTransactions();
-                
-                console.log('✅ Payment completed for transaction:', transaction.id);
-                return sendJson(res, 200, { 
-                    ResultCode: 0, 
-                    ResultDesc: 'Success' 
-                });
-                
+                return sendJson(res, 200, { ResultCode: 0, ResultDesc: 'Success' });
             } else if (resultCode === 1037) {
                 transaction.status = 'cancelled';
                 transaction.errorDescription = 'User cancelled the transaction';
                 transaction.errorCode = resultCode;
                 transaction.completedAt = new Date().toISOString();
                 saveTransactions();
-                
-                console.log(`⏱️ Payment CANCELLED by user for transaction: ${transaction.id}`);
-                return sendJson(res, 200, { 
-                    ResultCode: resultCode, 
-                    ResultDesc: 'User cancelled' 
-                });
-                
+                return sendJson(res, 200, { ResultCode: resultCode, ResultDesc: 'User cancelled' });
             } else if (resultCode === 2001) {
                 transaction.status = 'failed';
-                transaction.errorDescription = 'Insufficient M-Pesa balance. Please top up and try again.';
+                transaction.errorDescription = 'Insufficient M-Pesa balance';
                 transaction.errorCode = resultCode;
                 transaction.completedAt = new Date().toISOString();
                 saveTransactions();
-                
-                console.log(`💰 Insufficient balance for transaction: ${transaction.id}`);
-                return sendJson(res, 200, { 
-                    ResultCode: resultCode, 
-                    ResultDesc: 'Insufficient balance' 
-                });
-                
+                return sendJson(res, 200, { ResultCode: resultCode, ResultDesc: 'Insufficient balance' });
             } else {
                 transaction.status = 'failed';
                 transaction.errorDescription = resultDesc || 'Payment failed';
                 transaction.errorCode = resultCode;
                 transaction.completedAt = new Date().toISOString();
                 saveTransactions();
-                
-                console.log(`❌ Payment FAILED for transaction: ${transaction.id} - ${resultDesc}`);
-                return sendJson(res, 200, { 
-                    ResultCode: resultCode, 
-                    ResultDesc: resultDesc 
-                });
+                return sendJson(res, 200, { ResultCode: resultCode, ResultDesc: resultDesc });
             }
         }
 
         // ============================================================
-        // ===================== VOUCHER SYSTEM =====================
+        // VOUCHER SYSTEM
         // ============================================================
 
         // Redeem Voucher
         if (req.method === 'POST' && url.pathname === '/api/voucher/redeem') {
             const body = await readBody(req);
             const { code, phoneNumber } = body;
-            
-            console.log('🎟️ Voucher redemption request:', { code, phoneNumber });
-            
-            if (!code) {
-                return sendJson(res, 400, { success: false, message: 'Voucher code required' });
-            }
-            
+            if (!code) return sendJson(res, 400, { success: false, message: 'Voucher code required' });
             const voucher = vouchers.find(v => v.code === code && !v.used);
-            if (!voucher) {
-                return sendJson(res, 404, { success: false, message: 'Invalid or already used voucher' });
-            }
-            
+            if (!voucher) return sendJson(res, 404, { success: false, message: 'Invalid or already used voucher' });
             if (voucher.expiresAt && new Date(voucher.expiresAt) < new Date()) {
                 return sendJson(res, 400, { success: false, message: 'Voucher has expired' });
             }
-            
             voucher.used = true;
             voucher.usedBy = phoneNumber || 'unknown';
             voucher.usedAt = new Date().toISOString();
             saveVouchers();
-            
+
             const transactionId = 'VOUCH' + Date.now() + Math.random().toString(36).substring(7);
             const duration = voucher.duration_seconds || 3600;
             const planName = voucher.planName || 'Voucher Plan';
-            const sharedUsers = voucher.devices || 1;
-            
             const transaction = {
                 id: transactionId,
                 phoneNumber: phoneNumber || 'voucher_user',
@@ -2330,14 +1494,14 @@ const server = http.createServer(async (req, res) => {
                 mikrotikCreated: true,
                 isVoucher: true,
                 voucherCode: voucher.code,
-                sharedUsers: sharedUsers
+                sharedUsers: voucher.devices || 1
             };
             transactions.push(transaction);
             saveTransactions();
-            
+
             return sendJson(res, 200, {
                 success: true,
-                message: '✅ Voucher redeemed successfully!',
+                message: 'Voucher redeemed successfully!',
                 data: {
                     transactionId: transactionId,
                     planName: planName,
@@ -2349,414 +1513,191 @@ const server = http.createServer(async (req, res) => {
         }
 
         // ============================================================
-        // ===================== ADMIN ENDPOINTS =====================
+        // ADMIN ENDPOINTS
         // ============================================================
 
-        // ===== ADMIN VERIFICATION =====
+        // Admin Verify
         if (req.method === 'POST' && url.pathname === '/api/admin/verify') {
             const body = await readBody(req);
-            const { pin } = body;
-            
-            console.log('🔐 Admin verification attempt');
-            
-            if (pin === ADMIN_PASSWORD) {
+            if (body.pin === ADMIN_PASSWORD) {
                 const token = generateToken({ username: 'admin', role: 'admin', exp: Date.now() + 86400000 });
-                console.log('✅ Admin verified successfully');
-                return sendJson(res, 200, { 
-                    success: true, 
-                    message: 'Admin verified',
-                    token: token
-                });
+                return sendJson(res, 200, { success: true, message: 'Admin verified', token });
             } else {
-                console.log('❌ Admin verification failed - wrong PIN');
-                return sendJson(res, 401, { 
-                    success: false, 
-                    message: 'Invalid PIN' 
-                });
+                return sendJson(res, 401, { success: false, message: 'Invalid PIN' });
             }
         }
 
-        // ===== ADMIN CLIENTS =====
+        // Admin Clients CRUD
         if (req.method === 'GET' && url.pathname === '/api/admin/clients') {
-            if (!isAdmin(req)) {
-                return sendJson(res, 401, { success: false, message: 'Unauthorized' });
-            }
-            
-            return sendJson(res, 200, {
-                success: true,
-                data: clients,
-                count: clients.length
-            });
+            if (!isAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
+            return sendJson(res, 200, { success: true, data: clients, count: clients.length });
         }
 
         if (req.method === 'POST' && url.pathname === '/api/admin/clients') {
-            if (!isAdmin(req)) {
-                return sendJson(res, 401, { success: false, message: 'Unauthorized' });
-            }
-            
+            if (!isAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
             const body = await readBody(req);
-            console.log('👤 Creating new client:', body);
-            
-            const { name, phone, email, businessName, mpesaTill } = body;
-            
-            if (!name || !phone) {
-                return sendJson(res, 400, { 
-                    success: false, 
-                    message: 'Name and phone are required' 
-                });
-            }
-            
+            if (!body.name || !body.phone) return sendJson(res, 400, { success: false, message: 'Name and phone required' });
             const newClient = {
                 id: generateClientId(),
-                name: name,
-                phone: phone,
-                email: email || '',
-                businessName: businessName || '',
-                mpesaTill: mpesaTill || '',
+                name: body.name,
+                phone: body.phone,
+                email: body.email || '',
+                businessName: body.businessName || '',
+                mpesaTill: body.mpesaTill || '',
                 status: 'active',
                 createdAt: new Date().toISOString(),
                 updatedAt: new Date().toISOString()
             };
-            
             clients.push(newClient);
             saveClients();
-            
-            return sendJson(res, 200, {
-                success: true,
-                message: 'Client created successfully!',
-                data: newClient
-            });
+            return sendJson(res, 200, { success: true, message: 'Client created', data: newClient });
         }
 
         if (req.method === 'PUT' && url.pathname.startsWith('/api/admin/clients/')) {
-            if (!isAdmin(req)) {
-                return sendJson(res, 401, { success: false, message: 'Unauthorized' });
-            }
-            
+            if (!isAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
             const clientId = url.pathname.split('/').pop();
             const body = await readBody(req);
-            console.log('✏️ Updating client:', clientId, body);
-            
-            const clientIndex = clients.findIndex(c => c.id === clientId);
-            if (clientIndex === -1) {
-                return sendJson(res, 404, { success: false, message: 'Client not found' });
-            }
-            
-            const updatedClient = {
-                ...clients[clientIndex],
-                ...body,
-                updatedAt: new Date().toISOString()
-            };
-            
-            clients[clientIndex] = updatedClient;
+            const index = clients.findIndex(c => c.id === clientId);
+            if (index === -1) return sendJson(res, 404, { success: false, message: 'Client not found' });
+            clients[index] = { ...clients[index], ...body, updatedAt: new Date().toISOString() };
             saveClients();
-            
-            return sendJson(res, 200, {
-                success: true,
-                message: 'Client updated successfully!',
-                data: updatedClient
-            });
+            return sendJson(res, 200, { success: true, message: 'Client updated', data: clients[index] });
         }
 
         if (req.method === 'DELETE' && url.pathname.startsWith('/api/admin/clients/')) {
-            if (!isAdmin(req)) {
-                return sendJson(res, 401, { success: false, message: 'Unauthorized' });
-            }
-            
+            if (!isAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
             const clientId = url.pathname.split('/').pop();
-            console.log('🗑️ Deleting client:', clientId);
-            
-            const clientIndex = clients.findIndex(c => c.id === clientId);
-            if (clientIndex === -1) {
-                return sendJson(res, 404, { success: false, message: 'Client not found' });
-            }
-            
-            clients.splice(clientIndex, 1);
+            const index = clients.findIndex(c => c.id === clientId);
+            if (index === -1) return sendJson(res, 404, { success: false, message: 'Client not found' });
+            clients.splice(index, 1);
             saveClients();
-            
-            return sendJson(res, 200, {
-                success: true,
-                message: 'Client deleted successfully!'
-            });
+            return sendJson(res, 200, { success: true, message: 'Client deleted' });
         }
 
-        // ===== ADMIN PRODUCTS =====
+        // Admin Products CRUD
         if (req.method === 'GET' && url.pathname === '/api/admin/products') {
-            if (!isAdmin(req)) {
-                return sendJson(res, 401, { success: false, message: 'Unauthorized' });
-            }
-            
-            return sendJson(res, 200, {
-                success: true,
-                data: products,
-                count: products.length
-            });
+            if (!isAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
+            return sendJson(res, 200, { success: true, data: products, count: products.length });
         }
 
         if (req.method === 'POST' && url.pathname === '/api/admin/products') {
-            if (!isAdmin(req)) {
-                return sendJson(res, 401, { success: false, message: 'Unauthorized' });
-            }
-            
+            if (!isAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
             const body = await readBody(req);
-            console.log('📦 Creating new product:', body);
-            
-            const { name, description, price, imageUrl, category } = body;
-            
-            if (!name || price === undefined) {
-                return sendJson(res, 400, { 
-                    success: false, 
-                    message: 'Name and price are required' 
-                });
-            }
-            
+            if (!body.name || body.price === undefined) return sendJson(res, 400, { success: false, message: 'Name and price required' });
             const newProduct = {
                 id: generateProductId(),
-                name: name,
-                description: description || '',
-                price: Number(price),
-                imageUrl: imageUrl || '',
-                category: category || 'general',
+                name: body.name,
+                description: body.description || '',
+                price: Number(body.price),
+                imageUrl: body.imageUrl || '',
+                category: body.category || 'general',
                 status: 'active',
                 createdAt: new Date().toISOString(),
                 updatedAt: new Date().toISOString()
             };
-            
             products.push(newProduct);
             saveProducts();
-            
-            return sendJson(res, 200, {
-                success: true,
-                message: 'Product created successfully!',
-                data: newProduct
-            });
+            return sendJson(res, 200, { success: true, message: 'Product created', data: newProduct });
         }
 
         if (req.method === 'PUT' && url.pathname.startsWith('/api/admin/products/')) {
-            if (!isAdmin(req)) {
-                return sendJson(res, 401, { success: false, message: 'Unauthorized' });
-            }
-            
+            if (!isAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
             const productId = url.pathname.split('/').pop();
             const body = await readBody(req);
-            console.log('✏️ Updating product:', productId, body);
-            
-            const productIndex = products.findIndex(p => p.id === productId);
-            if (productIndex === -1) {
-                return sendJson(res, 404, { success: false, message: 'Product not found' });
-            }
-            
-            const updatedProduct = {
-                ...products[productIndex],
-                ...body,
-                price: body.price !== undefined ? Number(body.price) : products[productIndex].price,
-                updatedAt: new Date().toISOString()
-            };
-            
-            products[productIndex] = updatedProduct;
+            const index = products.findIndex(p => p.id === productId);
+            if (index === -1) return sendJson(res, 404, { success: false, message: 'Product not found' });
+            products[index] = { ...products[index], ...body, price: body.price !== undefined ? Number(body.price) : products[index].price, updatedAt: new Date().toISOString() };
             saveProducts();
-            
-            return sendJson(res, 200, {
-                success: true,
-                message: 'Product updated successfully!',
-                data: updatedProduct
-            });
+            return sendJson(res, 200, { success: true, message: 'Product updated', data: products[index] });
         }
 
         if (req.method === 'DELETE' && url.pathname.startsWith('/api/admin/products/')) {
-            if (!isAdmin(req)) {
-                return sendJson(res, 401, { success: false, message: 'Unauthorized' });
-            }
-            
+            if (!isAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
             const productId = url.pathname.split('/').pop();
-            console.log('🗑️ Deleting product:', productId);
-            
-            const productIndex = products.findIndex(p => p.id === productId);
-            if (productIndex === -1) {
-                return sendJson(res, 404, { success: false, message: 'Product not found' });
-            }
-            
-            products.splice(productIndex, 1);
+            const index = products.findIndex(p => p.id === productId);
+            if (index === -1) return sendJson(res, 404, { success: false, message: 'Product not found' });
+            products.splice(index, 1);
             saveProducts();
-            
-            return sendJson(res, 200, {
-                success: true,
-                message: 'Product deleted successfully!'
-            });
+            return sendJson(res, 200, { success: true, message: 'Product deleted' });
         }
 
-        // ===== ADMIN PLANS =====
+        // Admin Plans
         if (req.method === 'GET' && url.pathname === '/api/admin/plans') {
-            if (!isAdmin(req)) {
-                return sendJson(res, 401, { success: false, message: 'Unauthorized' });
-            }
-            
-            return sendJson(res, 200, {
-                success: true,
-                data: plans
-            });
+            if (!isAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
+            return sendJson(res, 200, { success: true, data: plans });
         }
 
         if (req.method === 'POST' && url.pathname === '/api/admin/plans') {
-            if (!isAdmin(req)) {
-                return sendJson(res, 401, { success: false, message: 'Unauthorized' });
-            }
-            
+            if (!isAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
             const body = await readBody(req);
-            console.log('📦 Creating new plan:', body);
-            
-            const { id, name, price, devices, shared_users, duration_seconds } = body;
-            
-            if (!id || !name || price === undefined) {
-                return sendJson(res, 400, { 
-                    success: false, 
-                    message: 'ID, name, and price are required' 
-                });
-            }
-            
-            if (plans.find(p => p.id === id)) {
-                return sendJson(res, 400, { 
-                    success: false, 
-                    message: 'Plan ID already exists' 
-                });
-            }
-            
-            const newPlan = {
-                id: id,
-                name: name,
-                price: Number(price),
-                devices: devices || 1,
-                shared_users: shared_users || 1,
-                duration_seconds: duration_seconds || 3600
-            };
-            
-            plans.push(newPlan);
+            if (!body.id || !body.name || body.price === undefined) return sendJson(res, 400, { success: false, message: 'ID, name, and price required' });
+            if (plans.find(p => p.id === body.id)) return sendJson(res, 400, { success: false, message: 'Plan ID already exists' });
+            plans.push({ id: body.id, name: body.name, price: Number(body.price), devices: body.devices || 1, shared_users: body.shared_users || 1, duration_seconds: body.duration_seconds || 3600 });
             savePlans();
-            
-            return sendJson(res, 200, {
-                success: true,
-                message: 'Plan created successfully!',
-                data: newPlan
-            });
+            return sendJson(res, 200, { success: true, message: 'Plan created', data: plans[plans.length - 1] });
         }
 
         if (req.method === 'PUT' && url.pathname.startsWith('/api/admin/plans/')) {
-            if (!isAdmin(req)) {
-                return sendJson(res, 401, { success: false, message: 'Unauthorized' });
-            }
-            
+            if (!isAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
             const planId = url.pathname.split('/').pop();
             const body = await readBody(req);
-            
             const plan = plans.find(p => p.id === planId);
-            if (!plan) {
-                return sendJson(res, 404, { success: false, message: 'Plan not found' });
-            }
-            
+            if (!plan) return sendJson(res, 404, { success: false, message: 'Plan not found' });
             if (body.name) plan.name = body.name;
             if (body.price !== undefined) plan.price = Number(body.price);
             if (body.devices !== undefined) plan.devices = Number(body.devices);
             if (body.shared_users !== undefined) plan.shared_users = Number(body.shared_users);
             if (body.duration_seconds !== undefined) plan.duration_seconds = Number(body.duration_seconds);
-            
             savePlans();
-            
-            return sendJson(res, 200, {
-                success: true,
-                message: 'Plan updated successfully!',
-                data: plan
-            });
+            return sendJson(res, 200, { success: true, message: 'Plan updated', data: plan });
         }
 
         if (req.method === 'DELETE' && url.pathname.startsWith('/api/admin/plans/')) {
-            if (!isAdmin(req)) {
-                return sendJson(res, 401, { success: false, message: 'Unauthorized' });
-            }
-            
+            if (!isAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
             const planId = url.pathname.split('/').pop();
             const index = plans.findIndex(p => p.id === planId);
-            
-            if (index === -1) {
-                return sendJson(res, 404, { success: false, message: 'Plan not found' });
-            }
-            
+            if (index === -1) return sendJson(res, 404, { success: false, message: 'Plan not found' });
             plans.splice(index, 1);
             savePlans();
-            
-            return sendJson(res, 200, {
-                success: true,
-                message: 'Plan deleted successfully!'
-            });
+            return sendJson(res, 200, { success: true, message: 'Plan deleted' });
         }
 
-        // ===== ADMIN VOUCHERS =====
+        // Admin Vouchers
         if (req.method === 'POST' && url.pathname === '/api/admin/voucher/generate') {
-            if (!isAdmin(req)) {
-                return sendJson(res, 401, { success: false, message: 'Unauthorized' });
-            }
-            
+            if (!isAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
             const body = await readBody(req);
-            const { planId, count, duration_seconds } = body;
-            
-            if (!planId) {
-                return sendJson(res, 400, { success: false, message: 'Plan ID required' });
-            }
-            
-            const plan = plans.find(p => p.id === planId);
-            if (!plan) {
-                return sendJson(res, 400, { success: false, message: 'Invalid plan ID' });
-            }
-            
-            const numVouchers = Math.min(count || 1, 100);
+            const plan = plans.find(p => p.id === body.planId);
+            if (!plan) return sendJson(res, 400, { success: false, message: 'Invalid plan ID' });
+            const count = Math.min(body.count || 1, 100);
             const generated = [];
-            
-            for (let i = 0; i < numVouchers; i++) {
+            for (let i = 0; i < count; i++) {
                 const code = generateVoucherCode();
-                const voucher = {
+                vouchers.push({
                     code: code,
                     planId: plan.id,
                     planName: plan.name,
-                    duration_seconds: duration_seconds || plan.duration_seconds,
+                    duration_seconds: body.duration_seconds || plan.duration_seconds,
                     devices: plan.devices || 1,
                     used: false,
                     usedBy: null,
                     usedAt: null,
                     expiresAt: null,
                     createdAt: new Date().toISOString()
-                };
-                vouchers.push(voucher);
+                });
                 generated.push(code);
             }
             saveVouchers();
-            
-            return sendJson(res, 200, {
-                success: true,
-                message: `Generated ${generated.length} vouchers`,
-                vouchers: generated,
-                count: generated.length
-            });
+            return sendJson(res, 200, { success: true, message: 'Generated ' + generated.length + ' vouchers', vouchers: generated, count: generated.length });
         }
 
         if (req.method === 'GET' && url.pathname === '/api/admin/vouchers') {
-            if (!isAdmin(req)) {
-                return sendJson(res, 401, { success: false, message: 'Unauthorized' });
-            }
-            
-            return sendJson(res, 200, {
-                success: true,
-                data: vouchers,
-                count: vouchers.length,
-                used: vouchers.filter(v => v.used).length,
-                unused: vouchers.filter(v => !v.used).length
-            });
+            if (!isAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
+            return sendJson(res, 200, { success: true, data: vouchers, count: vouchers.length, used: vouchers.filter(v => v.used).length, unused: vouchers.filter(v => !v.used).length });
         }
 
-        // ===== ADMIN TRANSACTIONS =====
+        // Admin Transactions
         if (req.method === 'GET' && url.pathname === '/api/admin/transactions') {
-            if (!isAdmin(req)) {
-                return sendJson(res, 401, { success: false, message: 'Unauthorized' });
-            }
-            
+            if (!isAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
             return sendJson(res, 200, {
                 success: true,
                 data: transactions,
@@ -2767,163 +1708,84 @@ const server = http.createServer(async (req, res) => {
                     pending: transactions.filter(t => t.status === 'pending').length,
                     cancelled: transactions.filter(t => t.status === 'cancelled').length,
                     failed: transactions.filter(t => t.status === 'failed').length,
-                    totalRevenue: transactions
-                        .filter(t => t.status === 'completed')
-                        .reduce((sum, t) => sum + (t.amount || 0), 0)
+                    totalRevenue: transactions.filter(t => t.status === 'completed').reduce((sum, t) => sum + (t.amount || 0), 0)
                 }
             });
         }
 
-        // ===== ADMIN SETTINGS =====
+        // Admin Settings
         if (req.method === 'GET' && url.pathname === '/api/admin/settings') {
-            if (!isAdmin(req)) {
-                return sendJson(res, 401, { success: false, message: 'Unauthorized' });
-            }
-            
-            return sendJson(res, 200, {
-                success: true,
-                data: settings
-            });
+            if (!isAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
+            return sendJson(res, 200, { success: true, data: settings });
         }
 
         if (req.method === 'POST' && url.pathname === '/api/admin/settings') {
-            if (!isAdmin(req)) {
-                return sendJson(res, 401, { success: false, message: 'Unauthorized' });
-            }
-            
+            if (!isAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
             const body = await readBody(req);
-            console.log('⚙️ Updating settings:', body);
-
             if (body.theme) {
-                const selectedTheme = themes.find(t => t.id === body.theme);
-                if (selectedTheme) {
-                    console.log('🎨 Applying theme:', selectedTheme.name);
-                    settings.theme = selectedTheme.id;
-                    settings.primaryColor = selectedTheme.colors.primary;
-                    settings.secondaryColor = selectedTheme.colors.secondary;
-                    settings.accentColor = selectedTheme.colors.accent;
-                    settings.textColor = selectedTheme.colors.text;
-                    settings.headerTextColor = selectedTheme.colors.headerText;
-                    settings.buttonTextColor = selectedTheme.colors.buttonText;
-                    settings.bgGradient = selectedTheme.gradient;
+                const theme = themes.find(t => t.id === body.theme);
+                if (theme) {
+                    settings.theme = theme.id;
+                    settings.primaryColor = theme.colors.primary;
+                    settings.secondaryColor = theme.colors.secondary;
+                    settings.accentColor = theme.colors.accent;
+                    settings.textColor = theme.colors.text;
+                    settings.headerTextColor = theme.colors.headerText;
+                    settings.buttonTextColor = theme.colors.buttonText;
+                    settings.bgGradient = theme.gradient;
                 }
             }
-            
             if (body.primaryColor !== undefined) settings.primaryColor = body.primaryColor;
             if (body.secondaryColor !== undefined) settings.secondaryColor = body.secondaryColor;
             if (body.accentColor !== undefined) settings.accentColor = body.accentColor;
-            if (body.textColor !== undefined) settings.textColor = body.textColor;
-            if (body.headerTextColor !== undefined) settings.headerTextColor = body.headerTextColor;
-            if (body.buttonTextColor !== undefined) settings.buttonTextColor = body.buttonTextColor;
-            
             if (body.businessName !== undefined) settings.businessName = body.businessName;
             if (body.businessTagline !== undefined) settings.businessTagline = body.businessTagline;
             if (body.supportPhone !== undefined) settings.supportPhone = body.supportPhone;
             if (body.supportEmail !== undefined) settings.supportEmail = body.supportEmail;
             if (body.website !== undefined) settings.website = body.website;
-            
-            if (body.logo !== undefined) {
-                if (body.logo.length > 2 * 1024 * 1024) {
-                    return sendJson(res, 400, { 
-                        success: false, 
-                        message: 'Logo image is too large. Please use an image under 2MB.' 
-                    });
-                }
-                settings.logo = body.logo;
-                console.log('🖼️ Logo updated');
-            }
-            
+            if (body.logo !== undefined) settings.logo = body.logo;
             saveSettings();
-            
-            return sendJson(res, 200, {
-                success: true,
-                message: 'Settings updated successfully',
-                data: settings
-            });
+            return sendJson(res, 200, { success: true, message: 'Settings updated', data: settings });
         }
 
-        // ===== ADMIN THEMES =====
+        // Admin Themes
         if (req.method === 'GET' && url.pathname === '/api/admin/themes') {
-            if (!isAdmin(req)) {
-                return sendJson(res, 401, { success: false, message: 'Unauthorized' });
-            }
-            return sendJson(res, 200, {
-                success: true,
-                data: themes
-            });
+            if (!isAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
+            return sendJson(res, 200, { success: true, data: themes });
         }
 
         if (req.method === 'POST' && url.pathname === '/api/admin/themes') {
-            if (!isAdmin(req)) {
-                return sendJson(res, 401, { success: false, message: 'Unauthorized' });
-            }
-            
+            if (!isAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
             const body = await readBody(req);
-            console.log('🎨 Adding new theme:', body);
-            
             const newTheme = {
                 id: body.id || 'theme_' + Date.now(),
                 name: body.name || 'Custom Theme',
                 preview: body.preview || '🎨',
-                colors: body.colors || {
-                    primary: '#00c853',
-                    secondary: '#00e676',
-                    accent: '#0f2027',
-                    text: '#ffffff',
-                    headerText: '#ffffff',
-                    buttonText: '#000000'
-                },
+                colors: body.colors || { primary: '#00c853', secondary: '#00e676', accent: '#0f2027', text: '#ffffff', headerText: '#ffffff', buttonText: '#000000' },
                 gradient: body.gradient || 'linear-gradient(135deg, #0f2027, #203a43, #2c5364)'
             };
-            
             themes.push(newTheme);
             saveThemes();
-            
-            return sendJson(res, 200, {
-                success: true,
-                message: 'Theme added successfully',
-                data: newTheme
-            });
+            return sendJson(res, 200, { success: true, message: 'Theme added', data: newTheme });
         }
 
         if (req.method === 'DELETE' && url.pathname.startsWith('/api/admin/themes/')) {
-            if (!isAdmin(req)) {
-                return sendJson(res, 401, { success: false, message: 'Unauthorized' });
-            }
-            
+            if (!isAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
             const themeId = url.pathname.split('/').pop();
+            if (themeId === 'default') return sendJson(res, 400, { success: false, message: 'Cannot delete default theme' });
             const index = themes.findIndex(t => t.id === themeId);
-            
-            if (index === -1) {
-                return sendJson(res, 404, { success: false, message: 'Theme not found' });
-            }
-            
-            if (themeId === 'default') {
-                return sendJson(res, 400, { success: false, message: 'Cannot delete default theme' });
-            }
-            
+            if (index === -1) return sendJson(res, 404, { success: false, message: 'Theme not found' });
             themes.splice(index, 1);
             saveThemes();
-            
-            return sendJson(res, 200, {
-                success: true,
-                message: 'Theme deleted successfully'
-            });
+            return sendJson(res, 200, { success: true, message: 'Theme deleted' });
         }
 
-        // ===== GET CREDENTIALS =====
+        // Get Credentials
         if (req.method === 'GET' && url.pathname.startsWith('/api/get-credentials/')) {
             const transactionId = url.pathname.split('/').pop();
             const transaction = transactions.find(t => t.id === transactionId);
-            
-            if (!transaction) {
-                return sendJson(res, 404, { success: false, message: 'Transaction not found' });
-            }
-            
-            if (transaction.status !== 'completed') {
-                return sendJson(res, 400, { success: false, message: 'Payment not completed' });
-            }
-            
+            if (!transaction) return sendJson(res, 404, { success: false, message: 'Transaction not found' });
+            if (transaction.status !== 'completed') return sendJson(res, 400, { success: false, message: 'Payment not completed' });
             return sendJson(res, 200, {
                 success: true,
                 username: transaction.mikrotikUsername || 'user_' + (transaction.mpesaCode || transaction.id).substring(0, 12),
@@ -2934,159 +1796,99 @@ const server = http.createServer(async (req, res) => {
         }
 
         // ============================================================
-        // ===================== MULTI-TENANT ENDPOINTS =====================
+        // MULTI-TENANT ENDPOINTS
         // ============================================================
 
-        // ===== MASTER ADMIN VERIFICATION =====
+        // Master Admin Verify
         if (req.method === 'POST' && url.pathname === '/api/master/verify') {
             const body = await readBody(req);
-            const { pin } = body;
-            
-            console.log('🔐 Master Admin verification attempt');
-            
-            if (pin === MASTER_PASSWORD) {
+            if (body.pin === MASTER_PASSWORD) {
                 const token = generateToken({ username: 'master', role: 'master', exp: Date.now() + 86400000 });
-                console.log('✅ Master Admin verified successfully');
-                return sendJson(res, 200, { 
-                    success: true, 
-                    message: 'Master Admin verified',
-                    token: token,
-                    role: 'master'
-                });
+                return sendJson(res, 200, { success: true, message: 'Master verified', token, role: 'master' });
             } else {
-                console.log('❌ Master Admin verification failed - wrong PIN');
-                return sendJson(res, 401, { 
-                    success: false, 
-                    message: 'Invalid PIN' 
-                });
+                return sendJson(res, 401, { success: false, message: 'Invalid PIN' });
             }
         }
 
-        // ===== GET ALL ORGANIZATIONS =====
+        // Get All Organizations
         if (req.method === 'GET' && url.pathname === '/api/master/organizations') {
-            if (!isMasterAdmin(req)) {
-                return sendJson(res, 401, { success: false, message: 'Unauthorized' });
-            }
-            
-            return sendJson(res, 200, {
-                success: true,
-                data: organizations,
-                count: organizations.length
-            });
+            if (!isMasterAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
+            return sendJson(res, 200, { success: true, data: organizations, count: organizations.length });
         }
 
-        // ===== CREATE NEW ORGANIZATION =====
+        // Create Organization
         if (req.method === 'POST' && url.pathname === '/api/master/organizations') {
-            if (!isMasterAdmin(req)) {
-                return sendJson(res, 401, { success: false, message: 'Unauthorized' });
-            }
-            
+            if (!isMasterAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
             const body = await readBody(req);
-            console.log('🏢 Creating new organization:', body);
-            
-            const {
-                name,
-                businessName,
-                email,
-                phone,
-                logo,
-                primaryColor,
-                secondaryColor,
-                accentColor,
-                textColor,
-                headerTextColor,
-                buttonTextColor,
-                bgGradient,
-                supportPhone,
-                supportEmail,
-                website,
-                businessTagline,
-                mpesaTill,
-                mpesaShortcode,
-                plans: customPlans
-            } = body;
-            
-            if (!name || !businessName || !email || !phone) {
-                return sendJson(res, 400, {
-                    success: false,
-                    message: 'Name, Business Name, Email, and Phone are required'
-                });
+            if (!body.name || !body.businessName || !body.email || !body.phone) {
+                return sendJson(res, 400, { success: false, message: 'Name, Business Name, Email, and Phone are required' });
             }
-            
             const clientId = generateOrgId();
-            
             const newOrganization = {
                 id: clientId,
-                name: name,
-                businessName: businessName,
-                email: email,
-                phone: phone,
-                logo: logo || '',
-                primaryColor: primaryColor || masterSettings.defaultPrimaryColor || '#00c853',
-                secondaryColor: secondaryColor || '#00e676',
-                accentColor: accentColor || '#0f2027',
-                textColor: textColor || '#ffffff',
-                headerTextColor: headerTextColor || '#ffffff',
-                buttonTextColor: buttonTextColor || '#000000',
-                bgGradient: bgGradient || masterSettings.defaultBgGradient || 'linear-gradient(135deg, #0f2027, #203a43, #2c5364)',
-                supportPhone: supportPhone || phone,
-                supportEmail: supportEmail || email,
-                website: website || '',
-                businessTagline: businessTagline || 'Fast • Secure • Reliable',
-                mpesaTill: mpesaTill || '',
-                mpesaShortcode: mpesaShortcode || SHORTCODE,
+                name: body.name,
+                businessName: body.businessName,
+                email: body.email,
+                phone: body.phone,
+                logo: body.logo || '',
+                primaryColor: body.primaryColor || masterSettings.defaultPrimaryColor || '#00c853',
+                secondaryColor: body.secondaryColor || '#00e676',
+                accentColor: body.accentColor || '#0f2027',
+                textColor: '#ffffff',
+                headerTextColor: '#ffffff',
+                buttonTextColor: '#000000',
+                bgGradient: body.bgGradient || masterSettings.defaultBgGradient || 'linear-gradient(135deg, #0f2027, #203a43, #2c5364)',
+                supportPhone: body.supportPhone || body.phone,
+                supportEmail: body.supportEmail || body.email,
+                website: body.website || '',
+                businessTagline: body.businessTagline || 'Fast • Secure • Reliable',
+                mpesaTill: body.mpesaTill || '',
+                mpesaShortcode: SHORTCODE,
                 status: 'active',
                 createdAt: new Date().toISOString(),
                 updatedAt: new Date().toISOString(),
-                plans: customPlans || [
+                plans: body.plans || [
                     { id: '2_Hours', name: '2 Hours', price: 10, devices: 1, shared_users: 1, duration_seconds: 7200 },
                     { id: '5_Hours', name: '5 Hours', price: 20, devices: 1, shared_users: 1, duration_seconds: 18000 },
                     { id: '24_Hours', name: '24 Hours', price: 80, devices: 1, shared_users: 1, duration_seconds: 86400 }
                 ]
             };
-            
             organizations.push(newOrganization);
             saveOrganizations();
-            
-            // Also add to clients for backward compatibility
-            const newClient = {
+
+            // Also add to clients
+            clients.push({
                 id: clientId,
-                name: name,
-                phone: phone,
-                email: email,
-                businessName: businessName,
-                mpesaTill: mpesaTill || '',
+                name: body.name,
+                phone: body.phone,
+                email: body.email,
+                businessName: body.businessName,
+                mpesaTill: body.mpesaTill || '',
                 status: 'active',
                 createdAt: new Date().toISOString(),
                 updatedAt: new Date().toISOString(),
                 isOrganization: true,
                 organizationId: clientId
-            };
-            clients.push(newClient);
+            });
             saveClients();
-            
+
             return sendJson(res, 200, {
                 success: true,
-                message: 'Organization created successfully!',
+                message: 'Organization created!',
                 data: newOrganization,
                 clientId: clientId,
                 clientPageUrl: `/${clientId}/client-page.html`
             });
         }
 
-        // ===== GET ORGANIZATION BY ID =====
+        // Get Organization by ID
         if (req.method === 'GET' && url.pathname.startsWith('/api/organization/')) {
             const orgId = url.pathname.split('/').pop();
-            
             if (!orgId || orgId === 'organizations') {
                 return sendJson(res, 400, { success: false, message: 'Invalid organization ID' });
             }
-            
             const organization = getOrganizationByClientId(orgId);
-            if (!organization) {
-                return sendJson(res, 404, { success: false, message: 'Organization not found' });
-            }
-            
+            if (!organization) return sendJson(res, 404, { success: false, message: 'Organization not found' });
             return sendJson(res, 200, {
                 success: true,
                 data: {
@@ -3110,267 +1912,112 @@ const server = http.createServer(async (req, res) => {
             });
         }
 
-        // ===== UPDATE ORGANIZATION =====
+        // Update Organization
         if (req.method === 'PUT' && url.pathname.startsWith('/api/master/organizations/')) {
-            if (!isMasterAdmin(req)) {
-                return sendJson(res, 401, { success: false, message: 'Unauthorized' });
-            }
-            
+            if (!isMasterAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
             const orgId = url.pathname.split('/').pop();
             const body = await readBody(req);
-            console.log('✏️ Updating organization:', orgId, body);
-            
-            const orgIndex = organizations.findIndex(o => o.id === orgId);
-            if (orgIndex === -1) {
-                return sendJson(res, 404, { success: false, message: 'Organization not found' });
-            }
-            
-            const updatedOrg = {
-                ...organizations[orgIndex],
-                ...body,
-                updatedAt: new Date().toISOString()
-            };
-            
-            organizations[orgIndex] = updatedOrg;
+            const index = organizations.findIndex(o => o.id === orgId);
+            if (index === -1) return sendJson(res, 404, { success: false, message: 'Organization not found' });
+            organizations[index] = { ...organizations[index], ...body, updatedAt: new Date().toISOString() };
             saveOrganizations();
-            
+
             const clientIndex = clients.findIndex(c => c.id === orgId);
             if (clientIndex !== -1) {
-                clients[clientIndex] = {
-                    ...clients[clientIndex],
-                    name: body.name || clients[clientIndex].name,
-                    phone: body.phone || clients[clientIndex].phone,
-                    email: body.email || clients[clientIndex].email,
-                    businessName: body.businessName || clients[clientIndex].businessName,
-                    mpesaTill: body.mpesaTill || clients[clientIndex].mpesaTill,
-                    updatedAt: new Date().toISOString()
-                };
+                clients[clientIndex] = { ...clients[clientIndex], ...body, updatedAt: new Date().toISOString() };
                 saveClients();
             }
-            
-            return sendJson(res, 200, {
-                success: true,
-                message: 'Organization updated successfully!',
-                data: updatedOrg
-            });
+            return sendJson(res, 200, { success: true, message: 'Organization updated', data: organizations[index] });
         }
 
-        // ===== DELETE ORGANIZATION =====
+        // Delete Organization
         if (req.method === 'DELETE' && url.pathname.startsWith('/api/master/organizations/')) {
-            if (!isMasterAdmin(req)) {
-                return sendJson(res, 401, { success: false, message: 'Unauthorized' });
-            }
-            
+            if (!isMasterAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
             const orgId = url.pathname.split('/').pop();
-            console.log('🗑️ Deleting organization:', orgId);
-            
             const orgIndex = organizations.findIndex(o => o.id === orgId);
-            if (orgIndex === -1) {
-                return sendJson(res, 404, { success: false, message: 'Organization not found' });
-            }
-            
+            if (orgIndex === -1) return sendJson(res, 404, { success: false, message: 'Organization not found' });
             organizations.splice(orgIndex, 1);
             saveOrganizations();
-            
+
             const clientIndex = clients.findIndex(c => c.id === orgId);
-            if (clientIndex !== -1) {
-                clients.splice(clientIndex, 1);
-                saveClients();
-            }
-            
-            return sendJson(res, 200, {
-                success: true,
-                message: 'Organization deleted successfully!'
-            });
+            if (clientIndex !== -1) { clients.splice(clientIndex, 1);
+                saveClients(); }
+            return sendJson(res, 200, { success: true, message: 'Organization deleted' });
         }
 
-        // ===== MASTER SETTINGS =====
+        // Master Settings
         if (req.method === 'GET' && url.pathname === '/api/master/settings') {
-            if (!isMasterAdmin(req)) {
-                return sendJson(res, 401, { success: false, message: 'Unauthorized' });
-            }
-            
-            return sendJson(res, 200, {
-                success: true,
-                data: masterSettings
-            });
+            if (!isMasterAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
+            return sendJson(res, 200, { success: true, data: masterSettings });
         }
 
         if (req.method === 'POST' && url.pathname === '/api/master/settings') {
-            if (!isMasterAdmin(req)) {
-                return sendJson(res, 401, { success: false, message: 'Unauthorized' });
-            }
-            
+            if (!isMasterAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
             const body = await readBody(req);
-            console.log('⚙️ Updating master settings:', body);
-            
-            masterSettings = {
-                ...masterSettings,
-                ...body,
-                updatedAt: new Date().toISOString()
-            };
-            
+            masterSettings = { ...masterSettings, ...body, updatedAt: new Date().toISOString() };
             saveMasterSettings();
-            
-            return sendJson(res, 200, {
-                success: true,
-                message: 'Master settings updated successfully',
-                data: masterSettings
-            });
+            return sendJson(res, 200, { success: true, message: 'Master settings updated', data: masterSettings });
         }
 
-        // ===== GENERATE CLIENT SKELETON HTML =====
+        // Generate Client HTML
         if (req.method === 'GET' && url.pathname.startsWith('/api/master/generate-client-page/')) {
-            if (!isMasterAdmin(req)) {
-                return sendJson(res, 401, { success: false, message: 'Unauthorized' });
-            }
-            
+            if (!isMasterAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
             const orgId = url.pathname.split('/').pop();
             const organization = getOrganizationByClientId(orgId);
-            
-            if (!organization) {
-                return sendJson(res, 404, { success: false, message: 'Organization not found' });
-            }
-            
-            const skeletonHtml = generateClientSkeletonHtml(organization);
-            
+            if (!organization) return sendJson(res, 404, { success: false, message: 'Organization not found' });
+            const html = generateClientSkeletonHtml(organization);
             return sendJson(res, 200, {
                 success: true,
-                html: skeletonHtml,
+                html: html,
                 filename: `${orgId}_client_page.html`,
                 instructions: 'Copy this HTML and give it to your client. Works on local WiFi (MikroTik), local PC, and online!'
             });
         }
 
-        // ===== SERVE CLIENT PAGE =====
+        // Serve Client Page
         if (req.method === 'GET' && url.pathname.match(/^\/CLIENT_[A-Z0-9]+\/client-page\.html$/)) {
             const pathParts = url.pathname.split('/');
             const orgId = pathParts[1];
-            
             const organization = getOrganizationByClientId(orgId);
             if (!organization) {
-                return sendHtml(res, 404, `
-                    <!DOCTYPE html>
-                    <html>
-                    <head><title>Organization Not Found</title></head>
-                    <body style="font-family:Arial;padding:40px;background:#0f172a;color:white;text-align:center;">
-                        <h1>❌ Organization Not Found</h1>
-                        <p>The organization with ID: <strong>${orgId}</strong> does not exist.</p>
-                        <p>Please contact support.</p>
-                    </body>
-                    </html>
-                `);
+                return sendHtml(res, 404, `<h1>❌ Organization Not Found</h1><p>ID: ${orgId}</p>`);
             }
-            
             const html = generateClientSkeletonHtml(organization);
             return sendHtml(res, 200, html);
         }
 
-        // ===== SERVE CLIENT PAGE (without /client-page.html) =====
         if (req.method === 'GET' && url.pathname.match(/^\/CLIENT_[A-Z0-9]+\/?$/)) {
             const orgId = url.pathname.replace('/', '');
-            
             const organization = getOrganizationByClientId(orgId);
             if (!organization) {
-                return sendHtml(res, 404, `
-                    <!DOCTYPE html>
-                    <html>
-                    <head><title>Organization Not Found</title></head>
-                    <body style="font-family:Arial;padding:40px;background:#0f172a;color:white;text-align:center;">
-                        <h1>❌ Organization Not Found</h1>
-                        <p>The organization with ID: <strong>${orgId}</strong> does not exist.</p>
-                        <p>Please contact support.</p>
-                    </body>
-                    </html>
-                `);
+                return sendHtml(res, 404, `<h1>❌ Organization Not Found</h1><p>ID: ${orgId}</p>`);
             }
-            
             const html = generateClientSkeletonHtml(organization);
             return sendHtml(res, 200, html);
         }
 
-        // ===== CLIENT PAGE WITH ORG PARAMETER =====
         if (req.method === 'GET' && url.pathname === '/client-page.html' && url.searchParams.has('org')) {
             const orgId = url.searchParams.get('org');
-            
             const organization = getOrganizationByClientId(orgId);
             if (!organization) {
-                return sendHtml(res, 404, `
-                    <!DOCTYPE html>
-                    <html>
-                    <head><title>Organization Not Found</title></head>
-                    <body style="font-family:Arial;padding:40px;background:#0f172a;color:white;text-align:center;">
-                        <h1>❌ Organization Not Found</h1>
-                        <p>The organization with ID: <strong>${orgId}</strong> does not exist.</p>
-                        <p>Please contact support.</p>
-                    </body>
-                    </html>
-                `);
+                return sendHtml(res, 404, `<h1>❌ Organization Not Found</h1><p>ID: ${orgId}</p>`);
             }
-            
             const html = generateClientSkeletonHtml(organization);
             return sendHtml(res, 200, html);
         }
 
         // ============================================================
-        // ===================== API INFO =====================
+        // API INFO
         // ============================================================
 
         if (req.method === 'GET' && url.pathname === '/api') {
             return sendJson(res, 200, {
-                name: 'GICH WiFi API - Multi-Tenant System',
+                name: 'GICH WiFi API',
                 version: '3.0.0',
                 status: 'Running',
-                endpoints: {
-                    public: {
-                        health: 'GET /api/health',
-                        plans: 'GET /api/plans',
-                        settings: 'GET /api/settings',
-                        themes: 'GET /api/themes',
-                        products: 'GET /api/products',
-                        payment: 'POST /api/payment/initiate',
-                        transaction: 'GET /api/transaction/:id',
-                        transactions: 'GET /api/transactions',
-                        check_active: 'GET /api/check-active?phone=',
-                        voucher_redeem: 'POST /api/voucher/redeem',
-                        credentials: 'GET /api/get-credentials/:transactionId',
-                        callback: 'POST /api/mpesa-callback',
-                        organization: 'GET /api/organization/:orgId',
-                        organization_plans: 'GET /api/organization/:orgId/plans'
-                    },
-                    admin: {
-                        verify: 'POST /api/admin/verify',
-                        settings: 'GET/POST /api/admin/settings',
-                        themes: 'GET /api/admin/themes',
-                        add_theme: 'POST /api/admin/themes',
-                        delete_theme: 'DELETE /api/admin/themes/:id',
-                        plans: 'GET/POST/PUT/DELETE /api/admin/plans',
-                        clients: 'GET/POST/PUT/DELETE /api/admin/clients',
-                        products: 'GET/POST/PUT/DELETE /api/admin/products',
-                        generate_voucher: 'POST /api/admin/voucher/generate',
-                        vouchers: 'GET /api/admin/vouchers',
-                        transactions: 'GET /api/admin/transactions'
-                    },
-                    master: {
-                        verify: 'POST /api/master/verify',
-                        organizations: 'GET /api/master/organizations',
-                        create_organization: 'POST /api/master/organizations',
-                        update_organization: 'PUT /api/master/organizations/:id',
-                        delete_organization: 'DELETE /api/master/organizations/:id',
-                        settings: 'GET/POST /api/master/settings',
-                        generate_client_page: 'GET /api/master/generate-client-page/:orgId'
-                    },
-                    client_pages: {
-                        direct: 'GET /:orgId/',
-                        with_html: 'GET /:orgId/client-page.html',
-                        with_param: 'GET /client-page.html?org=:orgId'
-                    }
-                },
                 statistics: {
                     totalTransactions: transactions.length,
-                    totalAmount: transactions
-                        .filter(t => t.status === 'completed')
-                        .reduce((sum, t) => sum + (t.amount || 0), 0),
+                    totalRevenue: transactions.filter(t => t.status === 'completed').reduce((sum, t) => sum + (t.amount || 0), 0),
                     activeVouchers: vouchers.filter(v => !v.used).length,
                     totalClients: clients.length,
                     totalProducts: products.length,
@@ -3387,34 +2034,25 @@ const server = http.createServer(async (req, res) => {
     }
 });
 
+// ============================================================
+// LOAD DATA & START SERVER
+// ============================================================
+
+loadAllData();
+
 server.listen(PORT, '0.0.0.0', () => {
     console.log('\n========================================');
-    console.log('🌐 GICH WiFi API - Multi-Tenant System');
+    console.log('🌐 GICH WiFi API');
     console.log('========================================');
     console.log(`✅ Server running on port: ${PORT}`);
     console.log(`📍 http://localhost:${PORT}/`);
     console.log(`📍 http://localhost:${PORT}/api/health`);
-    console.log(`📍 http://localhost:${PORT}/api/plans`);
-    console.log(`📍 http://localhost:${PORT}/api/settings`);
-    console.log(`📍 http://localhost:${PORT}/api/admin/clients`);
-    console.log(`📍 http://localhost:${PORT}/api/admin/products`);
     console.log('========================================');
-    console.log('📱 Test phone: 0712345678');
-    console.log('🔑 Test PIN: 12345');
     console.log(`🛡️ Admin PIN: ${ADMIN_PASSWORD ? '✅ Set' : '⚠️ NOT SET'}`);
     console.log(`👑 Master PIN: ${MASTER_PASSWORD ? '✅ Set' : '⚠️ NOT SET'}`);
-    console.log('📋 JWT Auth: ✅ Enabled');
-    console.log('👤 Client Management: ✅ Enabled');
-    console.log('📦 Product Management: ✅ Enabled');
-    console.log('🏢 Multi-Tenant: ✅ Enabled');
     console.log(`🏢 Organizations: ${organizations.length}`);
     console.log('========================================\n');
 });
 
-process.on('uncaughtException', (err) => {
-    console.error('❌ Uncaught Exception:', err);
-});
-
-process.on('unhandledRejection', (reason, promise) => {
-    console.error('❌ Unhandled Rejection:', reason);
-});
+process.on('uncaughtException', (err) => console.error('❌ Uncaught Exception:', err));
+process.on('unhandledRejection', (reason) => console.error('❌ Unhandled Rejection:', reason));
