@@ -29,7 +29,6 @@ const JWT_SECRET = process.env.JWT_SECRET || crypto.randomBytes(32).toString('he
 console.log('\n========================================');
 console.log('🌐 GICH WiFi API');
 console.log('========================================');
-console.log('📋 Configuration loaded:');
 console.log(`   Port: ${PORT}`);
 console.log(`   Admin PIN: ${ADMIN_PASSWORD ? '✅ Configured' : '⚠️ NOT SET'}`);
 console.log(`   Master PIN: ${MASTER_PASSWORD ? '✅ Configured' : '⚠️ NOT SET'}`);
@@ -126,10 +125,6 @@ const DEFAULT_MASTER_SETTINGS = {
     createdAt: new Date().toISOString()
 };
 
-// ============================================================
-// DEFAULT THEMES
-// ============================================================
-
 const DEFAULT_THEMES = [
     { id: 'default', name: 'Default Green', preview: '🌿', colors: { primary: '#00c853', secondary: '#00e676', accent: '#0f2027', text: '#ffffff', headerText: '#ffffff', buttonText: '#000000' }, gradient: 'linear-gradient(135deg, #0f2027, #203a43, #2c5364)' },
     { id: 'ocean', name: 'Ocean Blue', preview: '🌊', colors: { primary: '#0077be', secondary: '#00b4d8', accent: '#03045e', text: '#ffffff', headerText: '#ffffff', buttonText: '#000000' }, gradient: 'linear-gradient(135deg, #03045e, #0077be, #00b4d8)' },
@@ -140,10 +135,6 @@ const DEFAULT_THEMES = [
     { id: 'gold', name: 'Gold Premium', preview: '✨', colors: { primary: '#f9a825', secondary: '#fdd835', accent: '#1a1500', text: '#ffffff', headerText: '#ffffff', buttonText: '#000000' }, gradient: 'linear-gradient(135deg, #1a1500, #f9a825, #fdd835)' },
     { id: 'nebula', name: 'Nebula Cosmic', preview: '🌌', colors: { primary: '#e040fb', secondary: '#7c4dff', accent: '#0a0a1a', text: '#ffffff', headerText: '#ffffff', buttonText: '#000000' }, gradient: 'linear-gradient(135deg, #0a0a1a, #7c4dff, #e040fb)' }
 ];
-
-// ============================================================
-// DEFAULT PLANS
-// ============================================================
 
 const DEFAULT_PLANS = [
     { id: '2_Hours', name: '2 Hours', price: 10, devices: 1, shared_users: 1, duration_seconds: 7200 },
@@ -162,47 +153,34 @@ const DEFAULT_PLANS = [
 // ============================================================
 
 function loadAllData() {
-    // Load transactions
     if (fs.existsSync(TRANSACTIONS_FILE)) {
         try { transactions = JSON.parse(fs.readFileSync(TRANSACTIONS_FILE, 'utf8')); console.log(`📂 Loaded ${transactions.length} transactions`); } catch (e) { console.error('Error loading transactions:', e); }
     }
-    // Load vouchers
     if (fs.existsSync(VOUCHERS_FILE)) {
         try { vouchers = JSON.parse(fs.readFileSync(VOUCHERS_FILE, 'utf8')); console.log(`🎟️ Loaded ${vouchers.length} vouchers`); } catch (e) { console.error('Error loading vouchers:', e); }
     }
-    // Load plans
     if (fs.existsSync(PLANS_FILE)) {
         try { plans = JSON.parse(fs.readFileSync(PLANS_FILE, 'utf8')); console.log(`📦 Loaded ${plans.length} plans`); } catch (e) { console.error('Error loading plans:', e); plans = DEFAULT_PLANS; }
     } else { plans = DEFAULT_PLANS; savePlans(); }
-    // Load settings
     if (fs.existsSync(SETTINGS_FILE)) {
         try { settings = JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8')); console.log(`⚙️ Loaded settings`); } catch (e) { console.error('Error loading settings:', e); settings = DEFAULT_SETTINGS; }
     } else { settings = DEFAULT_SETTINGS; saveSettings(); }
-    // Load themes
     if (fs.existsSync(THEMES_FILE)) {
         try { themes = JSON.parse(fs.readFileSync(THEMES_FILE, 'utf8')); console.log(`🎨 Loaded ${themes.length} themes`); } catch (e) { console.error('Error loading themes:', e); themes = DEFAULT_THEMES; }
     } else { themes = DEFAULT_THEMES; saveThemes(); }
-    // Load clients
     if (fs.existsSync(CLIENTS_FILE)) {
         try { clients = JSON.parse(fs.readFileSync(CLIENTS_FILE, 'utf8')); console.log(`👤 Loaded ${clients.length} clients`); } catch (e) { console.error('Error loading clients:', e); clients = []; }
     } else { clients = []; saveClients(); }
-    // Load products
     if (fs.existsSync(PRODUCTS_FILE)) {
         try { products = JSON.parse(fs.readFileSync(PRODUCTS_FILE, 'utf8')); console.log(`📦 Loaded ${products.length} products`); } catch (e) { console.error('Error loading products:', e); products = []; }
     } else { products = []; saveProducts(); }
-    // Load organizations
     if (fs.existsSync(ORGANIZATIONS_FILE)) {
         try { organizations = JSON.parse(fs.readFileSync(ORGANIZATIONS_FILE, 'utf8')); console.log(`🏢 Loaded ${organizations.length} organizations`); } catch (e) { console.error('Error loading organizations:', e); organizations = []; }
     } else { organizations = []; saveOrganizations(); }
-    // Load master settings
     if (fs.existsSync(MASTER_SETTINGS_FILE)) {
         try { masterSettings = JSON.parse(fs.readFileSync(MASTER_SETTINGS_FILE, 'utf8')); console.log(`⚙️ Loaded master settings`); } catch (e) { console.error('Error loading master settings:', e); masterSettings = DEFAULT_MASTER_SETTINGS; }
     } else { masterSettings = DEFAULT_MASTER_SETTINGS; saveMasterSettings(); }
 }
-
-// ============================================================
-// SAVE FUNCTIONS
-// ============================================================
 
 function saveTransactions() { try { fs.writeFileSync(TRANSACTIONS_FILE, JSON.stringify(transactions, null, 2)); } catch (e) { console.error('⚠️ Could not save transactions:', e.message); } }
 function saveVouchers() { try { fs.writeFileSync(VOUCHERS_FILE, JSON.stringify(vouchers, null, 2)); } catch (e) { console.error('⚠️ Could not save vouchers:', e.message); } }
@@ -377,7 +355,7 @@ function isMasterAdmin(req) {
 }
 
 // ============================================================
-// GENERATE CLIENT SKELETON HTML - FULLY FIXED
+// GENERATE CLIENT SKELETON HTML - WITH VISIBLE VOUCHER SECTION
 // ============================================================
 
 function generateClientSkeletonHtml(organization) {
@@ -465,6 +443,7 @@ function generateClientSkeletonHtml(organization) {
         .header h1 { font-size: 32px; color: var(--primary-color); }
         .header p { color: var(--header-text-color); font-size: 16px; margin-top: 4px; opacity: 0.8; }
         .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+        
         .plans-grid {
             display: grid;
             grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
@@ -501,19 +480,23 @@ function generateClientSkeletonHtml(organization) {
             background: rgba(0,200,83,0.2); color: var(--primary-color);
             padding: 2px 12px; border-radius: 20px; font-size: 12px; font-weight: 600;
         }
-
+        
+        /* ============================================================
+           VOUCHER SECTION - VISIBLE WITH DASHED BORDER
+           ============================================================ */
         .voucher-section {
             background: rgba(255,255,255,0.05);
             backdrop-filter: blur(10px);
             border-radius: 16px;
             padding: 24px;
             margin-top: 20px;
-            border: 1px solid rgba(255,255,255,0.08);
+            border: 2px dashed var(--primary-color);
         }
         .voucher-section h3 {
             color: var(--primary-color);
             margin-bottom: 12px;
-            font-size: 18px;
+            font-size: 20px;
+            font-weight: 700;
         }
         .voucher-section .form-row {
             display: flex;
@@ -523,65 +506,104 @@ function generateClientSkeletonHtml(organization) {
         .voucher-section .form-row input {
             flex: 1;
             min-width: 180px;
-            padding: 12px 16px;
-            background: rgba(0,0,0,0.3);
-            border: 1px solid rgba(255,255,255,0.1);
-            border-radius: 8px;
+            padding: 14px 18px;
+            background: rgba(0,0,0,0.4);
+            border: 2px solid rgba(255,255,255,0.1);
+            border-radius: 10px;
             color: #fff;
             font-size: 16px;
             outline: none;
+            transition: 0.3s;
         }
-        .voucher-section .form-row input:focus { border-color: var(--primary-color); }
-        .voucher-section .form-row input::placeholder { color: #555; }
+        .voucher-section .form-row input:focus {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 3px rgba(0,200,83,0.1);
+        }
+        .voucher-section .form-row input::placeholder {
+            color: #666;
+        }
         .voucher-section .form-row .btn {
-            padding: 12px 24px;
+            padding: 14px 32px;
             background: var(--primary-color);
             color: var(--button-text-color);
             border: none;
-            border-radius: 8px;
+            border-radius: 10px;
             font-size: 16px;
             font-weight: bold;
             cursor: pointer;
-            transition: 0.2s;
+            transition: 0.3s;
             font-family: inherit;
             white-space: nowrap;
         }
-        .voucher-section .form-row .btn:hover { opacity: 0.85; transform: scale(1.01); }
-        .voucher-section .form-row .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+        .voucher-section .form-row .btn:hover {
+            opacity: 0.85;
+            transform: scale(1.02);
+        }
+        .voucher-section .form-row .btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+            transform: none;
+        }
         .voucher-section .voucher-result {
             margin-top: 12px;
             font-size: 14px;
             color: #888;
+            padding: 8px 12px;
+            border-radius: 8px;
         }
-        .voucher-section .voucher-result.success { color: var(--primary-color); }
-        .voucher-section .voucher-result.error { color: #ff4444; }
+        .voucher-section .voucher-result.success {
+            color: var(--primary-color);
+            background: rgba(0,200,83,0.08);
+        }
+        .voucher-section .voucher-result.error {
+            color: #ff4444;
+            background: rgba(255,68,68,0.08);
+        }
 
+        /* ============================================================
+           CHECK & CONNECT
+           ============================================================ */
         .check-section {
             margin-top: 20px;
             text-align: center;
         }
         .check-section .btn {
-            padding: 12px 28px;
+            padding: 14px 32px;
             background: var(--primary-color);
             color: var(--button-text-color);
             border: none;
-            border-radius: 8px;
+            border-radius: 10px;
             font-size: 16px;
             font-weight: bold;
             cursor: pointer;
-            transition: 0.2s;
+            transition: 0.3s;
             font-family: inherit;
-            width: auto;
+            width: 100%;
+            max-width: 400px;
         }
-        .check-section .btn:hover { opacity: 0.85; transform: scale(1.01); }
+        .check-section .btn:hover {
+            opacity: 0.85;
+            transform: scale(1.02);
+        }
         .check-section .result {
             margin-top: 12px;
             font-size: 14px;
             color: #888;
+            padding: 8px 12px;
+            border-radius: 8px;
         }
-        .check-section .result.success { color: var(--primary-color); }
-        .check-section .result.error { color: #ff4444; }
+        .check-section .result.success {
+            color: var(--primary-color);
+            background: rgba(0,200,83,0.08);
+        }
+        .check-section .result.error {
+            color: #ff4444;
+            background: rgba(255,68,68,0.08);
+        }
 
+        /* ============================================================
+           PAYMENT MODAL
+           ============================================================ */
         .payment-modal-overlay {
             position: fixed; top: 0; left: 0; right: 0; bottom: 0;
             background: rgba(0,0,0,0.85); backdrop-filter: blur(8px);
@@ -631,6 +653,9 @@ function generateClientSkeletonHtml(organization) {
         .payment-modal .error-msg.show { display: block; }
         .payment-modal .test-hint { text-align: center; color: #555; font-size: 11px; margin-top: 12px; border-top: 1px solid rgba(255,255,255,0.04); padding-top: 12px; }
 
+        /* ============================================================
+           SUCCESS OVERLAY
+           ============================================================ */
         .success-overlay {
             position: fixed; top: 0; left: 0; right: 0; bottom: 0;
             background: var(--bg-gradient);
@@ -723,7 +748,9 @@ function generateClientSkeletonHtml(organization) {
             </div>
         </div>
 
-        <!-- VOUCHER SECTION -->
+        <!-- ============================================================
+        VOUCHER SECTION - VISIBLE ON PAGE
+        ============================================================ -->
         <div class="voucher-section" id="voucherSection">
             <h3>🎟️ Have a Voucher?</h3>
             <div class="form-row">
@@ -734,7 +761,9 @@ function generateClientSkeletonHtml(organization) {
             <div class="voucher-result" id="voucherResult"></div>
         </div>
 
-        <!-- CHECK & CONNECT -->
+        <!-- ============================================================
+        CHECK & CONNECT
+        ============================================================ -->
         <div class="check-section">
             <button class="btn" onclick="checkAndConnect()">🔌 Check & Connect</button>
             <div class="result" id="checkResult"></div>
@@ -788,7 +817,7 @@ function generateClientSkeletonHtml(organization) {
 
     <script>
         // ============================================================
-        // CONFIGURATION - WORKS EVERYWHERE
+        // CONFIGURATION
         // ============================================================
         const RENDER_URL = 'https://billing-system-fm9a.onrender.com';
         const currentHost = window.location.hostname;
@@ -910,44 +939,6 @@ function generateClientSkeletonHtml(organization) {
         }
 
         // ============================================================
-        // CHECK & CONNECT - ONE CLICK
-        // ============================================================
-        function checkAndConnect() {
-            const phone = prompt('📱 Enter your phone number to check for active plan:');
-            if (!phone || phone.length < 10) {
-                showToast('Please enter a valid phone number', 'error');
-                return;
-            }
-            const resultEl = document.getElementById('checkResult');
-            resultEl.innerHTML = '<span class="loading"></span> Checking...';
-            resultEl.style.color = '#888';
-
-            fetch(API_URL + '/check-active?phone=' + encodeURIComponent(phone))
-                .then(r => r.json())
-                .then(data => {
-                    if (data.success && data.active) {
-                        resultEl.innerHTML = '✅ Active Plan Found! Connecting...';
-                        resultEl.className = 'result success';
-                        credentials = {
-                            username: data.data.username,
-                            password: data.data.password,
-                            plan: data.data.planName,
-                            expiresAt: data.data.expiresAt
-                        };
-                        showSuccessScreen(credentials);
-                    } else {
-                        resultEl.innerHTML = '❌ No active plan found. Please purchase a plan below.';
-                        resultEl.className = 'result error';
-                        showToast('No active plan found. Please purchase a plan.', 'error');
-                    }
-                })
-                .catch(err => {
-                    resultEl.innerHTML = '❌ Network error checking status';
-                    resultEl.className = 'result error';
-                });
-        }
-
-        // ============================================================
         // REDEEM VOUCHER - VISIBLE ON PAGE
         // ============================================================
         function redeemVoucher() {
@@ -1004,6 +995,44 @@ function generateClientSkeletonHtml(organization) {
                 resultEl.textContent = '❌ Network error';
                 resultEl.className = 'voucher-result error';
             });
+        }
+
+        // ============================================================
+        // CHECK & CONNECT - ONE CLICK
+        // ============================================================
+        function checkAndConnect() {
+            const phone = prompt('📱 Enter your phone number to check for active plan:');
+            if (!phone || phone.length < 10) {
+                showToast('Please enter a valid phone number', 'error');
+                return;
+            }
+            const resultEl = document.getElementById('checkResult');
+            resultEl.innerHTML = '<span class="loading"></span> Checking...';
+            resultEl.className = 'result';
+
+            fetch(API_URL + '/check-active?phone=' + encodeURIComponent(phone))
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success && data.active) {
+                        resultEl.innerHTML = '✅ Active Plan Found! Connecting...';
+                        resultEl.className = 'result success';
+                        credentials = {
+                            username: data.data.username,
+                            password: data.data.password,
+                            plan: data.data.planName,
+                            expiresAt: data.data.expiresAt
+                        };
+                        showSuccessScreen(credentials);
+                    } else {
+                        resultEl.innerHTML = '❌ No active plan found. Please purchase a plan below.';
+                        resultEl.className = 'result error';
+                        showToast('No active plan found. Please purchase a plan.', 'error');
+                    }
+                })
+                .catch(err => {
+                    resultEl.innerHTML = '❌ Network error checking status';
+                    resultEl.className = 'result error';
+                });
         }
 
         // ============================================================
@@ -1090,7 +1119,7 @@ function generateClientSkeletonHtml(organization) {
         }
 
         // ============================================================
-        // POLLING - FIXED WITH CANCELLATION HANDLING
+        // POLLING - WITH CANCELLATION HANDLING
         // ============================================================
         function startPolling(transactionId) {
             if (pollingInterval) { clearInterval(pollingInterval); pollingInterval = null; }
@@ -1401,7 +1430,7 @@ const server = http.createServer(async (req, res) => {
             }
         }
 
-        // ===== MPESA CALLBACK - FIXED =====
+        // ===== MPESA CALLBACK =====
         if (req.method === 'POST' && url.pathname === '/api/mpesa-callback') {
             const callback = await readBody(req);
             const resultCode = callback.Body?.stkCallback?.ResultCode;
