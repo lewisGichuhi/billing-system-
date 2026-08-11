@@ -1,6 +1,9 @@
 /**
- * GICH WiFi - Complete Backend with Admin Dashboard
+ * GICH WiFi - Complete Backend with Admin Dashboard & Multi-Tenant Support
  * Deployable on Render with .env support
+ * 
+ * ALL EXISTING FUNCTIONALITY PRESERVED
+ * Multi-Tenant Features ADDED on top
  */
 
 // Load environment variables from .env file
@@ -24,10 +27,11 @@ const CONSUMER_SECRET = process.env.CONSUMER_SECRET || '';
 const CALLBACK_URL = process.env.CALLBACK_URL || 'https://billing-system-fm9a.onrender.com/api/mpesa-callback';
 const PORT = process.env.PORT || 10000;
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '126483';
+const MASTER_PASSWORD = process.env.MASTER_PASSWORD || 'master126483';
 const JWT_SECRET = process.env.JWT_SECRET || crypto.randomBytes(32).toString('hex');
 
 console.log('\n========================================');
-console.log('🌐 GICH WiFi API');
+console.log('🌐 GICH WiFi API - Multi-Tenant System');
 console.log('========================================');
 console.log('📋 Configuration loaded:');
 console.log(`   Consumer Key: ${CONSUMER_KEY ? CONSUMER_KEY.substring(0, 10) + '...' : 'NOT SET'}`);
@@ -35,6 +39,7 @@ console.log(`   Shortcode: ${SHORTCODE}`);
 console.log(`   Callback URL: ${CALLBACK_URL}`);
 console.log(`   Port: ${PORT}`);
 console.log(`   Admin PIN: ${ADMIN_PASSWORD ? '✅ Configured' : '⚠️ NOT SET'}`);
+console.log(`   Master PIN: ${MASTER_PASSWORD ? '✅ Configured' : '⚠️ NOT SET'}`);
 console.log(`   JWT Secret: ${JWT_SECRET ? '✅ Set' : '⚠️ NOT SET'}`);
 console.log('========================================\n');
 
@@ -87,6 +92,8 @@ const SETTINGS_FILE = path.join(__dirname, 'settings.json');
 const THEMES_FILE = path.join(__dirname, 'themes.json');
 const CLIENTS_FILE = path.join(__dirname, 'clients.json');
 const PRODUCTS_FILE = path.join(__dirname, 'products.json');
+const ORGANIZATIONS_FILE = path.join(__dirname, 'organizations.json');
+const MASTER_SETTINGS_FILE = path.join(__dirname, 'master-settings.json');
 
 let transactions = [];
 let vouchers = [];
@@ -95,6 +102,8 @@ let settings = {};
 let themes = [];
 let clients = [];
 let products = [];
+let organizations = [];
+let masterSettings = {};
 
 // ============================================================
 // ===================== DEFAULT SETTINGS =====================
@@ -115,6 +124,16 @@ const DEFAULT_SETTINGS = {
     headerTextColor: '#ffffff',
     buttonTextColor: '#000000',
     bgGradient: 'linear-gradient(135deg, #0f2027, #203a43, #2c5364)'
+};
+
+const DEFAULT_MASTER_SETTINGS = {
+    masterBusinessName: 'GICH WiFi Master',
+    masterEmail: 'master@gichwifi.co.ke',
+    masterPhone: '0796587763',
+    defaultPrimaryColor: '#00c853',
+    defaultBgGradient: 'linear-gradient(135deg, #0f2027, #203a43, #2c5364)',
+    commissionRate: 5,
+    createdAt: new Date().toISOString()
 };
 
 // ============================================================
@@ -354,6 +373,70 @@ if (fs.existsSync(PRODUCTS_FILE)) {
 }
 
 // ============================================================
+// ===================== MULTI-TENANT DATA LOADING =====================
+// ============================================================
+
+// Load organizations (Multi-Tenant)
+if (fs.existsSync(ORGANIZATIONS_FILE)) {
+    try {
+        const data = fs.readFileSync(ORGANIZATIONS_FILE, 'utf8');
+        organizations = JSON.parse(data);
+        console.log(`🏢 Loaded ${organizations.length} organizations`);
+    } catch (error) {
+        console.error('Error loading organizations:', error);
+        organizations = [];
+    }
+} else {
+    // Create a demo organization
+    organizations = [{
+        id: 'CLIENT_DEMO001',
+        name: 'Demo WiFi Cafe',
+        businessName: 'Demo WiFi Cafe',
+        email: 'demo@example.com',
+        phone: '0712345678',
+        logo: '',
+        primaryColor: '#00c853',
+        secondaryColor: '#00e676',
+        accentColor: '#0f2027',
+        textColor: '#ffffff',
+        headerTextColor: '#ffffff',
+        buttonTextColor: '#000000',
+        bgGradient: 'linear-gradient(135deg, #0f2027, #203a43, #2c5364)',
+        supportPhone: '0796587763',
+        supportEmail: 'support@democafe.co.ke',
+        website: 'https://democafe.co.ke',
+        businessTagline: 'Fast • Secure • Reliable',
+        mpesaTill: '123456',
+        mpesaShortcode: SHORTCODE,
+        status: 'active',
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        plans: [
+            { id: '2_Hours', name: '2 Hours', price: 10, devices: 1, shared_users: 1, duration_seconds: 7200 },
+            { id: '5_Hours', name: '5 Hours', price: 20, devices: 1, shared_users: 1, duration_seconds: 18000 },
+            { id: '24_Hours', name: '24 Hours', price: 80, devices: 1, shared_users: 1, duration_seconds: 86400 },
+            { id: '1_Week_1_Device', name: '1 Week (1 Device)', price: 300, devices: 1, shared_users: 1, duration_seconds: 604800 }
+        ]
+    }];
+    saveOrganizations();
+}
+
+// Load master settings
+if (fs.existsSync(MASTER_SETTINGS_FILE)) {
+    try {
+        const data = fs.readFileSync(MASTER_SETTINGS_FILE, 'utf8');
+        masterSettings = JSON.parse(data);
+        console.log(`⚙️ Loaded master settings`);
+    } catch (error) {
+        console.error('Error loading master settings:', error);
+        masterSettings = DEFAULT_MASTER_SETTINGS;
+    }
+} else {
+    masterSettings = DEFAULT_MASTER_SETTINGS;
+    saveMasterSettings();
+}
+
+// ============================================================
 // ===================== SAVE FUNCTIONS =====================
 // ============================================================
 
@@ -420,6 +503,24 @@ function saveProducts() {
     }
 }
 
+function saveOrganizations() {
+    try {
+        fs.writeFileSync(ORGANIZATIONS_FILE, JSON.stringify(organizations, null, 2));
+        console.log('💾 Organizations saved');
+    } catch (error) {
+        console.error('⚠️ Could not save organizations:', error.message);
+    }
+}
+
+function saveMasterSettings() {
+    try {
+        fs.writeFileSync(MASTER_SETTINGS_FILE, JSON.stringify(masterSettings, null, 2));
+        console.log('💾 Master settings saved');
+    } catch (error) {
+        console.error('⚠️ Could not save master settings:', error.message);
+    }
+}
+
 // ============================================================
 // ===================== HELPERS =====================
 // ============================================================
@@ -478,6 +579,23 @@ function generateProductId() {
         code += chars.charAt(Math.floor(Math.random() * chars.length));
     }
     return 'PROD_' + code;
+}
+
+// ============================================================
+// ===================== MULTI-TENANT HELPERS =====================
+// ============================================================
+
+function generateOrgId() {
+    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    let code = '';
+    for (let i = 0; i < 8; i++) {
+        code += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return 'CLIENT_' + code;
+}
+
+function getOrganizationByClientId(clientId) {
+    return organizations.find(org => org.id === clientId);
 }
 
 // ============================================================
@@ -654,7 +772,7 @@ function sendJson(res, statusCode, obj) {
     res.writeHead(statusCode, { 
         'Content-Type': 'application/json',
         'Access-Control-Allow-Origin': '*',
-        'Access-Control-Allow-Methods': 'POST, GET, DELETE, OPTIONS',
+        'Access-Control-Allow-Methods': 'POST, GET, PUT, DELETE, OPTIONS',
         'Access-Control-Allow-Headers': 'Content-Type, Authorization',
         'Cache-Control': 'no-cache, no-store, must-revalidate',
         'Pragma': 'no-cache',
@@ -744,6 +862,652 @@ function isAdmin(req) {
     return true;
 }
 
+function isMasterAdmin(req) {
+    const auth = req.headers.authorization;
+    if (!auth) {
+        console.log('🔐 No authorization header');
+        return false;
+    }
+    const token = auth.replace('Bearer ', '');
+    const decoded = verifyToken(token);
+    if (!decoded || decoded.role !== 'master') {
+        console.log('🔐 Invalid or non-master token');
+        return false;
+    }
+    console.log(`🔐 Master Admin authenticated: ${decoded.username || 'master'}`);
+    return true;
+}
+
+// ============================================================
+// ===================== CLIENT SKELETON HTML GENERATOR =====================
+// ============================================================
+
+function generateClientSkeletonHtml(organization) {
+    const escapeHtml = (str) => {
+        if (!str) return '';
+        return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                  .replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+    };
+    
+    const orgId = escapeHtml(organization.id);
+    const businessName = escapeHtml(organization.businessName || organization.name || 'WiFi Service');
+    const tagline = escapeHtml(organization.businessTagline || 'Fast • Secure • Reliable');
+    const primaryColor = escapeHtml(organization.primaryColor || '#00c853');
+    const secondaryColor = escapeHtml(organization.secondaryColor || '#00e676');
+    const accentColor = escapeHtml(organization.accentColor || '#0f2027');
+    const textColor = escapeHtml(organization.textColor || '#ffffff');
+    const headerTextColor = escapeHtml(organization.headerTextColor || '#ffffff');
+    const buttonTextColor = escapeHtml(organization.buttonTextColor || '#000000');
+    const bgGradient = escapeHtml(organization.bgGradient || 'linear-gradient(135deg, #0f2027, #203a43, #2c5364)');
+    const supportPhone = escapeHtml(organization.supportPhone || '0796587763');
+    const supportEmail = escapeHtml(organization.supportEmail || 'support@example.com');
+    const website = escapeHtml(organization.website || '');
+    const logo = escapeHtml(organization.logo || '');
+    const plans = organization.plans || [];
+    
+    let plansHtml = '';
+    if (plans.length > 0) {
+        plansHtml = plans.map(p => {
+            const duration = p.duration_seconds || 3600;
+            const hours = Math.floor(duration / 3600);
+            const days = Math.floor(duration / 86400);
+            const durationStr = days > 0 ? `${days} day${days > 1 ? 's' : ''}` : `${hours} hour${hours > 1 ? 's' : ''}`;
+            const isPopular = p.id === '1_Week_1_Device' || p.id === '24_Hours';
+            return `
+                <div class="plan-card" data-plan-id="${escapeHtml(p.id)}" onclick="selectPlan('${escapeHtml(p.id)}')">
+                    ${isPopular ? '<div class="badge">🔥 Popular</div>' : ''}
+                    <div class="plan-name">${escapeHtml(p.name)}</div>
+                    <div class="plan-price">KES ${p.price} <span>/ ${durationStr}</span></div>
+                    <ul class="plan-features">
+                        <li>${p.devices || 1} device${(p.devices || 1) > 1 ? 's' : ''}</li>
+                        <li>${p.shared_users || 1} user${(p.shared_users || 1) > 1 ? 's' : ''}</li>
+                        <li>Valid for ${durationStr}</li>
+                    </ul>
+                </div>
+            `;
+        }).join('');
+    } else {
+        plansHtml = `<div style="text-align:center;padding:40px;color:#666;">No plans available</div>`;
+    }
+    
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>${businessName} - WiFi Services</title>
+    <style>
+        :root {
+            --primary-color: ${primaryColor};
+            --secondary-color: ${secondaryColor};
+            --accent-color: ${accentColor};
+            --text-color: ${textColor};
+            --header-text-color: ${headerTextColor};
+            --button-text-color: ${buttonTextColor};
+            --bg-gradient: ${bgGradient};
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: var(--accent-color);
+            color: var(--text-color);
+            min-height: 100vh;
+        }
+        .header {
+            background: var(--bg-gradient);
+            padding: 30px 20px;
+            text-align: center;
+            border-bottom: 3px solid var(--primary-color);
+        }
+        .header .logo {
+            max-width: 150px;
+            max-height: 80px;
+            margin-bottom: 10px;
+            ${logo ? '' : 'display: none;'}
+        }
+        .header h1 { font-size: 32px; color: var(--primary-color); }
+        .header p { color: var(--header-text-color); font-size: 16px; margin-top: 4px; opacity: 0.8; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+        .plans-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+            gap: 20px;
+            margin-top: 20px;
+        }
+        .plan-card {
+            background: rgba(255,255,255,0.05);
+            backdrop-filter: blur(10px);
+            border-radius: 16px;
+            padding: 24px;
+            border: 1px solid rgba(255,255,255,0.08);
+            transition: 0.3s;
+            cursor: pointer;
+            position: relative;
+        }
+        .plan-card:hover {
+            transform: translateY(-4px);
+            border-color: var(--primary-color);
+            box-shadow: 0 8px 30px rgba(0,0,0,0.3);
+        }
+        .plan-card.selected {
+            border-color: var(--primary-color);
+            box-shadow: 0 0 0 2px var(--primary-color);
+        }
+        .plan-card .plan-name { font-size: 20px; font-weight: bold; color: var(--text-color); }
+        .plan-card .plan-price { font-size: 28px; font-weight: bold; color: var(--primary-color); margin: 8px 0; }
+        .plan-card .plan-price span { font-size: 14px; color: #888; font-weight: normal; }
+        .plan-card .plan-features { color: #aaa; font-size: 14px; margin: 12px 0; list-style: none; }
+        .plan-card .plan-features li { padding: 4px 0; }
+        .plan-card .plan-features li::before { content: "✓ "; color: var(--primary-color); }
+        .plan-card .badge {
+            position: absolute; top: 12px; right: 12px;
+            background: rgba(0,200,83,0.2); color: var(--primary-color);
+            padding: 2px 12px; border-radius: 20px; font-size: 12px; font-weight: 600;
+        }
+        .payment-section {
+            background: rgba(255,255,255,0.05);
+            backdrop-filter: blur(10px);
+            border-radius: 16px;
+            padding: 24px;
+            margin-top: 30px;
+            border: 1px solid rgba(255,255,255,0.08);
+        }
+        .payment-section h2 { color: var(--primary-color); margin-bottom: 16px; }
+        .form-group { margin-bottom: 16px; }
+        .form-group label { display: block; color: #aaa; font-size: 14px; margin-bottom: 4px; }
+        .form-group input {
+            width: 100%; padding: 12px 16px;
+            background: rgba(0,0,0,0.3);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 8px;
+            color: #fff; font-size: 16px; outline: none;
+        }
+        .form-group input:focus { border-color: var(--primary-color); }
+        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+        @media (max-width: 600px) { .form-row { grid-template-columns: 1fr; } }
+        .btn {
+            padding: 14px 32px;
+            background: var(--primary-color);
+            color: var(--button-text-color);
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: 0.2s;
+            width: 100%;
+        }
+        .btn:hover { opacity: 0.8; transform: scale(1.01); }
+        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .btn-secondary { background: rgba(255,255,255,0.1); color: #fff; }
+        .btn-secondary:hover { background: rgba(255,255,255,0.2); }
+        .status-box { margin-top: 16px; padding: 16px; border-radius: 8px; display: none; }
+        .status-box.show { display: block; }
+        .status-box.success { background: rgba(0,200,83,0.1); border: 1px solid var(--primary-color); color: var(--primary-color); }
+        .status-box.error { background: rgba(255,68,68,0.1); border: 1px solid #ff4444; color: #ff4444; }
+        .status-box.info { background: rgba(33,150,243,0.1); border: 1px solid #2196f3; color: #2196f3; }
+        .credentials-box {
+            background: rgba(0,0,0,0.3);
+            border-radius: 12px;
+            padding: 20px;
+            margin-top: 16px;
+            border: 1px solid rgba(255,255,255,0.05);
+        }
+        .credentials-box .row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.03); }
+        .credentials-box .label { color: #888; }
+        .credentials-box .value { color: #fff; font-family: monospace; }
+        .loading {
+            display: inline-block; width: 20px; height: 20px;
+            border: 3px solid rgba(255,255,255,0.1); border-top-color: var(--primary-color);
+            border-radius: 50%; animation: spin 0.8s linear infinite; vertical-align: middle; margin-right: 8px;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .voucher-section { margin-top: 20px; padding: 16px; background: rgba(0,0,0,0.2); border-radius: 8px; border: 1px solid rgba(255,255,255,0.05); }
+        .voucher-section .form-row { display: flex; gap: 12px; }
+        .voucher-section .form-row input { flex: 1; }
+        .voucher-section .form-row .btn { width: auto; padding: 12px 24px; }
+        .footer { text-align: center; padding: 30px 20px; color: #555; font-size: 14px; border-top: 1px solid rgba(255,255,255,0.05); margin-top: 30px; }
+        .toast {
+            position: fixed; bottom: 30px; right: 30px; padding: 16px 24px; border-radius: 12px;
+            background: #1a1a2e; border: 1px solid rgba(255,255,255,0.05);
+            color: #fff; font-size: 14px; z-index: 999;
+            transform: translateY(100px); opacity: 0; transition: 0.3s ease; max-width: 400px;
+        }
+        .toast.show { transform: translateY(0); opacity: 1; }
+        .toast.success { border-color: var(--primary-color); }
+        .toast.error { border-color: #ff4444; }
+        .toast.info { border-color: #2196f3; }
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: var(--accent-color); }
+        ::-webkit-scrollbar-thumb { background: #2a2a4a; border-radius: 3px; }
+    </style>
+</head>
+<body>
+
+    <div class="header" id="pageHeader">
+        ${logo ? `<img src="${logo}" alt="${businessName}" class="logo">` : ''}
+        <h1>🌐 ${businessName}</h1>
+        <p id="tagline">${tagline}</p>
+    </div>
+
+    <div class="container">
+        <h2 style="color:var(--primary-color); margin-bottom:8px;">📶 Choose Your Plan</h2>
+        <p style="color:#888; margin-bottom:16px;">Select a package that fits your needs</p>
+        <div class="plans-grid" id="plansGrid">${plansHtml}</div>
+
+        <div class="payment-section" id="paymentSection">
+            <h2>💳 Pay with M-Pesa</h2>
+            <p style="color:#888;font-size:14px;margin-bottom:16px;">
+                Selected plan: <strong id="selectedPlanName">None</strong>
+            </p>
+            <div class="form-row">
+                <div class="form-group">
+                    <label>📱 Phone Number</label>
+                    <input type="tel" id="phoneNumber" placeholder="0712345678">
+                </div>
+                <div class="form-group">
+                    <label>💰 Amount (KES)</label>
+                    <input type="number" id="amountDisplay" readonly style="background:rgba(0,0,0,0.5);color:var(--primary-color);font-weight:bold;">
+                </div>
+            </div>
+            <button class="btn" id="payBtn" onclick="initiatePayment()">💳 Pay Now</button>
+            <div class="status-box" id="statusBox"></div>
+
+            <div class="voucher-section">
+                <p style="color:#888;font-size:14px;margin-bottom:8px;">🎟️ Have a voucher code?</p>
+                <div class="form-row">
+                    <input type="text" id="voucherInput" placeholder="Enter voucher code">
+                    <button class="btn btn-secondary" onclick="redeemVoucher()">Redeem</button>
+                </div>
+                <div id="voucherStatus" style="margin-top:8px;font-size:14px;"></div>
+            </div>
+        </div>
+
+        <div id="credentialsDisplay" style="display:none;">
+            <div class="credentials-box">
+                <h3 style="color:var(--primary-color);margin-bottom:12px;">✅ WiFi Credentials</h3>
+                <div class="row"><span class="label">Username</span><span class="value" id="credUsername">-</span></div>
+                <div class="row"><span class="label">Password</span><span class="value" id="credPassword">-</span></div>
+                <div class="row"><span class="label">Plan</span><span class="value" id="credPlan">-</span></div>
+                <div class="row"><span class="label">Expires</span><span class="value" id="credExpires">-</span></div>
+            </div>
+        </div>
+
+        <div style="margin-top:20px;text-align:center;">
+            <button class="btn btn-secondary" onclick="checkActive()" style="width:auto;padding:10px 24px;">
+                🔍 Check My Active Plan
+            </button>
+            <div id="checkResult" style="margin-top:12px;font-size:14px;"></div>
+        </div>
+    </div>
+
+    <div class="footer">
+        <p>© 2024 ${businessName} — All rights reserved</p>
+        <p style="font-size:12px;color:#333;">Support: ${supportPhone} | ${supportEmail}</p>
+    </div>
+
+    <div class="toast" id="toast">
+        <span class="toast-icon">✅</span>
+        <span id="toastMessage">Success!</span>
+    </div>
+
+    <script>
+        // ============================================================
+        // CONFIGURATION
+        // ============================================================
+        const ORG_ID = '${orgId}';
+        const API_BASE = '';
+
+        let plans = [];
+        let selectedPlan = null;
+        let pollingInterval = null;
+        let currentTransactionId = null;
+
+        // ============================================================
+        // INIT
+        // ============================================================
+        document.addEventListener('DOMContentLoaded', () => {
+            loadOrganizationData();
+        });
+
+        // ============================================================
+        // LOAD ORGANIZATION DATA
+        // ============================================================
+        function loadOrganizationData() {
+            fetch(\`/api/organization/\${ORG_ID}\`)
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        const org = data.data;
+                        plans = org.plans || [];
+                        renderPlans();
+                        if (org.primaryColor) {
+                            document.documentElement.style.setProperty('--primary-color', org.primaryColor);
+                        }
+                    } else {
+                        document.getElementById('plansGrid').innerHTML =
+                            '<div style="text-align:center;padding:40px;color:#ff4444;">Failed to load plans</div>';
+                    }
+                })
+                .catch(err => {
+                    console.error(err);
+                    document.getElementById('plansGrid').innerHTML =
+                        '<div style="text-align:center;padding:40px;color:#ff4444;">Network error loading plans</div>';
+                });
+        }
+
+        // ============================================================
+        // RENDER PLANS
+        // ============================================================
+        function renderPlans() {
+            const grid = document.getElementById('plansGrid');
+            if (plans.length === 0) {
+                grid.innerHTML = '<div style="text-align:center;padding:40px;color:#666;">No plans available</div>';
+                return;
+            }
+
+            grid.innerHTML = plans.map(p => {
+                const duration = p.duration_seconds || 3600;
+                const hours = Math.floor(duration / 3600);
+                const days = Math.floor(duration / 86400);
+                const durationStr = days > 0 ? \`\${days} day\${days > 1 ? 's' : ''}\` : \`\${hours} hour\${hours > 1 ? 's' : ''}\`;
+                const isPopular = p.id === '1_Week_1_Device' || p.id === '24_Hours';
+                return \`
+                    <div class="plan-card" onclick="selectPlan('\${p.id}')" data-plan-id="\${p.id}">
+                        \${isPopular ? '<div class="badge">🔥 Popular</div>' : ''}
+                        <div class="plan-name">\${p.name}</div>
+                        <div class="plan-price">KES \${p.price} <span>/ \${durationStr}</span></div>
+                        <ul class="plan-features">
+                            <li>\${p.devices || 1} device\${(p.devices || 1) > 1 ? 's' : ''}</li>
+                            <li>\${p.shared_users || 1} user\${(p.shared_users || 1) > 1 ? 's' : ''}</li>
+                            <li>Valid for \${durationStr}</li>
+                        </ul>
+                    </div>
+                \`;
+            }).join('');
+        }
+
+        // ============================================================
+        // SELECT PLAN
+        // ============================================================
+        function selectPlan(planId) {
+            const plan = plans.find(p => p.id === planId);
+            if (!plan) return;
+
+            selectedPlan = plan;
+
+            document.querySelectorAll('.plan-card').forEach(el => el.classList.remove('selected'));
+            const card = document.querySelector(\`.plan-card[data-plan-id="\${planId}"]\`);
+            if (card) card.classList.add('selected');
+
+            document.getElementById('selectedPlanName').textContent = plan.name;
+            document.getElementById('amountDisplay').value = plan.price;
+
+            document.getElementById('statusBox').className = 'status-box';
+            document.getElementById('statusBox').textContent = '';
+            document.getElementById('credentialsDisplay').style.display = 'none';
+        }
+
+        // ============================================================
+        // PAYMENT
+        // ============================================================
+        function initiatePayment() {
+            if (!selectedPlan) {
+                showToast('⚠️ Please select a plan first', 'error');
+                return;
+            }
+
+            const phone = document.getElementById('phoneNumber').value.trim();
+            if (!phone || phone.length < 10) {
+                showToast('📱 Please enter a valid phone number (e.g. 0712345678)', 'error');
+                return;
+            }
+
+            const btn = document.getElementById('payBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="loading"></span> Processing...';
+
+            const statusBox = document.getElementById('statusBox');
+            statusBox.className = 'status-box show info';
+            statusBox.innerHTML = '⏳ Initiating payment... Please wait.';
+
+            fetch('/api/payment/initiate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    phoneNumber: phone,
+                    amount: selectedPlan.price,
+                    planId: selectedPlan.id
+                })
+            })
+            .then(r => r.json())
+            .then(data => {
+                btn.disabled = false;
+                btn.innerHTML = '💳 Pay Now';
+
+                if (data.success) {
+                    if (data.isFree) {
+                        statusBox.className = 'status-box show success';
+                        statusBox.innerHTML = '🎉 Free plan activated! Check your credentials below.';
+                        document.getElementById('credentialsDisplay').style.display = 'block';
+                        fetchCredentials(data.transactionId);
+                        showToast('✅ Free plan activated!', 'success');
+                        return;
+                    }
+
+                    currentTransactionId = data.transactionId;
+                    statusBox.className = 'status-box show info';
+                    statusBox.innerHTML = \`
+                        📱 STK Push sent to your phone.<br>
+                        <strong>Check your M-Pesa and enter PIN to complete payment.</strong><br>
+                        <small>Waiting for confirmation...</small>
+                        <div style="margin-top:8px;"><span class="loading"></span> Waiting for payment...</div>
+                    \`;
+
+                    showToast('📱 STK Push sent! Check your phone.', 'info');
+                    startPolling(data.transactionId);
+
+                } else {
+                    statusBox.className = 'status-box show error';
+                    statusBox.innerHTML = '❌ ' + (data.message || 'Payment failed. Please try again.');
+                    showToast('❌ Payment failed: ' + data.message, 'error');
+                }
+            })
+            .catch(err => {
+                console.error(err);
+                btn.disabled = false;
+                btn.innerHTML = '💳 Pay Now';
+                statusBox.className = 'status-box show error';
+                statusBox.innerHTML = '❌ Network error. Please check your connection.';
+                showToast('❌ Network error', 'error');
+            });
+        }
+
+        // ============================================================
+        // POLLING
+        // ============================================================
+        function startPolling(transactionId) {
+            if (pollingInterval) clearInterval(pollingInterval);
+
+            let attempts = 0;
+            const maxAttempts = 30;
+
+            pollingInterval = setInterval(() => {
+                attempts++;
+                if (attempts > maxAttempts) {
+                    clearInterval(pollingInterval);
+                    const statusBox = document.getElementById('statusBox');
+                    statusBox.className = 'status-box show error';
+                    statusBox.innerHTML = '⏱️ Payment timed out. Please try again or contact support.';
+                    showToast('⏱️ Payment timeout', 'error');
+                    return;
+                }
+
+                fetch(\`/api/transaction/\${transactionId}\`)
+                    .then(r => r.json())
+                    .then(data => {
+                        if (data.success) {
+                            const tx = data.data;
+                            if (tx.status === 'completed') {
+                                clearInterval(pollingInterval);
+                                const statusBox = document.getElementById('statusBox');
+                                statusBox.className = 'status-box show success';
+                                statusBox.innerHTML = '🎉 Payment successful! Your WiFi credentials are ready.';
+                                document.getElementById('credentialsDisplay').style.display = 'block';
+                                fetchCredentials(transactionId);
+                                showToast('✅ Payment successful!', 'success');
+                            } else if (tx.status === 'failed' || tx.status === 'cancelled') {
+                                clearInterval(pollingInterval);
+                                const statusBox = document.getElementById('statusBox');
+                                statusBox.className = 'status-box show error';
+                                statusBox.innerHTML = '❌ ' + (tx.errorDescription || 'Payment failed. Please try again.');
+                                showToast('❌ Payment failed', 'error');
+                            }
+                        }
+                    })
+                    .catch(console.error);
+            }, 3000);
+        }
+
+        // ============================================================
+        // FETCH CREDENTIALS
+        // ============================================================
+        function fetchCredentials(transactionId) {
+            fetch(\`/api/get-credentials/\${transactionId}\`)
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success) {
+                        document.getElementById('credUsername').textContent = data.username || 'N/A';
+                        document.getElementById('credPassword').textContent = data.password || 'N/A';
+                        document.getElementById('credPlan').textContent = data.plan || 'N/A';
+                        document.getElementById('credExpires').textContent = data.expiresAt ? new Date(data.expiresAt).toLocaleString() : 'N/A';
+                    }
+                })
+                .catch(console.error);
+        }
+
+        // ============================================================
+        // CHECK ACTIVE PLAN
+        // ============================================================
+        function checkActive() {
+            const phone = document.getElementById('phoneNumber').value.trim();
+            if (!phone || phone.length < 10) {
+                showToast('📱 Please enter your phone number first', 'error');
+                return;
+            }
+
+            const result = document.getElementById('checkResult');
+            result.innerHTML = '<span class="loading"></span> Checking...';
+            result.style.color = '#888';
+
+            fetch(\`/api/check-active?phone=\${encodeURIComponent(phone)}\`)
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success && data.active) {
+                        result.innerHTML = \`
+                            ✅ <strong>Active Plan Found!</strong><br>
+                            Plan: \${data.data.planName}<br>
+                            Expires: \${new Date(data.data.expiresAt).toLocaleString()}<br>
+                            Username: <code>\${data.data.username}</code><br>
+                            Password: <code>\${data.data.password}</code>
+                        \`;
+                        result.style.color = 'var(--primary-color)';
+                        document.getElementById('credentialsDisplay').style.display = 'block';
+                        document.getElementById('credUsername').textContent = data.data.username || 'N/A';
+                        document.getElementById('credPassword').textContent = data.data.password || 'N/A';
+                        document.getElementById('credPlan').textContent = data.data.planName || 'N/A';
+                        document.getElementById('credExpires').textContent = data.data.expiresAt ? new Date(data.data.expiresAt).toLocaleString() : 'N/A';
+                    } else {
+                        result.innerHTML = '❌ No active plan found for this number.';
+                        result.style.color = '#ff4444';
+                        document.getElementById('credentialsDisplay').style.display = 'none';
+                    }
+                })
+                .catch(err => {
+                    console.error(err);
+                    result.innerHTML = '❌ Network error checking status';
+                    result.style.color = '#ff4444';
+                });
+        }
+
+        // ============================================================
+        // REDEEM VOUCHER
+        // ============================================================
+        function redeemVoucher() {
+            const code = document.getElementById('voucherInput').value.trim().toUpperCase();
+            if (!code) {
+                showToast('Please enter a voucher code', 'error');
+                return;
+            }
+
+            const status = document.getElementById('voucherStatus');
+            status.innerHTML = '<span class="loading"></span> Redeeming...';
+            status.style.color = '#888';
+
+            fetch('/api/voucher/redeem', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ code, phoneNumber: document.getElementById('phoneNumber').value.trim() })
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    status.innerHTML = '✅ Voucher redeemed successfully!';
+                    status.style.color = 'var(--primary-color)';
+                    document.getElementById('voucherInput').value = '';
+                    showToast('🎟️ Voucher redeemed!', 'success');
+                    document.getElementById('credentialsDisplay').style.display = 'block';
+                    if (data.data) {
+                        document.getElementById('credUsername').textContent = data.data.username || 'N/A';
+                        document.getElementById('credPassword').textContent = data.data.password || 'N/A';
+                        document.getElementById('credPlan').textContent = data.data.planName || 'N/A';
+                        document.getElementById('credExpires').textContent = data.data.expiresAt ? new Date(data.data.expiresAt).toLocaleString() : 'N/A';
+                    }
+                } else {
+                    status.innerHTML = '❌ ' + (data.message || 'Invalid voucher');
+                    status.style.color = '#ff4444';
+                    showToast('❌ ' + data.message, 'error');
+                }
+            })
+            .catch(err => {
+                console.error(err);
+                status.innerHTML = '❌ Network error';
+                status.style.color = '#ff4444';
+                showToast('Network error', 'error');
+            });
+        }
+
+        // ============================================================
+        // TOAST
+        // ============================================================
+        function showToast(message, type = 'success') {
+            const toast = document.getElementById('toast');
+            const toastMsg = document.getElementById('toastMessage');
+            const icon = toast.querySelector('.toast-icon');
+
+            toast.className = 'toast ' + type;
+            icon.textContent = type === 'success' ? '✅' : type === 'error' ? '❌' : 'ℹ️';
+            toastMsg.textContent = message;
+            toast.classList.add('show');
+
+            clearTimeout(toast._timeout);
+            toast._timeout = setTimeout(() => toast.classList.remove('show'), 4000);
+        }
+
+        // ============================================================
+        // ENTER KEY SUPPORT
+        // ============================================================
+        document.getElementById('phoneNumber').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') initiatePayment();
+        });
+        document.getElementById('voucherInput').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') redeemVoucher();
+        });
+    </script>
+</body>
+</html>`;
+}
+
 // ============================================================
 // ===================== CREATE SERVER =====================
 // ============================================================
@@ -751,7 +1515,7 @@ function isAdmin(req) {
 const server = http.createServer(async (req, res) => {
     // Always set CORS headers
     res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'POST, GET, DELETE, OPTIONS');
+    res.setHeader('Access-Control-Allow-Methods', 'POST, GET, PUT, DELETE, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
     res.setHeader('Access-Control-Allow-Credentials', 'true');
     res.setHeader('Access-Control-Max-Age', '86400');
@@ -784,6 +1548,7 @@ const server = http.createServer(async (req, res) => {
                     <p><a href="/api/admin/transactions">Transactions (Admin)</a></p>
                     <p><a href="/api/admin/clients">Clients (Admin)</a></p>
                     <p><a href="/api/admin/products">Products (Admin)</a></p>
+                    <p><a href="/api/master/organizations">Organizations (Master Admin)</a></p>
                 </body>
                 </html>
             `);
@@ -1793,11 +2558,415 @@ const server = http.createServer(async (req, res) => {
             });
         }
 
+        // ============================================================
+        // ===================== MULTI-TENANT ENDPOINTS =====================
+        // ============================================================
+
+        // ===== MASTER ADMIN VERIFICATION =====
+        if (req.method === 'POST' && url.pathname === '/api/master/verify') {
+            const body = await readBody(req);
+            const { pin } = body;
+            
+            console.log('🔐 Master Admin verification attempt');
+            
+            if (pin === MASTER_PASSWORD) {
+                const token = generateToken({ username: 'master', role: 'master', exp: Date.now() + 86400000 });
+                console.log('✅ Master Admin verified successfully');
+                return sendJson(res, 200, { 
+                    success: true, 
+                    message: 'Master Admin verified',
+                    token: token,
+                    role: 'master'
+                });
+            } else {
+                console.log('❌ Master Admin verification failed - wrong PIN');
+                return sendJson(res, 401, { 
+                    success: false, 
+                    message: 'Invalid PIN' 
+                });
+            }
+        }
+
+        // ===== GET ALL ORGANIZATIONS (Master Admin Only) =====
+        if (req.method === 'GET' && url.pathname === '/api/master/organizations') {
+            if (!isMasterAdmin(req)) {
+                return sendJson(res, 401, { success: false, message: 'Unauthorized' });
+            }
+            
+            return sendJson(res, 200, {
+                success: true,
+                data: organizations,
+                count: organizations.length
+            });
+        }
+
+        // ===== CREATE NEW ORGANIZATION (Master Admin Only) =====
+        if (req.method === 'POST' && url.pathname === '/api/master/organizations') {
+            if (!isMasterAdmin(req)) {
+                return sendJson(res, 401, { success: false, message: 'Unauthorized' });
+            }
+            
+            const body = await readBody(req);
+            console.log('🏢 Creating new organization:', body);
+            
+            const {
+                name,
+                businessName,
+                email,
+                phone,
+                logo,
+                primaryColor,
+                secondaryColor,
+                accentColor,
+                textColor,
+                headerTextColor,
+                buttonTextColor,
+                bgGradient,
+                supportPhone,
+                supportEmail,
+                website,
+                businessTagline,
+                mpesaTill,
+                mpesaShortcode,
+                plans: customPlans
+            } = body;
+            
+            if (!name || !businessName || !email || !phone) {
+                return sendJson(res, 400, {
+                    success: false,
+                    message: 'Name, Business Name, Email, and Phone are required'
+                });
+            }
+            
+            const clientId = generateOrgId();
+            
+            const newOrganization = {
+                id: clientId,
+                name: name,
+                businessName: businessName,
+                email: email,
+                phone: phone,
+                logo: logo || '',
+                primaryColor: primaryColor || masterSettings.defaultPrimaryColor || '#00c853',
+                secondaryColor: secondaryColor || '#00e676',
+                accentColor: accentColor || '#0f2027',
+                textColor: textColor || '#ffffff',
+                headerTextColor: headerTextColor || '#ffffff',
+                buttonTextColor: buttonTextColor || '#000000',
+                bgGradient: bgGradient || masterSettings.defaultBgGradient || 'linear-gradient(135deg, #0f2027, #203a43, #2c5364)',
+                supportPhone: supportPhone || phone,
+                supportEmail: supportEmail || email,
+                website: website || '',
+                businessTagline: businessTagline || 'Fast • Secure • Reliable',
+                mpesaTill: mpesaTill || '',
+                mpesaShortcode: mpesaShortcode || SHORTCODE,
+                status: 'active',
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+                plans: customPlans || [
+                    { id: '2_Hours', name: '2 Hours', price: 10, devices: 1, shared_users: 1, duration_seconds: 7200 },
+                    { id: '5_Hours', name: '5 Hours', price: 20, devices: 1, shared_users: 1, duration_seconds: 18000 },
+                    { id: '24_Hours', name: '24 Hours', price: 80, devices: 1, shared_users: 1, duration_seconds: 86400 }
+                ]
+            };
+            
+            organizations.push(newOrganization);
+            saveOrganizations();
+            
+            // Also add to clients for backward compatibility
+            const newClient = {
+                id: clientId,
+                name: name,
+                phone: phone,
+                email: email,
+                businessName: businessName,
+                mpesaTill: mpesaTill || '',
+                status: 'active',
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+                isOrganization: true,
+                organizationId: clientId
+            };
+            clients.push(newClient);
+            saveClients();
+            
+            return sendJson(res, 200, {
+                success: true,
+                message: 'Organization created successfully!',
+                data: newOrganization,
+                clientId: clientId,
+                clientPageUrl: `/${clientId}/client-page.html`
+            });
+        }
+
+        // ===== GET ORGANIZATION BY ID (Public) =====
+        if (req.method === 'GET' && url.pathname.startsWith('/api/organization/')) {
+            const orgId = url.pathname.split('/').pop();
+            
+            if (!orgId || orgId === 'organizations') {
+                return sendJson(res, 400, { success: false, message: 'Invalid organization ID' });
+            }
+            
+            const organization = getOrganizationByClientId(orgId);
+            if (!organization) {
+                return sendJson(res, 404, { success: false, message: 'Organization not found' });
+            }
+            
+            return sendJson(res, 200, {
+                success: true,
+                data: {
+                    id: organization.id,
+                    businessName: organization.businessName,
+                    logo: organization.logo || '',
+                    primaryColor: organization.primaryColor,
+                    secondaryColor: organization.secondaryColor,
+                    accentColor: organization.accentColor,
+                    textColor: organization.textColor,
+                    headerTextColor: organization.headerTextColor,
+                    buttonTextColor: organization.buttonTextColor,
+                    bgGradient: organization.bgGradient,
+                    supportPhone: organization.supportPhone,
+                    supportEmail: organization.supportEmail,
+                    website: organization.website,
+                    businessTagline: organization.businessTagline,
+                    plans: organization.plans || [],
+                    status: organization.status
+                }
+            });
+        }
+
+        // ===== GET ORGANIZATION PLANS (Public) =====
+        if (req.method === 'GET' && url.pathname.startsWith('/api/organization/')) {
+            const pathParts = url.pathname.split('/');
+            const orgId = pathParts[2];
+            const subPath = pathParts[3] || '';
+            
+            if (!orgId || orgId === 'organizations') {
+                return sendJson(res, 400, { success: false, message: 'Invalid organization ID' });
+            }
+            
+            if (subPath === 'plans') {
+                const organization = getOrganizationByClientId(orgId);
+                if (!organization) {
+                    return sendJson(res, 404, { success: false, message: 'Organization not found' });
+                }
+                
+                return sendJson(res, 200, {
+                    success: true,
+                    data: organization.plans || [],
+                    organizationName: organization.businessName
+                });
+            }
+        }
+
+        // ===== UPDATE ORGANIZATION (Master Admin Only) =====
+        if (req.method === 'PUT' && url.pathname.startsWith('/api/master/organizations/')) {
+            if (!isMasterAdmin(req)) {
+                return sendJson(res, 401, { success: false, message: 'Unauthorized' });
+            }
+            
+            const orgId = url.pathname.split('/').pop();
+            const body = await readBody(req);
+            console.log('✏️ Updating organization:', orgId, body);
+            
+            const orgIndex = organizations.findIndex(o => o.id === orgId);
+            if (orgIndex === -1) {
+                return sendJson(res, 404, { success: false, message: 'Organization not found' });
+            }
+            
+            const updatedOrg = {
+                ...organizations[orgIndex],
+                ...body,
+                updatedAt: new Date().toISOString()
+            };
+            
+            organizations[orgIndex] = updatedOrg;
+            saveOrganizations();
+            
+            const clientIndex = clients.findIndex(c => c.id === orgId);
+            if (clientIndex !== -1) {
+                clients[clientIndex] = {
+                    ...clients[clientIndex],
+                    name: body.name || clients[clientIndex].name,
+                    phone: body.phone || clients[clientIndex].phone,
+                    email: body.email || clients[clientIndex].email,
+                    businessName: body.businessName || clients[clientIndex].businessName,
+                    mpesaTill: body.mpesaTill || clients[clientIndex].mpesaTill,
+                    updatedAt: new Date().toISOString()
+                };
+                saveClients();
+            }
+            
+            return sendJson(res, 200, {
+                success: true,
+                message: 'Organization updated successfully!',
+                data: updatedOrg
+            });
+        }
+
+        // ===== DELETE ORGANIZATION (Master Admin Only) =====
+        if (req.method === 'DELETE' && url.pathname.startsWith('/api/master/organizations/')) {
+            if (!isMasterAdmin(req)) {
+                return sendJson(res, 401, { success: false, message: 'Unauthorized' });
+            }
+            
+            const orgId = url.pathname.split('/').pop();
+            console.log('🗑️ Deleting organization:', orgId);
+            
+            const orgIndex = organizations.findIndex(o => o.id === orgId);
+            if (orgIndex === -1) {
+                return sendJson(res, 404, { success: false, message: 'Organization not found' });
+            }
+            
+            organizations.splice(orgIndex, 1);
+            saveOrganizations();
+            
+            const clientIndex = clients.findIndex(c => c.id === orgId);
+            if (clientIndex !== -1) {
+                clients.splice(clientIndex, 1);
+                saveClients();
+            }
+            
+            return sendJson(res, 200, {
+                success: true,
+                message: 'Organization deleted successfully!'
+            });
+        }
+
+        // ===== MASTER SETTINGS - GET =====
+        if (req.method === 'GET' && url.pathname === '/api/master/settings') {
+            if (!isMasterAdmin(req)) {
+                return sendJson(res, 401, { success: false, message: 'Unauthorized' });
+            }
+            
+            return sendJson(res, 200, {
+                success: true,
+                data: masterSettings
+            });
+        }
+
+        // ===== MASTER SETTINGS - UPDATE =====
+        if (req.method === 'POST' && url.pathname === '/api/master/settings') {
+            if (!isMasterAdmin(req)) {
+                return sendJson(res, 401, { success: false, message: 'Unauthorized' });
+            }
+            
+            const body = await readBody(req);
+            console.log('⚙️ Updating master settings:', body);
+            
+            masterSettings = {
+                ...masterSettings,
+                ...body,
+                updatedAt: new Date().toISOString()
+            };
+            
+            saveMasterSettings();
+            
+            return sendJson(res, 200, {
+                success: true,
+                message: 'Master settings updated successfully',
+                data: masterSettings
+            });
+        }
+
+        // ===== GENERATE CLIENT SKELETON HTML =====
+        if (req.method === 'GET' && url.pathname.startsWith('/api/master/generate-client-page/')) {
+            if (!isMasterAdmin(req)) {
+                return sendJson(res, 401, { success: false, message: 'Unauthorized' });
+            }
+            
+            const orgId = url.pathname.split('/').pop();
+            const organization = getOrganizationByClientId(orgId);
+            
+            if (!organization) {
+                return sendJson(res, 404, { success: false, message: 'Organization not found' });
+            }
+            
+            const skeletonHtml = generateClientSkeletonHtml(organization);
+            
+            return sendJson(res, 200, {
+                success: true,
+                html: skeletonHtml,
+                filename: `${orgId}_client_page.html`,
+                instructions: 'Copy this HTML and give it to your client. They only need to open this file in a browser.'
+            });
+        }
+
+        // ===== SERVE CLIENT PAGE =====
+        if (req.method === 'GET' && url.pathname.match(/^\/CLIENT_[A-Z0-9]+\/client-page\.html$/)) {
+            const pathParts = url.pathname.split('/');
+            const orgId = pathParts[1];
+            
+            const organization = getOrganizationByClientId(orgId);
+            if (!organization) {
+                return sendHtml(res, 404, `
+                    <!DOCTYPE html>
+                    <html>
+                    <head><title>Organization Not Found</title></head>
+                    <body style="font-family:Arial;padding:40px;background:#0f172a;color:white;text-align:center;">
+                        <h1>❌ Organization Not Found</h1>
+                        <p>The organization with ID: <strong>${orgId}</strong> does not exist.</p>
+                        <p>Please contact support.</p>
+                    </body>
+                    </html>
+                `);
+            }
+            
+            const html = generateClientSkeletonHtml(organization);
+            return sendHtml(res, 200, html);
+        }
+
+        // ===== SERVE CLIENT PAGE (without /client-page.html) =====
+        if (req.method === 'GET' && url.pathname.match(/^\/CLIENT_[A-Z0-9]+\/?$/)) {
+            const orgId = url.pathname.replace('/', '');
+            
+            const organization = getOrganizationByClientId(orgId);
+            if (!organization) {
+                return sendHtml(res, 404, `
+                    <!DOCTYPE html>
+                    <html>
+                    <head><title>Organization Not Found</title></head>
+                    <body style="font-family:Arial;padding:40px;background:#0f172a;color:white;text-align:center;">
+                        <h1>❌ Organization Not Found</h1>
+                        <p>The organization with ID: <strong>${orgId}</strong> does not exist.</p>
+                        <p>Please contact support.</p>
+                    </body>
+                    </html>
+                `);
+            }
+            
+            const html = generateClientSkeletonHtml(organization);
+            return sendHtml(res, 200, html);
+        }
+
+        // ===== CLIENT PAGE WITH ORG PARAMETER =====
+        if (req.method === 'GET' && url.pathname === '/client-page.html' && url.searchParams.has('org')) {
+            const orgId = url.searchParams.get('org');
+            
+            const organization = getOrganizationByClientId(orgId);
+            if (!organization) {
+                return sendHtml(res, 404, `
+                    <!DOCTYPE html>
+                    <html>
+                    <head><title>Organization Not Found</title></head>
+                    <body style="font-family:Arial;padding:40px;background:#0f172a;color:white;text-align:center;">
+                        <h1>❌ Organization Not Found</h1>
+                        <p>The organization with ID: <strong>${orgId}</strong> does not exist.</p>
+                        <p>Please contact support.</p>
+                    </body>
+                    </html>
+                `);
+            }
+            
+            const html = generateClientSkeletonHtml(organization);
+            return sendHtml(res, 200, html);
+        }
+
         // ===== API INFO =====
         if (req.method === 'GET' && url.pathname === '/api') {
             return sendJson(res, 200, {
-                name: 'GICH WiFi API',
-                version: '2.0.0',
+                name: 'GICH WiFi API - Multi-Tenant System',
+                version: '3.0.0',
                 status: 'Running',
                 endpoints: {
                     public: {
@@ -1812,7 +2981,9 @@ const server = http.createServer(async (req, res) => {
                         check_active: 'GET /api/check-active?phone=',
                         voucher_redeem: 'POST /api/voucher/redeem',
                         credentials: 'GET /api/get-credentials/:transactionId',
-                        callback: 'POST /api/mpesa-callback'
+                        callback: 'POST /api/mpesa-callback',
+                        organization: 'GET /api/organization/:orgId',
+                        organization_plans: 'GET /api/organization/:orgId/plans'
                     },
                     admin: {
                         verify: 'POST /api/admin/verify',
@@ -1826,6 +2997,20 @@ const server = http.createServer(async (req, res) => {
                         generate_voucher: 'POST /api/admin/voucher/generate',
                         vouchers: 'GET /api/admin/vouchers',
                         transactions: 'GET /api/admin/transactions'
+                    },
+                    master: {
+                        verify: 'POST /api/master/verify',
+                        organizations: 'GET /api/master/organizations',
+                        create_organization: 'POST /api/master/organizations',
+                        update_organization: 'PUT /api/master/organizations/:id',
+                        delete_organization: 'DELETE /api/master/organizations/:id',
+                        settings: 'GET/POST /api/master/settings',
+                        generate_client_page: 'GET /api/master/generate-client-page/:orgId'
+                    },
+                    client_pages: {
+                        direct: 'GET /:orgId/',
+                        with_html: 'GET /:orgId/client-page.html',
+                        with_param: 'GET /client-page.html?org=:orgId'
                     }
                 },
                 statistics: {
@@ -1835,7 +3020,8 @@ const server = http.createServer(async (req, res) => {
                         .reduce((sum, t) => sum + (t.amount || 0), 0),
                     activeVouchers: vouchers.filter(v => !v.used).length,
                     totalClients: clients.length,
-                    totalProducts: products.length
+                    totalProducts: products.length,
+                    totalOrganizations: organizations.length
                 }
             });
         }
@@ -1850,7 +3036,7 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(PORT, '0.0.0.0', () => {
     console.log('\n========================================');
-    console.log('🌐 GICH WiFi API');
+    console.log('🌐 GICH WiFi API - Multi-Tenant System');
     console.log('========================================');
     console.log(`✅ Server running on port: ${PORT}`);
     console.log(`📍 http://localhost:${PORT}/`);
@@ -1863,9 +3049,12 @@ server.listen(PORT, '0.0.0.0', () => {
     console.log('📱 Test phone: 0712345678');
     console.log('🔑 Test PIN: 12345');
     console.log(`🛡️ Admin PIN: ${ADMIN_PASSWORD ? '✅ Set' : '⚠️ NOT SET'}`);
+    console.log(`👑 Master PIN: ${MASTER_PASSWORD ? '✅ Set' : '⚠️ NOT SET'}`);
     console.log('📋 JWT Auth: ✅ Enabled');
     console.log('👤 Client Management: ✅ Enabled');
     console.log('📦 Product Management: ✅ Enabled');
+    console.log('🏢 Multi-Tenant: ✅ Enabled');
+    console.log(`🏢 Organizations: ${organizations.length}`);
     console.log('========================================\n');
 });
 
