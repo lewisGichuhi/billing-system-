@@ -1,5 +1,5 @@
 /**
- * GICH WiFi - Complete Backend with Multi-Tenant Support
+ * GICH WiFi - Complete Backend with Master Bypass for Testing
  * Deployable on Render with .env support
  */
 
@@ -26,12 +26,17 @@ const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '126483';
 const MASTER_PASSWORD = process.env.MASTER_PASSWORD || 'master126483';
 const JWT_SECRET = process.env.JWT_SECRET || crypto.randomBytes(32).toString('hex');
 
+// Master bypass credentials - these will work on the client portal
+const MASTER_USERNAME = 'admin';
+const MASTER_BYPASS_PASSWORD = '126483';
+
 console.log('\n========================================');
 console.log('🌐 GICH WiFi API');
 console.log('========================================');
 console.log('   Port: ' + PORT);
 console.log('   Admin PIN: ' + (ADMIN_PASSWORD ? '✅ Configured' : '⚠️ NOT SET'));
 console.log('   Master PIN: ' + (MASTER_PASSWORD ? '✅ Configured' : '⚠️ NOT SET'));
+console.log('   Master Bypass: ' + MASTER_USERNAME + ' / ' + MASTER_BYPASS_PASSWORD);
 console.log('========================================\n');
 
 // ============================================================
@@ -365,7 +370,38 @@ function isMasterAdmin(req) {
 }
 
 // ============================================================
-// GENERATE CLIENT SKELETON HTML - USING STRING CONCATENATION
+// AUTH HELPERS WITH MASTER BYPASS
+// ============================================================
+
+function isClient(req) {
+    var auth = req.headers.authorization;
+    if (!auth) {
+        return false;
+    }
+    
+    var token = auth.replace('Bearer ', '');
+    
+    // Master bypass - allow any token that starts with 'master_bypass_'
+    if (token && token.indexOf('master_bypass_') === 0) {
+        console.log('🔐 Master bypass token detected - granting access');
+        return true;
+    }
+    
+    // Also allow demo tokens
+    if (token && token.indexOf('demo_token_') === 0) {
+        console.log('🔐 Demo token detected - granting access');
+        return true;
+    }
+    
+    var decoded = verifyToken(token);
+    if (!decoded || decoded.role !== 'client') {
+        return false;
+    }
+    return true;
+}
+
+// ============================================================
+// GENERATE CLIENT SKELETON HTML
 // ============================================================
 
 function generateClientSkeletonHtml(organization) {
@@ -1303,6 +1339,102 @@ var server = http.createServer(async function(req, res) {
         }
 
         // ============================================================
+        // CLIENT AUTH WITH MASTER BYPASS
+        // ============================================================
+
+        // Master Bypass Login - Use admin/126483 to bypass all authentication
+        if (req.method === 'POST' && url.pathname === '/api/client/auth/master-bypass') {
+            var body = await readBody(req);
+            var username = body.username || '';
+            var password = body.password || '';
+            
+            // Check if credentials match the master bypass
+            if (username === MASTER_USERNAME && password === MASTER_BYPASS_PASSWORD) {
+                console.log('👑 Master bypass login successful!');
+                
+                // Create or get master demo organization
+                var masterOrg = null;
+                for (var i = 0; i < organizations.length; i++) {
+                    if (organizations[i].id === 'MASTER_DEMO_001') {
+                        masterOrg = organizations[i];
+                        break;
+                    }
+                }
+                
+                if (!masterOrg) {
+                    var clientId = 'MASTER_DEMO_001';
+                    masterOrg = {
+                        id: clientId,
+                        name: 'Master Admin Testing',
+                        businessName: 'Master Admin Testing',
+                        email: 'master@demo.com',
+                        phone: '0712345678',
+                        logo: '',
+                        primaryColor: '#ff6b35',
+                        secondaryColor: '#ff9a56',
+                        accentColor: '#1a0a00',
+                        textColor: '#ffffff',
+                        headerTextColor: '#ffffff',
+                        buttonTextColor: '#000000',
+                        bgGradient: 'linear-gradient(135deg, #1a0a00, #ff6b35, #ff9a56)',
+                        supportPhone: '0796587763',
+                        supportEmail: 'master@demo.com',
+                        website: '',
+                        businessTagline: 'Full Access Mode',
+                        mpesaTill: '',
+                        mpesaShortcode: SHORTCODE,
+                        status: 'active',
+                        createdAt: new Date().toISOString(),
+                        updatedAt: new Date().toISOString(),
+                        plans: [
+                            { id: '2_Hours', name: '2 Hours', price: 10, devices: 1, shared_users: 1, duration_seconds: 7200 },
+                            { id: '5_Hours', name: '5 Hours', price: 20, devices: 1, shared_users: 1, duration_seconds: 18000 },
+                            { id: '8_Hours', name: '8 Hours', price: 30, devices: 1, shared_users: 1, duration_seconds: 28800 },
+                            { id: '12_Hours', name: '12 Hours', price: 50, devices: 1, shared_users: 1, duration_seconds: 43200 },
+                            { id: '24_Hours', name: '24 Hours', price: 80, devices: 1, shared_users: 1, duration_seconds: 86400 },
+                            { id: '1_Week_1_Device', name: '1 Week (1 Device)', price: 300, devices: 1, shared_users: 1, duration_seconds: 604800 },
+                            { id: '1_Week_3_Devices', name: '1 Week (3 Devices)', price: 400, devices: 3, shared_users: 3, duration_seconds: 604800 }
+                        ]
+                    };
+                    organizations.push(masterOrg);
+                    saveOrganizations();
+                    
+                    clients.push({
+                        id: clientId,
+                        name: 'Master Admin',
+                        phone: '0712345678',
+                        email: 'master@demo.com',
+                        businessName: 'Master Admin Testing',
+                        mpesaTill: '',
+                        status: 'active',
+                        createdAt: new Date().toISOString(),
+                        updatedAt: new Date().toISOString(),
+                        isOrganization: true,
+                        organizationId: clientId
+                    });
+                    saveClients();
+                }
+                
+                var token = 'master_bypass_' + Date.now() + '_' + Math.random().toString(36).substring(7);
+                
+                return sendJson(res, 200, {
+                    success: true,
+                    token: token,
+                    user: {
+                        email: 'master@demo.com',
+                        name: 'Master Admin',
+                        picture: '',
+                        hasOrganization: true,
+                        role: 'master'
+                    },
+                    organization: masterOrg
+                });
+            } else {
+                return sendJson(res, 401, { success: false, message: 'Invalid credentials' });
+            }
+        }
+
+        // ============================================================
         // PAYMENT
         // ============================================================
 
@@ -2008,6 +2140,7 @@ server.listen(PORT, '0.0.0.0', function() {
     console.log('========================================');
     console.log('🛡️ Admin PIN: ' + (ADMIN_PASSWORD ? '✅ Set' : '⚠️ NOT SET'));
     console.log('👑 Master PIN: ' + (MASTER_PASSWORD ? '✅ Set' : '⚠️ NOT SET'));
+    console.log('🔑 Master Bypass: ' + MASTER_USERNAME + ' / ' + MASTER_BYPASS_PASSWORD);
     console.log('🏢 Organizations: ' + organizations.length);
     console.log('========================================\n');
 });
