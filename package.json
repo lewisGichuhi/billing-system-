@@ -1,13 +1,15 @@
 {
-  "name": "gich-wifi-backend",
-  "version": "2.0.0",
-  "description": "GICH WiFi Hotspot Payment System with M-Pesa Daraja Integration",
+  "name": "billing-system",
+  "version": "1.0.0",
+  "description": "GICH WiFi Billing System",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
   },
-  "dependencies": {
-    "dotenv": "^16.3.1"
+  "engines": {
+    "node": ">=20.0.0 <22.0.0"
   },
-  "license": "MIT"
+  "dependencies": {
+    "dotenv": "^16.4.5"
+  }
 }
