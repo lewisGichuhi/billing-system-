@@ -1,9 +1,6 @@
 /**
  * GICH WiFi - Complete Backend with Admin Dashboard & Multi-Tenant Support
  * Deployable on Render with .env support
- * 
- * ALL EXISTING FUNCTIONALITY PRESERVED
- * Multi-Tenant Features ADDED on top
  */
 
 // Load environment variables from .env file
@@ -922,6 +919,9 @@ function generateClientSkeletonHtml(organization) {
         plansHtml = `<div style="text-align:center;padding:40px;color:#666;">No plans available</div>`;
     }
     
+    // ============================================================
+    // GENERATE THE COMPLETE CLIENT PAGE WITH FIXES
+    // ============================================================
     return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -955,7 +955,7 @@ function generateClientSkeletonHtml(organization) {
             max-width: 150px;
             max-height: 80px;
             margin-bottom: 10px;
-            ${logo ? '' : 'display: none;'}
+            display: none;
         }
         .header h1 { font-size: 32px; color: var(--primary-color); }
         .header p { color: var(--header-text-color); font-size: 16px; margin-top: 4px; opacity: 0.8; }
@@ -1127,7 +1127,9 @@ function generateClientSkeletonHtml(organization) {
             </div>
         </div>
         <div class="check-section">
-            <button class="btn" onclick="showCheckModal()">🔍 Check My Active Plan</button>
+            <button class="btn" onclick="checkAndConnect()" style="background:var(--primary-color);color:var(--button-text-color);padding:12px 28px;border:none;border-radius:8px;font-size:16px;font-weight:bold;cursor:pointer;transition:0.2s;width:auto;margin:0 auto;">
+                🔌 Check & Connect
+            </button>
             <div class="result" id="checkResult"></div>
         </div>
     </div>
@@ -1190,7 +1192,7 @@ function generateClientSkeletonHtml(organization) {
 
     <script>
         // ============================================================
-        // CONFIGURATION
+        // CONFIGURATION - FIXED FOR LOCAL & REMOTE
         // ============================================================
         console.log('🌐 Customer Page Loading...');
         console.log('📡 Current Host:', window.location.hostname);
@@ -1203,6 +1205,7 @@ function generateClientSkeletonHtml(organization) {
                        currentHost === '127.0.0.1' || 
                        currentHost === '' || 
                        currentHost === '192.168.88.1' ||
+                       currentHost === '192.168.1.1' ||
                        window.location.protocol === 'file:';
 
         let API_URL;
@@ -1217,22 +1220,41 @@ function generateClientSkeletonHtml(organization) {
         console.log('📡 API URL:', API_URL);
 
         // ============================================================
-        // ORGANIZATION ID
+        // ORGANIZATION ID - FIXED WITH MULTIPLE DETECTION METHODS
         // ============================================================
-        const pathParts = window.location.pathname.split('/');
         let ORG_ID = '';
-        for (const part of pathParts) {
-            if (part.startsWith('CLIENT_')) {
-                ORG_ID = part;
-                break;
+
+        // Method 1: Use the embedded ID from the server (MOST RELIABLE)
+        ORG_ID = '${orgId}';
+        
+        // Method 2: Check URL path for CLIENT_ pattern
+        if (!ORG_ID || ORG_ID === '') {
+            const pathParts = window.location.pathname.split('/');
+            for (const part of pathParts) {
+                if (part.startsWith('CLIENT_')) {
+                    ORG_ID = part;
+                    break;
+                }
             }
         }
-        if (!ORG_ID) {
+
+        // Method 3: Check URL query parameters
+        if (!ORG_ID || ORG_ID === '') {
             const urlParams = new URLSearchParams(window.location.search);
-            ORG_ID = urlParams.get('org') || '';
+            ORG_ID = urlParams.get('org') || urlParams.get('client') || '';
         }
 
-        console.log('🏢 Organization ID:', ORG_ID);
+        // Method 4: Check localStorage for saved org ID
+        if (!ORG_ID || ORG_ID === '') {
+            ORG_ID = localStorage.getItem('client_org_id') || '';
+        }
+
+        console.log('🏢 Organization ID detected:', ORG_ID);
+
+        // Save to localStorage for next time
+        if (ORG_ID && ORG_ID !== '') {
+            localStorage.setItem('client_org_id', ORG_ID);
+        }
 
         // ============================================================
         // STATE
@@ -1261,12 +1283,44 @@ function generateClientSkeletonHtml(organization) {
         // ============================================================
         document.addEventListener('DOMContentLoaded', () => {
             console.log('🚀 Customer Page Initialized');
-            if (ORG_ID) {
+            
+            if (ORG_ID && ORG_ID !== '') {
                 loadOrganizationData();
             } else {
-                plansGrid.innerHTML = '<div style="text-align:center;padding:40px;color:#ff4444;grid-column:1/-1;">❌ Organization ID not found in URL</div>';
+                plansGrid.innerHTML = \`
+                    <div style="text-align:center;padding:40px;color:#ff4444;grid-column:1/-1;">
+                        ❌ Organization ID not found<br>
+                        <small style="color:#666;font-size:12px;">
+                            Please make sure the URL contains your organization ID.<br>
+                            Example: <code>https://your-site.com/CLIENT_XXXXX/</code>
+                        </small>
+                        <br><br>
+                        <button onclick="manualOrgEntry()" style="padding:8px 20px;background:var(--primary-color);color:#000;border:none;border-radius:6px;cursor:pointer;">
+                            🔑 Enter Organization ID Manually
+                        </button>
+                    </div>
+                \`;
             }
         });
+
+        // ============================================================
+        // MANUAL ORG ID ENTRY
+        // ============================================================
+        function manualOrgEntry() {
+            const id = prompt('Enter your Organization ID (e.g., CLIENT_DEMO001):');
+            if (id && id.trim()) {
+                ORG_ID = id.trim();
+                localStorage.setItem('client_org_id', ORG_ID);
+                console.log('🏢 Manual Org ID entered:', ORG_ID);
+                plansGrid.innerHTML = \`
+                    <div style="text-align:center;padding:40px;color:#888;grid-column:1/-1;">
+                        <span class="loading" style="display:inline-block;width:20px;height:20px;border:3px solid rgba(255,255,255,0.1);border-top-color:var(--primary-color);border-radius:50%;animation:spin 0.8s linear infinite;vertical-align:middle;margin-right:8px;"></span>
+                        Loading plans...
+                    </div>
+                \`;
+                loadOrganizationData();
+            }
+        }
 
         // ============================================================
         // LOAD ORGANIZATION DATA
@@ -1278,6 +1332,9 @@ function generateClientSkeletonHtml(organization) {
             fetch(url)
                 .then(r => {
                     console.log('📥 Response status:', r.status);
+                    if (!r.ok) {
+                        throw new Error('HTTP ' + r.status + ': ' + r.statusText);
+                    }
                     return r.json();
                 })
                 .then(data => {
@@ -1287,6 +1344,7 @@ function generateClientSkeletonHtml(organization) {
                         plans = org.plans || [];
                         console.log('📦 Plans loaded:', plans.length);
 
+                        // Apply branding
                         if (org.primaryColor) {
                             document.documentElement.style.setProperty('--primary-color', org.primaryColor);
                         }
@@ -1301,7 +1359,7 @@ function generateClientSkeletonHtml(organization) {
                             document.querySelector('.header').style.background = org.bgGradient;
                         }
                         if (org.businessName) {
-                            document.getElementById('businessName').textContent = '🌐 ' + org.businessName;
+                            document.querySelector('.header h1').textContent = '🌐 ' + org.businessName;
                             document.getElementById('successBusinessName').textContent = org.businessName;
                             document.getElementById('brandName').textContent = org.businessName;
                             document.title = org.businessName + ' - WiFi Services';
@@ -1310,8 +1368,11 @@ function generateClientSkeletonHtml(organization) {
                             document.getElementById('tagline').textContent = org.businessTagline;
                         }
                         if (org.logo) {
-                            document.getElementById('logoImage').src = org.logo;
-                            document.getElementById('logoImage').style.display = 'block';
+                            const logoImg = document.querySelector('.header .logo');
+                            if (logoImg) {
+                                logoImg.src = org.logo;
+                                logoImg.style.display = 'block';
+                            }
                             document.getElementById('successLogo').src = org.logo;
                             document.getElementById('successLogo').style.display = 'block';
                         }
@@ -1319,7 +1380,16 @@ function generateClientSkeletonHtml(organization) {
                         renderPlans();
                     } else {
                         console.error('❌ Failed to load organization:', data.message);
-                        plansGrid.innerHTML = '<div style="text-align:center;padding:40px;color:#ff4444;grid-column:1/-1;">❌ ' + (data.message || 'Failed to load plans') + '</div>';
+                        plansGrid.innerHTML = \`
+                            <div style="text-align:center;padding:40px;color:#ff4444;grid-column:1/-1;">
+                                ❌ \${data.message || 'Failed to load plans'}<br>
+                                <small style="color:#666;font-size:12px;">Organization ID: \${ORG_ID}</small>
+                                <br><br>
+                                <button onclick="loadOrganizationData()" style="padding:8px 20px;background:var(--primary-color);color:#000;border:none;border-radius:6px;cursor:pointer;">🔄 Retry</button>
+                                <br><br>
+                                <button onclick="manualOrgEntry()" style="padding:8px 20px;background:var(--primary-color);color:#000;border:none;border-radius:6px;cursor:pointer;">🔑 Change Organization ID</button>
+                            </div>
+                        \`;
                     }
                 })
                 .catch(err => {
@@ -1330,6 +1400,8 @@ function generateClientSkeletonHtml(organization) {
                             <small style="color:#666;font-size:12px;">\${err.message}</small>
                             <br><br>
                             <button onclick="loadOrganizationData()" style="padding:8px 20px;background:var(--primary-color);color:#000;border:none;border-radius:6px;cursor:pointer;">🔄 Retry</button>
+                            <br><br>
+                            <button onclick="manualOrgEntry()" style="padding:8px 20px;background:var(--primary-color);color:#000;border:none;border-radius:6px;cursor:pointer;">🔑 Change Organization ID</button>
                         </div>
                     \`;
                 });
@@ -1365,6 +1437,47 @@ function generateClientSkeletonHtml(organization) {
             }).join('');
 
             console.log('✅ Plans rendered successfully');
+        }
+
+        // ============================================================
+        // CHECK & CONNECT - ONE CLICK SOLUTION
+        // ============================================================
+        function checkAndConnect() {
+            const phone = prompt('📱 Enter your phone number to check for active plan:');
+            if (!phone || phone.length < 10) {
+                showToast('Please enter a valid phone number', 'error');
+                return;
+            }
+
+            const resultEl = document.getElementById('checkResult');
+            resultEl.innerHTML = '<span class="loading" style="display:inline-block;width:16px;height:16px;border:2px solid rgba(255,255,255,0.1);border-top-color:var(--primary-color);border-radius:50%;animation:spin 0.8s linear infinite;vertical-align:middle;margin-right:8px;"></span> Checking for active plan...';
+            resultEl.style.color = '#888';
+
+            fetch(API_URL + '/check-active?phone=' + encodeURIComponent(phone))
+                .then(r => r.json())
+                .then(data => {
+                    if (data.success && data.active) {
+                        resultEl.innerHTML = '✅ <strong>Active Plan Found!</strong> Connecting...';
+                        resultEl.style.color = '#00c853';
+                        credentials = {
+                            username: data.data.username,
+                            password: data.data.password,
+                            plan: data.data.planName,
+                            expiresAt: data.data.expiresAt
+                        };
+                        showSuccessScreen(credentials);
+                    } else {
+                        resultEl.innerHTML = '❌ No active plan found. Please purchase a plan below.';
+                        resultEl.style.color = '#ff4444';
+                        showToast('No active plan found. Please purchase a plan.', 'error');
+                    }
+                })
+                .catch(err => {
+                    console.error(err);
+                    resultEl.innerHTML = '❌ Network error checking status';
+                    resultEl.style.color = '#ff4444';
+                    showToast('Network error', 'error');
+                });
         }
 
         // ============================================================
@@ -1478,7 +1591,6 @@ function generateClientSkeletonHtml(organization) {
         // POLLING - FIXED VERSION
         // ============================================================
         function startPolling(transactionId) {
-            // Clear any existing polling
             if (pollingInterval) {
                 clearInterval(pollingInterval);
                 pollingInterval = null;
@@ -1517,7 +1629,6 @@ function generateClientSkeletonHtml(organization) {
                             console.log('📊 Transaction status:', tx.status);
                             
                             if (tx.status === 'completed') {
-                                // SUCCESS - Stop polling immediately
                                 clearInterval(pollingInterval);
                                 pollingInterval = null;
                                 pollingActive = false;
@@ -1525,7 +1636,6 @@ function generateClientSkeletonHtml(organization) {
                                 fetchCredentials(transactionId);
                                 
                             } else if (tx.status === 'cancelled') {
-                                // USER CANCELLED - Stop polling immediately
                                 clearInterval(pollingInterval);
                                 pollingInterval = null;
                                 pollingActive = false;
@@ -1533,7 +1643,6 @@ function generateClientSkeletonHtml(organization) {
                                 console.log('⏱️ User cancelled transaction:', transactionId);
                                 
                             } else if (tx.status === 'failed') {
-                                // PAYMENT FAILED - Stop polling immediately
                                 clearInterval(pollingInterval);
                                 pollingInterval = null;
                                 pollingActive = false;
@@ -1542,17 +1651,14 @@ function generateClientSkeletonHtml(organization) {
                                 console.log('❌ Payment failed:', errorMsg);
                                 
                             } else if (tx.status === 'pending') {
-                                // Still pending - continue polling
                                 console.log('⏳ Transaction still pending...');
                             }
                         } else {
-                            // API returned error - continue polling
                             console.log('⚠️ Polling API error:', data.message);
                         }
                     })
                     .catch(err => {
                         console.error('❌ Polling fetch error:', err);
-                        // Don't stop polling on network errors
                     });
             }, 3000);
         }
@@ -1636,7 +1742,7 @@ function generateClientSkeletonHtml(organization) {
         }
 
         // ============================================================
-        // CHECK ACTIVE PLAN
+        // CHECK ACTIVE PLAN (Manual)
         // ============================================================
         function showCheckModal() {
             document.getElementById('checkPhone').value = '';
@@ -1700,6 +1806,58 @@ function generateClientSkeletonHtml(organization) {
                     resultEl.textContent = '❌ Network error checking status';
                     resultEl.style.color = '#ff4444';
                 });
+        }
+
+        // ============================================================
+        // REDEEM VOUCHER
+        // ============================================================
+        function redeemVoucher() {
+            const code = prompt('🎟️ Enter your voucher code:');
+            if (!code || code.trim() === '') {
+                showToast('Please enter a voucher code', 'error');
+                return;
+            }
+
+            const phone = prompt('📱 Enter your phone number:');
+            if (!phone || phone.length < 10) {
+                showToast('Please enter a valid phone number', 'error');
+                return;
+            }
+
+            const statusEl = document.getElementById('checkResult');
+            statusEl.innerHTML = '<span class="loading" style="display:inline-block;width:16px;height:16px;border:2px solid rgba(255,255,255,0.1);border-top-color:var(--primary-color);border-radius:50%;animation:spin 0.8s linear infinite;vertical-align:middle;margin-right:8px;"></span> Redeeming voucher...';
+            statusEl.style.color = '#888';
+
+            fetch(API_URL + '/voucher/redeem', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ code: code.trim().toUpperCase(), phoneNumber: phone })
+            })
+            .then(r => r.json())
+            .then(data => {
+                if (data.success) {
+                    statusEl.innerHTML = '✅ Voucher redeemed successfully! Connecting...';
+                    statusEl.style.color = '#00c853';
+                    showToast('🎟️ Voucher redeemed!', 'success');
+                    credentials = {
+                        username: data.data.username || 'voucher_user',
+                        password: data.data.password || 'pass_' + Date.now(),
+                        plan: data.data.planName || 'Voucher Plan',
+                        expiresAt: data.data.expiresAt || new Date(Date.now() + 3600000).toISOString()
+                    };
+                    showSuccessScreen(credentials);
+                } else {
+                    statusEl.innerHTML = '❌ ' + (data.message || 'Invalid voucher');
+                    statusEl.style.color = '#ff4444';
+                    showToast('❌ ' + data.message, 'error');
+                }
+            })
+            .catch(err => {
+                console.error(err);
+                statusEl.innerHTML = '❌ Network error';
+                statusEl.style.color = '#ff4444';
+                showToast('Network error', 'error');
+            });
         }
 
         // ============================================================
@@ -1840,16 +1998,13 @@ const server = http.createServer(async (req, res) => {
             });
         }
 
-        // ============================================================
-        // GET TRANSACTION - FIXED (Returns full transaction data)
-        // ============================================================
+        // Get Transaction
         if (req.method === 'GET' && url.pathname.startsWith('/api/transaction/')) {
             const id = url.pathname.split('/').pop();
             const transaction = transactions.find(t => t.id === id);
             if (!transaction) {
                 return sendJson(res, 404, { success: false, message: 'Transaction not found' });
             }
-            // Return full transaction with all status info
             return sendJson(res, 200, { 
                 success: true, 
                 data: {
@@ -2026,9 +2181,7 @@ const server = http.createServer(async (req, res) => {
             }
         }
 
-        // ============================================================
-        // ===================== MPESA CALLBACK - FIXED =====================
-        // ============================================================
+        // ===== MPESA CALLBACK - FIXED =====
         if (req.method === 'POST' && url.pathname === '/api/mpesa-callback') {
             const callback = await readBody(req);
             console.log('📞 M-Pesa Callback Received:');
@@ -2066,13 +2219,7 @@ const server = http.createServer(async (req, res) => {
                 });
             }
             
-            // ============================================================
-            // FIX: ALWAYS update the transaction status and SAVE
-            // This ensures the client polling stops immediately
-            // ============================================================
-            
             if (resultCode === 0) {
-                // SUCCESS
                 transaction.status = 'completed';
                 transaction.mpesaCode = receipt || 'MPESA' + Date.now();
                 transaction.completedAt = new Date().toISOString();
@@ -2093,21 +2240,19 @@ const server = http.createServer(async (req, res) => {
                 });
                 
             } else if (resultCode === 1037) {
-                // USER CANCELLED - FIX: Mark as cancelled and SAVE immediately
                 transaction.status = 'cancelled';
                 transaction.errorDescription = 'User cancelled the transaction';
                 transaction.errorCode = resultCode;
                 transaction.completedAt = new Date().toISOString();
                 saveTransactions();
                 
-                console.log(`⏱️ Payment CANCELLED by user for transaction: ${transaction.id} - ${resultDesc}`);
+                console.log(`⏱️ Payment CANCELLED by user for transaction: ${transaction.id}`);
                 return sendJson(res, 200, { 
                     ResultCode: resultCode, 
                     ResultDesc: 'User cancelled' 
                 });
                 
             } else if (resultCode === 2001) {
-                // INSUFFICIENT BALANCE
                 transaction.status = 'failed';
                 transaction.errorDescription = 'Insufficient M-Pesa balance. Please top up and try again.';
                 transaction.errorCode = resultCode;
@@ -2121,7 +2266,6 @@ const server = http.createServer(async (req, res) => {
                 });
                 
             } else {
-                // OTHER FAILURE
                 transaction.status = 'failed';
                 transaction.errorDescription = resultDesc || 'Payment failed';
                 transaction.errorCode = resultCode;
@@ -2233,7 +2377,6 @@ const server = http.createServer(async (req, res) => {
         }
 
         // ===== ADMIN CLIENTS =====
-        // Get all clients
         if (req.method === 'GET' && url.pathname === '/api/admin/clients') {
             if (!isAdmin(req)) {
                 return sendJson(res, 401, { success: false, message: 'Unauthorized' });
@@ -2246,7 +2389,6 @@ const server = http.createServer(async (req, res) => {
             });
         }
 
-        // Create a new client
         if (req.method === 'POST' && url.pathname === '/api/admin/clients') {
             if (!isAdmin(req)) {
                 return sendJson(res, 401, { success: false, message: 'Unauthorized' });
@@ -2286,7 +2428,6 @@ const server = http.createServer(async (req, res) => {
             });
         }
 
-        // Update a client
         if (req.method === 'PUT' && url.pathname.startsWith('/api/admin/clients/')) {
             if (!isAdmin(req)) {
                 return sendJson(res, 401, { success: false, message: 'Unauthorized' });
@@ -2317,7 +2458,6 @@ const server = http.createServer(async (req, res) => {
             });
         }
 
-        // Delete a client
         if (req.method === 'DELETE' && url.pathname.startsWith('/api/admin/clients/')) {
             if (!isAdmin(req)) {
                 return sendJson(res, 401, { success: false, message: 'Unauthorized' });
@@ -2341,7 +2481,6 @@ const server = http.createServer(async (req, res) => {
         }
 
         // ===== ADMIN PRODUCTS =====
-        // Get all products
         if (req.method === 'GET' && url.pathname === '/api/admin/products') {
             if (!isAdmin(req)) {
                 return sendJson(res, 401, { success: false, message: 'Unauthorized' });
@@ -2354,7 +2493,6 @@ const server = http.createServer(async (req, res) => {
             });
         }
 
-        // Create a new product
         if (req.method === 'POST' && url.pathname === '/api/admin/products') {
             if (!isAdmin(req)) {
                 return sendJson(res, 401, { success: false, message: 'Unauthorized' });
@@ -2394,7 +2532,6 @@ const server = http.createServer(async (req, res) => {
             });
         }
 
-        // Update a product
         if (req.method === 'PUT' && url.pathname.startsWith('/api/admin/products/')) {
             if (!isAdmin(req)) {
                 return sendJson(res, 401, { success: false, message: 'Unauthorized' });
@@ -2426,7 +2563,6 @@ const server = http.createServer(async (req, res) => {
             });
         }
 
-        // Delete a product
         if (req.method === 'DELETE' && url.pathname.startsWith('/api/admin/products/')) {
             if (!isAdmin(req)) {
                 return sendJson(res, 401, { success: false, message: 'Unauthorized' });
@@ -2450,7 +2586,6 @@ const server = http.createServer(async (req, res) => {
         }
 
         // ===== ADMIN PLANS =====
-        // Get all plans (Admin)
         if (req.method === 'GET' && url.pathname === '/api/admin/plans') {
             if (!isAdmin(req)) {
                 return sendJson(res, 401, { success: false, message: 'Unauthorized' });
@@ -2462,7 +2597,6 @@ const server = http.createServer(async (req, res) => {
             });
         }
 
-        // Add a new plan
         if (req.method === 'POST' && url.pathname === '/api/admin/plans') {
             if (!isAdmin(req)) {
                 return sendJson(res, 401, { success: false, message: 'Unauthorized' });
@@ -2506,7 +2640,6 @@ const server = http.createServer(async (req, res) => {
             });
         }
 
-        // Update a plan
         if (req.method === 'PUT' && url.pathname.startsWith('/api/admin/plans/')) {
             if (!isAdmin(req)) {
                 return sendJson(res, 401, { success: false, message: 'Unauthorized' });
@@ -2535,7 +2668,6 @@ const server = http.createServer(async (req, res) => {
             });
         }
 
-        // Delete a plan
         if (req.method === 'DELETE' && url.pathname.startsWith('/api/admin/plans/')) {
             if (!isAdmin(req)) {
                 return sendJson(res, 401, { success: false, message: 'Unauthorized' });
@@ -2605,7 +2737,6 @@ const server = http.createServer(async (req, res) => {
             });
         }
 
-        // Get all vouchers (Admin)
         if (req.method === 'GET' && url.pathname === '/api/admin/vouchers') {
             if (!isAdmin(req)) {
                 return sendJson(res, 401, { success: false, message: 'Unauthorized' });
@@ -2643,7 +2774,7 @@ const server = http.createServer(async (req, res) => {
             });
         }
 
-        // ===== ADMIN SETTINGS - GET =====
+        // ===== ADMIN SETTINGS =====
         if (req.method === 'GET' && url.pathname === '/api/admin/settings') {
             if (!isAdmin(req)) {
                 return sendJson(res, 401, { success: false, message: 'Unauthorized' });
@@ -2655,7 +2786,6 @@ const server = http.createServer(async (req, res) => {
             });
         }
 
-        // ===== ADMIN SETTINGS - POST =====
         if (req.method === 'POST' && url.pathname === '/api/admin/settings') {
             if (!isAdmin(req)) {
                 return sendJson(res, 401, { success: false, message: 'Unauthorized' });
@@ -2832,7 +2962,7 @@ const server = http.createServer(async (req, res) => {
             }
         }
 
-        // ===== GET ALL ORGANIZATIONS (Master Admin Only) =====
+        // ===== GET ALL ORGANIZATIONS =====
         if (req.method === 'GET' && url.pathname === '/api/master/organizations') {
             if (!isMasterAdmin(req)) {
                 return sendJson(res, 401, { success: false, message: 'Unauthorized' });
@@ -2845,7 +2975,7 @@ const server = http.createServer(async (req, res) => {
             });
         }
 
-        // ===== CREATE NEW ORGANIZATION (Master Admin Only) =====
+        // ===== CREATE NEW ORGANIZATION =====
         if (req.method === 'POST' && url.pathname === '/api/master/organizations') {
             if (!isMasterAdmin(req)) {
                 return sendJson(res, 401, { success: false, message: 'Unauthorized' });
@@ -2944,7 +3074,7 @@ const server = http.createServer(async (req, res) => {
             });
         }
 
-        // ===== GET ORGANIZATION BY ID (Public) =====
+        // ===== GET ORGANIZATION BY ID =====
         if (req.method === 'GET' && url.pathname.startsWith('/api/organization/')) {
             const orgId = url.pathname.split('/').pop();
             
@@ -2980,31 +3110,7 @@ const server = http.createServer(async (req, res) => {
             });
         }
 
-        // ===== GET ORGANIZATION PLANS (Public) =====
-        if (req.method === 'GET' && url.pathname.startsWith('/api/organization/')) {
-            const pathParts = url.pathname.split('/');
-            const orgId = pathParts[2];
-            const subPath = pathParts[3] || '';
-            
-            if (!orgId || orgId === 'organizations') {
-                return sendJson(res, 400, { success: false, message: 'Invalid organization ID' });
-            }
-            
-            if (subPath === 'plans') {
-                const organization = getOrganizationByClientId(orgId);
-                if (!organization) {
-                    return sendJson(res, 404, { success: false, message: 'Organization not found' });
-                }
-                
-                return sendJson(res, 200, {
-                    success: true,
-                    data: organization.plans || [],
-                    organizationName: organization.businessName
-                });
-            }
-        }
-
-        // ===== UPDATE ORGANIZATION (Master Admin Only) =====
+        // ===== UPDATE ORGANIZATION =====
         if (req.method === 'PUT' && url.pathname.startsWith('/api/master/organizations/')) {
             if (!isMasterAdmin(req)) {
                 return sendJson(res, 401, { success: false, message: 'Unauthorized' });
@@ -3049,7 +3155,7 @@ const server = http.createServer(async (req, res) => {
             });
         }
 
-        // ===== DELETE ORGANIZATION (Master Admin Only) =====
+        // ===== DELETE ORGANIZATION =====
         if (req.method === 'DELETE' && url.pathname.startsWith('/api/master/organizations/')) {
             if (!isMasterAdmin(req)) {
                 return sendJson(res, 401, { success: false, message: 'Unauthorized' });
@@ -3078,7 +3184,7 @@ const server = http.createServer(async (req, res) => {
             });
         }
 
-        // ===== MASTER SETTINGS - GET =====
+        // ===== MASTER SETTINGS =====
         if (req.method === 'GET' && url.pathname === '/api/master/settings') {
             if (!isMasterAdmin(req)) {
                 return sendJson(res, 401, { success: false, message: 'Unauthorized' });
@@ -3090,7 +3196,6 @@ const server = http.createServer(async (req, res) => {
             });
         }
 
-        // ===== MASTER SETTINGS - UPDATE =====
         if (req.method === 'POST' && url.pathname === '/api/master/settings') {
             if (!isMasterAdmin(req)) {
                 return sendJson(res, 401, { success: false, message: 'Unauthorized' });
@@ -3133,7 +3238,7 @@ const server = http.createServer(async (req, res) => {
                 success: true,
                 html: skeletonHtml,
                 filename: `${orgId}_client_page.html`,
-                instructions: 'Copy this HTML and give it to your client. Works on local WiFi, local PC, and online!'
+                instructions: 'Copy this HTML and give it to your client. Works on local WiFi (MikroTik), local PC, and online!'
             });
         }
 
