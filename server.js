@@ -1,5 +1,5 @@
 /**
- * GICH WiFi - Complete Backend with Multi-Tenant, Client Self-Service, and Google OAuth
+ * GICH WiFi - Complete Backend with Admin Dashboard & Multi-Tenant Support
  * Deployable on Render with .env support
  * 
  * ALL EXISTING FUNCTIONALITY PRESERVED
@@ -30,11 +30,6 @@ const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '126483';
 const MASTER_PASSWORD = process.env.MASTER_PASSWORD || 'master126483';
 const JWT_SECRET = process.env.JWT_SECRET || crypto.randomBytes(32).toString('hex');
 
-// Google OAuth Configuration
-const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
-const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || '';
-const GOOGLE_REDIRECT_URI = process.env.GOOGLE_REDIRECT_URI || 'https://billing-system-fm9a.onrender.com/api/auth/google/callback';
-
 console.log('\n========================================');
 console.log('🌐 GICH WiFi API - Multi-Tenant System');
 console.log('========================================');
@@ -45,7 +40,7 @@ console.log(`   Callback URL: ${CALLBACK_URL}`);
 console.log(`   Port: ${PORT}`);
 console.log(`   Admin PIN: ${ADMIN_PASSWORD ? '✅ Configured' : '⚠️ NOT SET'}`);
 console.log(`   Master PIN: ${MASTER_PASSWORD ? '✅ Configured' : '⚠️ NOT SET'}`);
-console.log(`   Google OAuth: ${GOOGLE_CLIENT_ID ? '✅ Configured' : '⚠️ NOT SET'}`);
+console.log(`   JWT Secret: ${JWT_SECRET ? '✅ Set' : '⚠️ NOT SET'}`);
 console.log('========================================\n');
 
 // ============================================================
@@ -99,7 +94,6 @@ const CLIENTS_FILE = path.join(__dirname, 'clients.json');
 const PRODUCTS_FILE = path.join(__dirname, 'products.json');
 const ORGANIZATIONS_FILE = path.join(__dirname, 'organizations.json');
 const MASTER_SETTINGS_FILE = path.join(__dirname, 'master-settings.json');
-const CLIENT_USERS_FILE = path.join(__dirname, 'client-users.json');
 
 let transactions = [];
 let vouchers = [];
@@ -109,8 +103,7 @@ let themes = [];
 let clients = [];
 let products = [];
 let organizations = [];
-let masterSettings = [];
-let clientUsers = [];
+let masterSettings = {};
 
 // ============================================================
 // ===================== DEFAULT SETTINGS =====================
@@ -439,21 +432,6 @@ if (fs.existsSync(MASTER_SETTINGS_FILE)) {
     saveMasterSettings();
 }
 
-// Load client users
-if (fs.existsSync(CLIENT_USERS_FILE)) {
-    try {
-        const data = fs.readFileSync(CLIENT_USERS_FILE, 'utf8');
-        clientUsers = JSON.parse(data);
-        console.log(`👤 Loaded ${clientUsers.length} client users`);
-    } catch (error) {
-        console.error('Error loading client users:', error);
-        clientUsers = [];
-    }
-} else {
-    clientUsers = [];
-    saveClientUsers();
-}
-
 // ============================================================
 // ===================== SAVE FUNCTIONS =====================
 // ============================================================
@@ -539,15 +517,6 @@ function saveMasterSettings() {
     }
 }
 
-function saveClientUsers() {
-    try {
-        fs.writeFileSync(CLIENT_USERS_FILE, JSON.stringify(clientUsers, null, 2));
-        console.log('💾 Client users saved');
-    } catch (error) {
-        console.error('⚠️ Could not save client users:', error.message);
-    }
-}
-
 // ============================================================
 // ===================== HELPERS =====================
 // ============================================================
@@ -619,58 +588,6 @@ function generateOrgId() {
 
 function getOrganizationByClientId(clientId) {
     return organizations.find(org => org.id === clientId);
-}
-
-function getOrganizationByEmail(email) {
-    return organizations.find(org => org.email === email);
-}
-
-function getClientUserByEmail(email) {
-    return clientUsers.find(u => u.email === email);
-}
-
-// ============================================================
-// ===================== VERIFY GOOGLE TOKEN =====================
-// ============================================================
-
-function verifyGoogleToken(idToken) {
-    return new Promise((resolve, reject) => {
-        const options = {
-            hostname: 'oauth2.googleapis.com',
-            port: 443,
-            path: '/tokeninfo?id_token=' + encodeURIComponent(idToken),
-            method: 'GET',
-            headers: {
-                'Content-Type': 'application/json'
-            },
-            timeout: 10000,
-            agent: agent
-        };
-
-        const req = https.request(options, (res) => {
-            let data = '';
-            res.on('data', (chunk) => data += chunk);
-            res.on('end', () => {
-                try {
-                    const json = JSON.parse(data);
-                    if (json.aud && json.email) {
-                        resolve(json);
-                    } else {
-                        reject(new Error('Invalid token'));
-                    }
-                } catch (e) {
-                    reject(new Error('Invalid response'));
-                }
-            });
-        });
-
-        req.on('error', reject);
-        req.on('timeout', () => {
-            req.destroy();
-            reject(new Error('Timeout'));
-        });
-        req.end();
-    });
 }
 
 // ============================================================
@@ -953,22 +870,6 @@ function isMasterAdmin(req) {
     return true;
 }
 
-function isClient(req) {
-    const auth = req.headers.authorization;
-    if (!auth) {
-        console.log('🔐 No authorization header');
-        return false;
-    }
-    const token = auth.replace('Bearer ', '');
-    const decoded = verifyToken(token);
-    if (!decoded || decoded.role !== 'client') {
-        console.log('🔐 Invalid or non-client token');
-        return false;
-    }
-    console.log(`🔐 Client authenticated: ${decoded.email || 'client'}`);
-    return true;
-}
-
 // ============================================================
 // ===================== CLIENT SKELETON HTML GENERATOR =====================
 // ============================================================
@@ -1005,7 +906,7 @@ function generateClientSkeletonHtml(organization) {
             const durationStr = days > 0 ? `${days} day${days > 1 ? 's' : ''}` : `${hours} hour${hours > 1 ? 's' : ''}`;
             const isPopular = p.id === '1_Week_1_Device' || p.id === '24_Hours';
             return `
-                <div class="plan-card" data-plan-id="${escapeHtml(p.id)}" onclick="selectPlan('${escapeHtml(p.id)}')">
+                <div class="plan-card" data-plan-id="${escapeHtml(p.id)}" onclick="openPaymentModal('${escapeHtml(p.id)}')">
                     ${isPopular ? '<div class="badge">🔥 Popular</div>' : ''}
                     <div class="plan-name">${escapeHtml(p.name)}</div>
                     <div class="plan-price">KES ${p.price} <span>/ ${durationStr}</span></div>
@@ -1095,82 +996,117 @@ function generateClientSkeletonHtml(organization) {
             background: rgba(0,200,83,0.2); color: var(--primary-color);
             padding: 2px 12px; border-radius: 20px; font-size: 12px; font-weight: 600;
         }
-        .payment-section {
-            background: rgba(255,255,255,0.05);
-            backdrop-filter: blur(10px);
-            border-radius: 16px;
-            padding: 24px;
-            margin-top: 30px;
-            border: 1px solid rgba(255,255,255,0.08);
+        .payment-modal-overlay {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0,0,0,0.85); backdrop-filter: blur(8px);
+            display: none; align-items: center; justify-content: center;
+            z-index: 999; padding: 20px;
         }
-        .payment-section h2 { color: var(--primary-color); margin-bottom: 16px; }
-        .form-group { margin-bottom: 16px; }
-        .form-group label { display: block; color: #aaa; font-size: 14px; margin-bottom: 4px; }
-        .form-group input {
+        .payment-modal-overlay.active { display: flex; }
+        .payment-modal {
+            background: #1a1a2e; border-radius: 20px; padding: 32px;
+            max-width: 440px; width: 100%;
+            border: 1px solid rgba(255,255,255,0.06);
+            box-shadow: 0 40px 100px rgba(0,0,0,0.6);
+            animation: modalSlideUp 0.35s ease; position: relative;
+        }
+        @keyframes modalSlideUp {
+            from { opacity: 0; transform: translateY(30px) scale(0.95); }
+            to { opacity: 1; transform: translateY(0) scale(1); }
+        }
+        .payment-modal .modal-close {
+            position: absolute; top: 14px; right: 18px;
+            background: none; border: none; color: #666;
+            font-size: 24px; cursor: pointer; transition: 0.2s;
+        }
+        .payment-modal .modal-close:hover { color: #fff; }
+        .payment-modal .plan-detail { text-align: center; margin: 10px 0 20px 0; }
+        .payment-modal .plan-detail .name { font-size: 22px; font-weight: bold; color: #fff; }
+        .payment-modal .plan-detail .price { font-size: 32px; font-weight: bold; color: var(--primary-color); margin-top: 4px; }
+        .payment-modal .plan-detail .duration { color: #888; font-size: 14px; }
+        .payment-modal .form-group { margin-bottom: 16px; }
+        .payment-modal .form-group label { display: block; color: #aaa; font-size: 13px; margin-bottom: 6px; font-weight: 600; }
+        .payment-modal .form-group input {
             width: 100%; padding: 12px 16px;
-            background: rgba(0,0,0,0.3);
-            border: 1px solid rgba(255,255,255,0.1);
-            border-radius: 8px;
-            color: #fff; font-size: 16px; outline: none;
+            background: #0a0a1a; border: 2px solid rgba(255,255,255,0.06);
+            border-radius: 10px; color: #fff; font-size: 16px;
+            outline: none; transition: 0.25s;
         }
-        .form-group input:focus { border-color: var(--primary-color); }
-        .form-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-        @media (max-width: 600px) { .form-row { grid-template-columns: 1fr; } }
-        .btn {
-            padding: 14px 32px;
-            background: var(--primary-color);
-            color: var(--button-text-color);
-            border: none;
-            border-radius: 8px;
-            font-size: 16px;
-            font-weight: bold;
-            cursor: pointer;
-            transition: 0.2s;
-            width: 100%;
+        .payment-modal .form-group input:focus { border-color: var(--primary-color); box-shadow: 0 0 0 3px rgba(0,200,83,0.06); }
+        .payment-modal .btn {
+            width: 100%; padding: 14px;
+            background: var(--primary-color); color: var(--button-text-color);
+            border: none; border-radius: 10px;
+            font-size: 16px; font-weight: bold; cursor: pointer; transition: 0.2s;
         }
-        .btn:hover { opacity: 0.8; transform: scale(1.01); }
-        .btn:disabled { opacity: 0.5; cursor: not-allowed; }
-        .btn-secondary { background: rgba(255,255,255,0.1); color: #fff; }
-        .btn-secondary:hover { background: rgba(255,255,255,0.2); }
-        .status-box { margin-top: 16px; padding: 16px; border-radius: 8px; display: none; }
-        .status-box.show { display: block; }
-        .status-box.success { background: rgba(0,200,83,0.1); border: 1px solid var(--primary-color); color: var(--primary-color); }
-        .status-box.error { background: rgba(255,68,68,0.1); border: 1px solid #ff4444; color: #ff4444; }
-        .status-box.info { background: rgba(33,150,243,0.1); border: 1px solid #2196f3; color: #2196f3; }
-        .credentials-box {
-            background: rgba(0,0,0,0.3);
-            border-radius: 12px;
-            padding: 20px;
-            margin-top: 16px;
-            border: 1px solid rgba(255,255,255,0.05);
+        .payment-modal .btn:hover { opacity: 0.85; transform: scale(1.01); }
+        .payment-modal .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+        .payment-modal .error-msg { color: #ff4444; font-size: 13px; margin-top: 8px; display: none; text-align: center; }
+        .payment-modal .error-msg.show { display: block; }
+        .payment-modal .test-hint { text-align: center; color: #555; font-size: 11px; margin-top: 12px; border-top: 1px solid rgba(255,255,255,0.04); padding-top: 12px; }
+        .success-overlay {
+            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
+            background: var(--bg-gradient);
+            display: none; flex-direction: column; align-items: center; justify-content: center;
+            z-index: 1000; padding: 40px 20px;
+            animation: fadeIn 0.6s ease;
         }
-        .credentials-box .row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid rgba(255,255,255,0.03); }
-        .credentials-box .label { color: #888; }
-        .credentials-box .value { color: #fff; font-family: monospace; }
-        .loading {
-            display: inline-block; width: 20px; height: 20px;
-            border: 3px solid rgba(255,255,255,0.1); border-top-color: var(--primary-color);
-            border-radius: 50%; animation: spin 0.8s linear infinite; vertical-align: middle; margin-right: 8px;
-        }
-        @keyframes spin { to { transform: rotate(360deg); } }
-        .voucher-section { margin-top: 20px; padding: 16px; background: rgba(0,0,0,0.2); border-radius: 8px; border: 1px solid rgba(255,255,255,0.05); }
-        .voucher-section .form-row { display: flex; gap: 12px; }
-        .voucher-section .form-row input { flex: 1; }
-        .voucher-section .form-row .btn { width: auto; padding: 12px 24px; }
-        .footer { text-align: center; padding: 30px 20px; color: #555; font-size: 14px; border-top: 1px solid rgba(255,255,255,0.05); margin-top: 30px; }
+        .success-overlay.active { display: flex; }
+        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+        .success-overlay .logo { max-width: 120px; max-height: 70px; margin-bottom: 12px; display: none; }
+        .success-overlay .icon { font-size: 72px; margin-bottom: 12px; }
+        .success-overlay .title { font-size: 36px; font-weight: 700; color: var(--primary-color); text-align: center; }
+        .success-overlay .subtitle { font-size: 18px; color: #aaa; text-align: center; margin-top: 4px; }
+        .success-overlay .business-name { font-size: 22px; color: #fff; margin-top: 8px; text-align: center; }
+        .success-overlay .timer-container { margin: 25px 0 10px 0; text-align: center; padding: 25px 40px; background: rgba(0,0,0,0.3); border-radius: 16px; border: 1px solid rgba(255,255,255,0.05); }
+        .success-overlay .timer-label { color: #888; font-size: 14px; text-transform: uppercase; letter-spacing: 2px; }
+        .success-overlay .timer { font-size: 56px; font-weight: 700; color: var(--primary-color); font-family: 'Courier New', monospace; letter-spacing: 4px; margin-top: 4px; }
+        .success-overlay .timer.expired { color: #ff4444; }
+        .success-overlay .enjoy-text { color: var(--primary-color); font-size: 18px; margin-top: 16px; opacity: 0.9; text-align: center; }
+        .success-overlay .credentials { background: rgba(0,0,0,0.3); border-radius: 12px; padding: 16px 24px; margin-top: 16px; border: 1px solid rgba(255,255,255,0.05); width: 100%; max-width: 400px; }
+        .success-overlay .credentials .row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.03); }
+        .success-overlay .credentials .row:last-child { border-bottom: none; }
+        .success-overlay .credentials .label { color: #888; font-size: 13px; }
+        .success-overlay .credentials .value { color: #fff; font-family: monospace; font-size: 13px; }
+        .success-overlay .auto-close { color: #555; font-size: 12px; margin-top: 20px; animation: pulse 2s infinite; }
+        @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
+        .success-overlay .powered-by { color: #444; font-size: 12px; margin-top: 30px; }
+        .success-overlay .powered-by .brand { color: var(--primary-color); font-weight: bold; }
+        .check-section { margin-top: 30px; text-align: center; }
+        .check-section .btn { padding: 10px 28px; background: rgba(255,255,255,0.08); color: #fff; border: 1px solid rgba(255,255,255,0.05); border-radius: 8px; font-size: 14px; cursor: pointer; transition: 0.2s; font-family: inherit; }
+        .check-section .btn:hover { background: rgba(255,255,255,0.12); }
+        .check-section .result { margin-top: 12px; font-size: 14px; color: #888; }
+        .check-section .result.success { color: var(--primary-color); }
+        .check-section .result.error { color: #ff4444; }
         .toast {
-            position: fixed; bottom: 30px; right: 30px; padding: 16px 24px; border-radius: 12px;
+            position: fixed; bottom: 30px; right: 30px;
+            padding: 14px 22px; border-radius: 12px;
             background: #1a1a2e; border: 1px solid rgba(255,255,255,0.05);
             color: #fff; font-size: 14px; z-index: 999;
-            transform: translateY(100px); opacity: 0; transition: 0.3s ease; max-width: 400px;
+            transform: translateY(100px); opacity: 0;
+            transition: 0.35s ease; max-width: 400px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.4);
         }
         .toast.show { transform: translateY(0); opacity: 1; }
         .toast.success { border-color: var(--primary-color); }
         .toast.error { border-color: #ff4444; }
         .toast.info { border-color: #2196f3; }
+        @media (max-width: 600px) {
+            .header h1 { font-size: 24px; }
+            .plans-grid { grid-template-columns: 1fr 1fr; gap: 12px; }
+            .plan-card { padding: 16px; }
+            .plan-card .plan-name { font-size: 16px; }
+            .plan-card .plan-price { font-size: 22px; }
+            .payment-modal { padding: 24px 20px; }
+            .success-overlay .timer { font-size: 38px; }
+            .success-overlay .title { font-size: 28px; }
+            .success-overlay .timer-container { padding: 20px; min-width: 200px; }
+        }
+        @media (max-width: 400px) { .plans-grid { grid-template-columns: 1fr; } }
         ::-webkit-scrollbar { width: 6px; }
         ::-webkit-scrollbar-track { background: var(--accent-color); }
         ::-webkit-scrollbar-thumb { background: #2a2a4a; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #3a3a5a; }
     </style>
 </head>
 <body>
@@ -1181,76 +1117,82 @@ function generateClientSkeletonHtml(organization) {
         <p id="tagline">${tagline}</p>
     </div>
 
-    <div class="container">
+    <div class="container" id="mainContainer">
         <h2 style="color:var(--primary-color); margin-bottom:8px;">📶 Choose Your Plan</h2>
         <p style="color:#888; margin-bottom:16px;">Select a package that fits your needs</p>
         <div class="plans-grid" id="plansGrid">
-            <div style="text-align:center;padding:40px;color:#888;">
-                <span class="loading"></span> Loading plans...
+            <div style="text-align:center;padding:40px;color:#888;grid-column:1/-1;">
+                <span class="loading" style="display:inline-block;width:20px;height:20px;border:3px solid rgba(255,255,255,0.1);border-top-color:var(--primary-color);border-radius:50%;animation:spin 0.8s linear infinite;vertical-align:middle;margin-right:8px;"></span>
+                Loading plans...
             </div>
         </div>
-
-        <div class="payment-section" id="paymentSection">
-            <h2>💳 Pay with M-Pesa</h2>
-            <p style="color:#888;font-size:14px;margin-bottom:16px;">
-                Selected plan: <strong id="selectedPlanName">None</strong>
-            </p>
-            <div class="form-row">
-                <div class="form-group">
-                    <label>📱 Phone Number</label>
-                    <input type="tel" id="phoneNumber" placeholder="0712345678">
-                </div>
-                <div class="form-group">
-                    <label>💰 Amount (KES)</label>
-                    <input type="number" id="amountDisplay" readonly style="background:rgba(0,0,0,0.5);color:var(--primary-color);font-weight:bold;">
-                </div>
-            </div>
-            <button class="btn" id="payBtn" onclick="initiatePayment()">💳 Pay Now</button>
-            <div class="status-box" id="statusBox"></div>
-
-            <div class="voucher-section">
-                <p style="color:#888;font-size:14px;margin-bottom:8px;">🎟️ Have a voucher code?</p>
-                <div class="form-row">
-                    <input type="text" id="voucherInput" placeholder="Enter voucher code">
-                    <button class="btn btn-secondary" onclick="redeemVoucher()">Redeem</button>
-                </div>
-                <div id="voucherStatus" style="margin-top:8px;font-size:14px;"></div>
-            </div>
-        </div>
-
-        <div id="credentialsDisplay" style="display:none;">
-            <div class="credentials-box">
-                <h3 style="color:var(--primary-color);margin-bottom:12px;">✅ WiFi Credentials</h3>
-                <div class="row"><span class="label">Username</span><span class="value" id="credUsername">-</span></div>
-                <div class="row"><span class="label">Password</span><span class="value" id="credPassword">-</span></div>
-                <div class="row"><span class="label">Plan</span><span class="value" id="credPlan">-</span></div>
-                <div class="row"><span class="label">Expires</span><span class="value" id="credExpires">-</span></div>
-            </div>
-        </div>
-
-        <div style="margin-top:20px;text-align:center;">
-            <button class="btn btn-secondary" onclick="checkActive()" style="width:auto;padding:10px 24px;">
-                🔍 Check My Active Plan
-            </button>
-            <div id="checkResult" style="margin-top:12px;font-size:14px;"></div>
+        <div class="check-section">
+            <button class="btn" onclick="showCheckModal()">🔍 Check My Active Plan</button>
+            <div class="result" id="checkResult"></div>
         </div>
     </div>
 
-    <div class="footer">
-        <p>© 2024 ${businessName} — All rights reserved</p>
-        <p style="font-size:12px;color:#333;">Support: ${supportPhone} | ${supportEmail}</p>
+    <div class="payment-modal-overlay" id="paymentModal">
+        <div class="payment-modal">
+            <button class="modal-close" onclick="closePaymentModal()">✕</button>
+            <div class="plan-detail">
+                <div class="name" id="modalPlanName">2 Hours</div>
+                <div class="price" id="modalPlanPrice">KES 10</div>
+                <div class="duration" id="modalPlanDuration">Valid for 2 hours</div>
+            </div>
+            <div class="form-group">
+                <label>📱 Phone Number</label>
+                <input type="tel" id="modalPhone" placeholder="0712345678" autofocus>
+            </div>
+            <button class="btn" id="modalPayBtn" onclick="modalPay()">💳 Pay Now</button>
+            <div class="error-msg" id="modalError">Please enter a valid phone number</div>
+            <div class="test-hint">🔑 Test PIN: 12345</div>
+        </div>
+    </div>
+
+    <div class="payment-modal-overlay" id="checkModal">
+        <div class="payment-modal">
+            <button class="modal-close" onclick="closeCheckModal()">✕</button>
+            <h2 style="color:var(--primary-color);text-align:center;margin-bottom:16px;">🔍 Check Active Plan</h2>
+            <div class="form-group">
+                <label>📱 Phone Number</label>
+                <input type="tel" id="checkPhone" placeholder="0712345678">
+            </div>
+            <button class="btn" onclick="checkActivePlan()">🔍 Check Status</button>
+            <div id="checkModalResult" style="margin-top:12px;font-size:14px;text-align:center;color:#888;"></div>
+        </div>
+    </div>
+
+    <div class="success-overlay" id="successOverlay">
+        ${logo ? `<img src="${logo}" alt="${businessName}" class="logo">` : ''}
+        <div class="icon">🎉</div>
+        <div class="title">You're Connected!</div>
+        <div class="subtitle">Enjoy your high-speed internet</div>
+        <div class="business-name" id="successBusinessName">${businessName}</div>
+        <div class="timer-container">
+            <div class="timer-label">⏱ Time Remaining</div>
+            <div class="timer" id="successTimer">--:--:--</div>
+        </div>
+        <div class="credentials" id="successCredentials">
+            <div class="row"><span class="label">Username</span><span class="value" id="credUsername">-</span></div>
+            <div class="row"><span class="label">Password</span><span class="value" id="credPassword">-</span></div>
+            <div class="row"><span class="label">Plan</span><span class="value" id="credPlan">-</span></div>
+        </div>
+        <div class="enjoy-text" id="enjoyText">🌐 Enjoy your browsing!</div>
+        <div class="auto-close">⏳ This page will close automatically when your plan expires</div>
+        <div class="powered-by">Powered by <span class="brand" id="brandName">${businessName}</span></div>
     </div>
 
     <div class="toast" id="toast">
-        <span class="toast-icon">✅</span>
+        <span id="toastIcon">✅</span>
         <span id="toastMessage">Success!</span>
     </div>
 
     <script>
         // ============================================================
-        // CONFIGURATION - FIXED FOR LOCAL & REMOTE (MIKROTIK SUPPORT)
+        // CONFIGURATION
         // ============================================================
-        console.log('🌐 Client Page Loading...');
+        console.log('🌐 Customer Page Loading...');
         console.log('📡 Current Host:', window.location.hostname);
 
         // THE RENDER URL - CHANGE THIS TO YOUR ACTUAL URL
@@ -1260,7 +1202,7 @@ function generateClientSkeletonHtml(organization) {
         const isLocal = currentHost === 'localhost' || 
                        currentHost === '127.0.0.1' || 
                        currentHost === '' || 
-                       currentHost === '192.168.88.1' ||  // MikroTik hotspot
+                       currentHost === '192.168.88.1' ||
                        window.location.protocol === 'file:';
 
         let API_URL;
@@ -1277,20 +1219,53 @@ function generateClientSkeletonHtml(organization) {
         // ============================================================
         // ORGANIZATION ID
         // ============================================================
-        const ORG_ID = '${orgId}';
+        const pathParts = window.location.pathname.split('/');
+        let ORG_ID = '';
+        for (const part of pathParts) {
+            if (part.startsWith('CLIENT_')) {
+                ORG_ID = part;
+                break;
+            }
+        }
+        if (!ORG_ID) {
+            const urlParams = new URLSearchParams(window.location.search);
+            ORG_ID = urlParams.get('org') || '';
+        }
 
+        console.log('🏢 Organization ID:', ORG_ID);
+
+        // ============================================================
+        // STATE
+        // ============================================================
         let plans = [];
         let selectedPlan = null;
         let pollingInterval = null;
         let currentTransactionId = null;
+        let countdownInterval = null;
+        let credentials = null;
+        let pollingActive = false;
+
+        // ============================================================
+        // DOM REFS
+        // ============================================================
+        const plansGrid = document.getElementById('plansGrid');
+        const paymentModal = document.getElementById('paymentModal');
+        const checkModal = document.getElementById('checkModal');
+        const successOverlay = document.getElementById('successOverlay');
+        const toast = document.getElementById('toast');
+        const toastMsg = document.getElementById('toastMessage');
+        const toastIcon = document.getElementById('toastIcon');
 
         // ============================================================
         // INIT
         // ============================================================
         document.addEventListener('DOMContentLoaded', () => {
-            console.log('🚀 Client Page Initialized');
-            console.log('🏢 Organization ID:', ORG_ID);
-            loadOrganizationData();
+            console.log('🚀 Customer Page Initialized');
+            if (ORG_ID) {
+                loadOrganizationData();
+            } else {
+                plansGrid.innerHTML = '<div style="text-align:center;padding:40px;color:#ff4444;grid-column:1/-1;">❌ Organization ID not found in URL</div>';
+            }
         });
 
         // ============================================================
@@ -1311,27 +1286,46 @@ function generateClientSkeletonHtml(organization) {
                         const org = data.data;
                         plans = org.plans || [];
                         console.log('📦 Plans loaded:', plans.length);
-                        renderPlans();
+
                         if (org.primaryColor) {
                             document.documentElement.style.setProperty('--primary-color', org.primaryColor);
                         }
+                        if (org.secondaryColor) {
+                            document.documentElement.style.setProperty('--secondary-color', org.secondaryColor);
+                        }
+                        if (org.accentColor) {
+                            document.documentElement.style.setProperty('--accent-color', org.accentColor);
+                        }
+                        if (org.bgGradient) {
+                            document.documentElement.style.setProperty('--bg-gradient', org.bgGradient);
+                            document.querySelector('.header').style.background = org.bgGradient;
+                        }
                         if (org.businessName) {
-                            document.querySelector('.header h1').textContent = '🌐 ' + org.businessName;
+                            document.getElementById('businessName').textContent = '🌐 ' + org.businessName;
+                            document.getElementById('successBusinessName').textContent = org.businessName;
+                            document.getElementById('brandName').textContent = org.businessName;
+                            document.title = org.businessName + ' - WiFi Services';
                         }
                         if (org.businessTagline) {
                             document.getElementById('tagline').textContent = org.businessTagline;
                         }
+                        if (org.logo) {
+                            document.getElementById('logoImage').src = org.logo;
+                            document.getElementById('logoImage').style.display = 'block';
+                            document.getElementById('successLogo').src = org.logo;
+                            document.getElementById('successLogo').style.display = 'block';
+                        }
+
+                        renderPlans();
                     } else {
                         console.error('❌ Failed to load organization:', data.message);
-                        document.getElementById('plansGrid').innerHTML =
-                            '<div style="text-align:center;padding:40px;color:#ff4444;">❌ ' + (data.message ||
-                                'Failed to load plans') + '</div>';
+                        plansGrid.innerHTML = '<div style="text-align:center;padding:40px;color:#ff4444;grid-column:1/-1;">❌ ' + (data.message || 'Failed to load plans') + '</div>';
                     }
                 })
                 .catch(err => {
                     console.error('❌ Network error loading plans:', err);
-                    document.getElementById('plansGrid').innerHTML = \`
-                        <div style="text-align:center;padding:40px;color:#ff4444;">
+                    plansGrid.innerHTML = \`
+                        <div style="text-align:center;padding:40px;color:#ff4444;grid-column:1/-1;">
                             ❌ Network error loading plans<br>
                             <small style="color:#666;font-size:12px;">\${err.message}</small>
                             <br><br>
@@ -1345,20 +1339,19 @@ function generateClientSkeletonHtml(organization) {
         // RENDER PLANS
         // ============================================================
         function renderPlans() {
-            const grid = document.getElementById('plansGrid');
             if (!plans || plans.length === 0) {
-                grid.innerHTML = '<div style="text-align:center;padding:40px;color:#666;">No plans available</div>';
+                plansGrid.innerHTML = '<div style="text-align:center;padding:40px;color:#666;grid-column:1/-1;">No plans available</div>';
                 return;
             }
 
-            grid.innerHTML = plans.map(p => {
+            plansGrid.innerHTML = plans.map(p => {
                 const duration = p.duration_seconds || 3600;
                 const hours = Math.floor(duration / 3600);
                 const days = Math.floor(duration / 86400);
                 const durationStr = days > 0 ? \`\${days} day\${days > 1 ? 's' : ''}\` : \`\${hours} hour\${hours > 1 ? 's' : ''}\`;
                 const isPopular = p.id === '1_Week_1_Device' || p.id === '24_Hours';
                 return \`
-                    <div class="plan-card" onclick="selectPlan('\${p.id}')" data-plan-id="\${p.id}">
+                    <div class="plan-card" onclick="openPaymentModal('\${p.id}')" data-plan-id="\${p.id}">
                         \${isPopular ? '<div class="badge">🔥 Popular</div>' : ''}
                         <div class="plan-name">\${p.name}</div>
                         <div class="plan-price">KES \${p.price} <span>/ \${durationStr}</span></div>
@@ -1375,48 +1368,65 @@ function generateClientSkeletonHtml(organization) {
         }
 
         // ============================================================
-        // SELECT PLAN
+        // OPEN PAYMENT MODAL
         // ============================================================
-        function selectPlan(planId) {
+        function openPaymentModal(planId) {
             const plan = plans.find(p => p.id === planId);
-            if (!plan) return;
+            if (!plan) {
+                showToast('Plan not found', 'error');
+                return;
+            }
 
             selectedPlan = plan;
 
-            document.querySelectorAll('.plan-card').forEach(el => el.classList.remove('selected'));
-            const card = document.querySelector(\`.plan-card[data-plan-id="\${planId}"]\`);
-            if (card) card.classList.add('selected');
+            const duration = plan.duration_seconds || 3600;
+            const hours = Math.floor(duration / 3600);
+            const days = Math.floor(duration / 86400);
+            const durationStr = days > 0 ? \`\${days} day\${days > 1 ? 's' : ''}\` : \`\${hours} hour\${hours > 1 ? 's' : ''}\`;
 
-            document.getElementById('selectedPlanName').textContent = plan.name;
-            document.getElementById('amountDisplay').value = plan.price;
+            document.getElementById('modalPlanName').textContent = plan.name;
+            document.getElementById('modalPlanPrice').textContent = 'KES ' + plan.price;
+            document.getElementById('modalPlanDuration').textContent = 'Valid for ' + durationStr;
+            document.getElementById('modalPhone').value = '';
+            document.getElementById('modalError').classList.remove('show');
 
-            document.getElementById('statusBox').className = 'status-box';
-            document.getElementById('statusBox').textContent = '';
-            document.getElementById('credentialsDisplay').style.display = 'none';
+            paymentModal.classList.add('active');
+            setTimeout(() => {
+                document.getElementById('modalPhone').focus();
+            }, 300);
         }
 
-        // ============================================================
-        // PAYMENT
-        // ============================================================
-        function initiatePayment() {
-            if (!selectedPlan) {
-                showToast('⚠️ Please select a plan first', 'error');
-                return;
-            }
+        function closePaymentModal() {
+            paymentModal.classList.remove('active');
+            document.getElementById('modalError').classList.remove('show');
+        }
 
-            const phone = document.getElementById('phoneNumber').value.trim();
+        paymentModal.addEventListener('click', function(e) {
+            if (e.target === this) closePaymentModal();
+        });
+
+        document.getElementById('modalPhone').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') modalPay();
+        });
+
+        // ============================================================
+        // MODAL PAYMENT
+        // ============================================================
+        function modalPay() {
+            const phone = document.getElementById('modalPhone').value.trim();
+            const errorEl = document.getElementById('modalError');
+
             if (!phone || phone.length < 10) {
-                showToast('📱 Please enter a valid phone number (e.g. 0712345678)', 'error');
+                errorEl.textContent = '📱 Please enter a valid phone number (e.g. 0712345678)';
+                errorEl.classList.add('show');
                 return;
             }
 
-            const btn = document.getElementById('payBtn');
-            btn.disabled = true;
-            btn.innerHTML = '<span class="loading"></span> Processing...';
+            errorEl.classList.remove('show');
 
-            const statusBox = document.getElementById('statusBox');
-            statusBox.className = 'status-box show info';
-            statusBox.innerHTML = '⏳ Initiating payment... Please wait.';
+            const btn = document.getElementById('modalPayBtn');
+            btn.disabled = true;
+            btn.innerHTML = '<span class="loading" style="display:inline-block;width:20px;height:20px;border:3px solid rgba(0,0,0,0.1);border-top-color:#000;border-radius:50%;animation:spin 0.8s linear infinite;vertical-align:middle;margin-right:8px;"></span> Processing...';
 
             const url = API_URL + '/payment/initiate';
             console.log('📤 Sending payment to:', url);
@@ -1437,226 +1447,277 @@ function generateClientSkeletonHtml(organization) {
 
                 if (data.success) {
                     if (data.isFree) {
-                        statusBox.className = 'status-box show success';
-                        statusBox.innerHTML = '🎉 Free plan activated! Check your credentials below.';
-                        document.getElementById('credentialsDisplay').style.display = 'block';
+                        closePaymentModal();
+                        showToast('🎉 Free plan activated!', 'success');
                         fetchCredentials(data.transactionId);
-                        showToast('✅ Free plan activated!', 'success');
                         return;
                     }
 
                     currentTransactionId = data.transactionId;
-                    statusBox.className = 'status-box show info';
-                    statusBox.innerHTML = \`
-                        📱 STK Push sent to your phone.<br>
-                        <strong>Check your M-Pesa and enter PIN to complete payment.</strong><br>
-                        <small>Waiting for confirmation...</small>
-                        <div style="margin-top:8px;"><span class="loading"></span> Waiting for payment...</div>
-                    \`;
-
+                    closePaymentModal();
                     showToast('📱 STK Push sent! Check your phone.', 'info');
                     startPolling(data.transactionId);
 
                 } else {
-                    statusBox.className = 'status-box show error';
-                    statusBox.innerHTML = '❌ ' + (data.message || 'Payment failed. Please try again.');
-                    showToast('❌ Payment failed: ' + data.message, 'error');
+                    errorEl.textContent = '❌ ' + (data.message || 'Payment failed. Please try again.');
+                    errorEl.classList.add('show');
+                    showToast('❌ Payment failed', 'error');
                 }
             })
             .catch(err => {
                 console.error('Payment error:', err);
                 btn.disabled = false;
                 btn.innerHTML = '💳 Pay Now';
-                statusBox.className = 'status-box show error';
-                statusBox.innerHTML = '❌ Network error. Please check your connection.';
+                errorEl.textContent = '❌ Network error. Please try again.';
+                errorEl.classList.add('show');
                 showToast('❌ Network error', 'error');
             });
         }
 
         // ============================================================
-        // POLLING
+        // POLLING - FIXED VERSION
         // ============================================================
         function startPolling(transactionId) {
-            if (pollingInterval) clearInterval(pollingInterval);
+            // Clear any existing polling
+            if (pollingInterval) {
+                clearInterval(pollingInterval);
+                pollingInterval = null;
+            }
 
+            if (pollingActive) {
+                console.log('⚠️ Polling already active, stopping previous...');
+                return;
+            }
+
+            pollingActive = true;
             let attempts = 0;
-            const maxAttempts = 30;
+            const maxAttempts = 40;
+
+            showToast('⏳ Waiting for payment confirmation...', 'info');
 
             pollingInterval = setInterval(() => {
                 attempts++;
+                console.log(\`⏳ Polling attempt \${attempts}/\${maxAttempts} for transaction: \${transactionId}\`);
+
                 if (attempts > maxAttempts) {
                     clearInterval(pollingInterval);
-                    const statusBox = document.getElementById('statusBox');
-                    statusBox.className = 'status-box show error';
-                    statusBox.innerHTML = '⏱️ Payment timed out. Please try again or contact support.';
-                    showToast('⏱️ Payment timeout', 'error');
+                    pollingInterval = null;
+                    pollingActive = false;
+                    showToast('⏱️ Payment timed out. Please check your transaction status.', 'error');
                     return;
                 }
 
                 fetch(API_URL + '/transaction/' + transactionId)
                     .then(r => r.json())
                     .then(data => {
+                        console.log('📥 Polling response:', data);
+                        
                         if (data.success) {
                             const tx = data.data;
+                            console.log('📊 Transaction status:', tx.status);
+                            
                             if (tx.status === 'completed') {
+                                // SUCCESS - Stop polling immediately
                                 clearInterval(pollingInterval);
-                                const statusBox = document.getElementById('statusBox');
-                                statusBox.className = 'status-box show success';
-                                statusBox.innerHTML = '🎉 Payment successful! Your WiFi credentials are ready.';
-                                document.getElementById('credentialsDisplay').style.display = 'block';
+                                pollingInterval = null;
+                                pollingActive = false;
+                                showToast('🎉 Payment successful!', 'success');
                                 fetchCredentials(transactionId);
-                                showToast('✅ Payment successful!', 'success');
-                            } else if (tx.status === 'failed' || tx.status === 'cancelled') {
+                                
+                            } else if (tx.status === 'cancelled') {
+                                // USER CANCELLED - Stop polling immediately
                                 clearInterval(pollingInterval);
-                                const statusBox = document.getElementById('statusBox');
-                                statusBox.className = 'status-box show error';
-                                statusBox.innerHTML = '❌ ' + (tx.errorDescription ||
-                                    'Payment failed. Please try again.');
-                                showToast('❌ Payment failed', 'error');
+                                pollingInterval = null;
+                                pollingActive = false;
+                                showToast('❌ Payment cancelled by user', 'error');
+                                console.log('⏱️ User cancelled transaction:', transactionId);
+                                
+                            } else if (tx.status === 'failed') {
+                                // PAYMENT FAILED - Stop polling immediately
+                                clearInterval(pollingInterval);
+                                pollingInterval = null;
+                                pollingActive = false;
+                                const errorMsg = tx.errorDescription || 'Payment failed. Please try again.';
+                                showToast('❌ ' + errorMsg, 'error');
+                                console.log('❌ Payment failed:', errorMsg);
+                                
+                            } else if (tx.status === 'pending') {
+                                // Still pending - continue polling
+                                console.log('⏳ Transaction still pending...');
                             }
+                        } else {
+                            // API returned error - continue polling
+                            console.log('⚠️ Polling API error:', data.message);
                         }
                     })
-                    .catch(console.error);
+                    .catch(err => {
+                        console.error('❌ Polling fetch error:', err);
+                        // Don't stop polling on network errors
+                    });
             }, 3000);
         }
 
         // ============================================================
-        // FETCH CREDENTIALS
+        // FETCH CREDENTIALS & SHOW SUCCESS
         // ============================================================
         function fetchCredentials(transactionId) {
             fetch(API_URL + '/get-credentials/' + transactionId)
                 .then(r => r.json())
                 .then(data => {
                     if (data.success) {
-                        document.getElementById('credUsername').textContent = data.username || 'N/A';
-                        document.getElementById('credPassword').textContent = data.password || 'N/A';
-                        document.getElementById('credPlan').textContent = data.plan || 'N/A';
-                        document.getElementById('credExpires').textContent = data.expiresAt ? new Date(data
-                            .expiresAt).toLocaleString() : 'N/A';
+                        credentials = {
+                            username: data.username || 'N/A',
+                            password: data.password || 'N/A',
+                            plan: data.plan || 'N/A',
+                            expiresAt: data.expiresAt
+                        };
+                        showSuccessScreen(credentials);
                     }
                 })
                 .catch(console.error);
         }
 
         // ============================================================
+        // SHOW SUCCESS FULL-SCREEN
+        // ============================================================
+        function showSuccessScreen(cred) {
+            document.getElementById('mainContainer').style.display = 'none';
+            document.querySelector('.header').style.display = 'none';
+
+            document.getElementById('credUsername').textContent = cred.username;
+            document.getElementById('credPassword').textContent = cred.password;
+            document.getElementById('credPlan').textContent = cred.plan;
+
+            successOverlay.classList.add('active');
+
+            if (cred.expiresAt) {
+                startCountdown(cred.expiresAt);
+            }
+        }
+
+        // ============================================================
+        // COUNTDOWN TIMER
+        // ============================================================
+        function startCountdown(expiresAt) {
+            if (countdownInterval) clearInterval(countdownInterval);
+
+            const timerEl = document.getElementById('successTimer');
+
+            function update() {
+                const now = Date.now();
+                const expiry = new Date(expiresAt).getTime();
+                const diff = Math.max(0, expiry - now);
+
+                if (diff <= 0) {
+                    timerEl.textContent = '00:00:00';
+                    timerEl.classList.add('expired');
+                    clearInterval(countdownInterval);
+                    setTimeout(() => {
+                        try { window.close(); } catch (e) {
+                            document.getElementById('enjoyText').textContent = '⏰ Your plan has expired. Please reconnect.';
+                            document.querySelector('.auto-close').textContent = '🔄 Refresh to purchase a new plan';
+                        }
+                    }, 3000);
+                    return;
+                }
+
+                timerEl.classList.remove('expired');
+                const hours = Math.floor(diff / 3600000);
+                const mins = Math.floor((diff % 3600000) / 60000);
+                const secs = Math.floor((diff % 60000) / 1000);
+                timerEl.textContent =
+                    String(hours).padStart(2, '0') + ':' +
+                    String(mins).padStart(2, '0') + ':' +
+                    String(secs).padStart(2, '0');
+            }
+
+            update();
+            countdownInterval = setInterval(update, 1000);
+        }
+
+        // ============================================================
         // CHECK ACTIVE PLAN
         // ============================================================
-        function checkActive() {
-            const phone = document.getElementById('phoneNumber').value.trim();
+        function showCheckModal() {
+            document.getElementById('checkPhone').value = '';
+            document.getElementById('checkModalResult').textContent = '';
+            checkModal.classList.add('active');
+            setTimeout(() => {
+                document.getElementById('checkPhone').focus();
+            }, 300);
+        }
+
+        function closeCheckModal() {
+            checkModal.classList.remove('active');
+        }
+
+        checkModal.addEventListener('click', function(e) {
+            if (e.target === this) closeCheckModal();
+        });
+
+        document.getElementById('checkPhone').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') checkActivePlan();
+        });
+
+        function checkActivePlan() {
+            const phone = document.getElementById('checkPhone').value.trim();
+            const resultEl = document.getElementById('checkModalResult');
+
             if (!phone || phone.length < 10) {
-                showToast('📱 Please enter your phone number first', 'error');
+                resultEl.textContent = '📱 Please enter a valid phone number';
+                resultEl.style.color = '#ff4444';
                 return;
             }
 
-            const result = document.getElementById('checkResult');
-            result.innerHTML = '<span class="loading"></span> Checking...';
-            result.style.color = '#888';
+            resultEl.innerHTML = '<span class="loading" style="display:inline-block;width:16px;height:16px;border:2px solid rgba(255,255,255,0.1);border-top-color:var(--primary-color);border-radius:50%;animation:spin 0.8s linear infinite;vertical-align:middle;margin-right:8px;"></span> Checking...';
+            resultEl.style.color = '#888';
 
             fetch(API_URL + '/check-active?phone=' + encodeURIComponent(phone))
                 .then(r => r.json())
                 .then(data => {
                     if (data.success && data.active) {
-                        result.innerHTML = \`
+                        resultEl.innerHTML = \`
                             ✅ <strong>Active Plan Found!</strong><br>
                             Plan: \${data.data.planName}<br>
-                            Expires: \${new Date(data.data.expiresAt).toLocaleString()}<br>
-                            Username: <code>\${data.data.username}</code><br>
-                            Password: <code>\${data.data.password}</code>
+                            Expires: \${new Date(data.data.expiresAt).toLocaleString()}
                         \`;
-                        result.style.color = 'var(--primary-color)';
-                        document.getElementById('credentialsDisplay').style.display = 'block';
-                        document.getElementById('credUsername').textContent = data.data.username || 'N/A';
-                        document.getElementById('credPassword').textContent = data.data.password || 'N/A';
-                        document.getElementById('credPlan').textContent = data.data.planName || 'N/A';
-                        document.getElementById('credExpires').textContent = data.data.expiresAt ? new Date(data
-                            .data.expiresAt).toLocaleString() : 'N/A';
+                        resultEl.style.color = 'var(--primary-color)';
+                        credentials = {
+                            username: data.data.username,
+                            password: data.data.password,
+                            plan: data.data.planName,
+                            expiresAt: data.data.expiresAt
+                        };
+                        closeCheckModal();
+                        showSuccessScreen(credentials);
                     } else {
-                        result.innerHTML = '❌ No active plan found for this number.';
-                        result.style.color = '#ff4444';
-                        document.getElementById('credentialsDisplay').style.display = 'none';
+                        resultEl.textContent = '❌ No active plan found for this number.';
+                        resultEl.style.color = '#ff4444';
                     }
                 })
                 .catch(err => {
                     console.error(err);
-                    result.innerHTML = '❌ Network error checking status';
-                    result.style.color = '#ff4444';
+                    resultEl.textContent = '❌ Network error checking status';
+                    resultEl.style.color = '#ff4444';
                 });
-        }
-
-        // ============================================================
-        // REDEEM VOUCHER
-        // ============================================================
-        function redeemVoucher() {
-            const code = document.getElementById('voucherInput').value.trim().toUpperCase();
-            if (!code) {
-                showToast('Please enter a voucher code', 'error');
-                return;
-            }
-
-            const status = document.getElementById('voucherStatus');
-            status.innerHTML = '<span class="loading"></span> Redeeming...';
-            status.style.color = '#888';
-
-            fetch(API_URL + '/voucher/redeem', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ code, phoneNumber: document.getElementById('phoneNumber').value.trim() })
-            })
-            .then(r => r.json())
-            .then(data => {
-                if (data.success) {
-                    status.innerHTML = '✅ Voucher redeemed successfully!';
-                    status.style.color = 'var(--primary-color)';
-                    document.getElementById('voucherInput').value = '';
-                    showToast('🎟️ Voucher redeemed!', 'success');
-                    document.getElementById('credentialsDisplay').style.display = 'block';
-                    if (data.data) {
-                        document.getElementById('credUsername').textContent = data.data.username || 'N/A';
-                        document.getElementById('credPassword').textContent = data.data.password || 'N/A';
-                        document.getElementById('credPlan').textContent = data.data.planName || 'N/A';
-                        document.getElementById('credExpires').textContent = data.data.expiresAt ? new Date(data
-                            .data.expiresAt).toLocaleString() : 'N/A';
-                    }
-                } else {
-                    status.innerHTML = '❌ ' + (data.message || 'Invalid voucher');
-                    status.style.color = '#ff4444';
-                    showToast('❌ ' + data.message, 'error');
-                }
-            })
-            .catch(err => {
-                console.error(err);
-                status.innerHTML = '❌ Network error';
-                status.style.color = '#ff4444';
-                showToast('Network error', 'error');
-            });
         }
 
         // ============================================================
         // TOAST
         // ============================================================
         function showToast(message, type = 'success') {
-            const toast = document.getElementById('toast');
-            const toastMsg = document.getElementById('toastMessage');
-            const icon = toast.querySelector('.toast-icon');
+            const icons = { success: '✅', error: '❌', info: 'ℹ️' };
 
             toast.className = 'toast ' + type;
-            icon.textContent = type === 'success' ? '✅' : type === 'error' ? '❌' : 'ℹ️';
+            toastIcon.textContent = icons[type] || '✅';
             toastMsg.textContent = message;
             toast.classList.add('show');
 
             clearTimeout(toast._timeout);
-            toast._timeout = setTimeout(() => toast.classList.remove('show'), 4000);
+            toast._timeout = setTimeout(() => {
+                toast.classList.remove('show');
+            }, 4000);
         }
-
-        // ============================================================
-        // ENTER KEY SUPPORT
-        // ============================================================
-        document.getElementById('phoneNumber').addEventListener('keydown', function(e) {
-            if (e.key === 'Enter') initiatePayment();
-        });
-        document.getElementById('voucherInput').addEventListener('keydown', function(e) {
-            if (e.key === 'Enter') redeemVoucher();
-        });
     </script>
 </body>
 </html>`;
@@ -1715,15 +1776,6 @@ const server = http.createServer(async (req, res) => {
                 return;
             }
             sendHtml(res, 404, `<h1>File not found</h1><p>GICH_wifi.html not found</p>`);
-            return;
-        }
-
-        // Serve client-signup.html
-        if (req.method === 'GET' && url.pathname === '/client-signup.html') {
-            if (serveHtmlFile(res, 'client-signup.html')) {
-                return;
-            }
-            sendHtml(res, 404, `<h1>File not found</h1><p>client-signup.html not found</p>`);
             return;
         }
 
@@ -1788,14 +1840,32 @@ const server = http.createServer(async (req, res) => {
             });
         }
 
-        // Get Transaction
+        // ============================================================
+        // GET TRANSACTION - FIXED (Returns full transaction data)
+        // ============================================================
         if (req.method === 'GET' && url.pathname.startsWith('/api/transaction/')) {
             const id = url.pathname.split('/').pop();
             const transaction = transactions.find(t => t.id === id);
             if (!transaction) {
                 return sendJson(res, 404, { success: false, message: 'Transaction not found' });
             }
-            return sendJson(res, 200, { success: true, data: transaction });
+            // Return full transaction with all status info
+            return sendJson(res, 200, { 
+                success: true, 
+                data: {
+                    id: transaction.id,
+                    status: transaction.status,
+                    errorDescription: transaction.errorDescription || null,
+                    phoneNumber: transaction.phoneNumber,
+                    amount: transaction.amount,
+                    planName: transaction.planName,
+                    mpesaCode: transaction.mpesaCode || null,
+                    expiresAt: transaction.expiresAt || null,
+                    mikrotikUsername: transaction.mikrotikUsername || null,
+                    mikrotikPassword: transaction.mikrotikPassword || null,
+                    completedAt: transaction.completedAt || null
+                }
+            });
         }
 
         // Get All Transactions (with phone filter)
@@ -1956,7 +2026,9 @@ const server = http.createServer(async (req, res) => {
             }
         }
 
-        // ===== MPESA CALLBACK =====
+        // ============================================================
+        // ===================== MPESA CALLBACK - FIXED =====================
+        // ============================================================
         if (req.method === 'POST' && url.pathname === '/api/mpesa-callback') {
             const callback = await readBody(req);
             console.log('📞 M-Pesa Callback Received:');
@@ -1994,7 +2066,13 @@ const server = http.createServer(async (req, res) => {
                 });
             }
             
+            // ============================================================
+            // FIX: ALWAYS update the transaction status and SAVE
+            // This ensures the client polling stops immediately
+            // ============================================================
+            
             if (resultCode === 0) {
+                // SUCCESS
                 transaction.status = 'completed';
                 transaction.mpesaCode = receipt || 'MPESA' + Date.now();
                 transaction.completedAt = new Date().toISOString();
@@ -2015,36 +2093,42 @@ const server = http.createServer(async (req, res) => {
                 });
                 
             } else if (resultCode === 1037) {
+                // USER CANCELLED - FIX: Mark as cancelled and SAVE immediately
                 transaction.status = 'cancelled';
-                transaction.errorDescription = resultDesc;
+                transaction.errorDescription = 'User cancelled the transaction';
                 transaction.errorCode = resultCode;
+                transaction.completedAt = new Date().toISOString();
                 saveTransactions();
                 
-                console.log(`⏱️ Payment cancelled by user: ${resultDesc}`);
+                console.log(`⏱️ Payment CANCELLED by user for transaction: ${transaction.id} - ${resultDesc}`);
                 return sendJson(res, 200, { 
                     ResultCode: resultCode, 
-                    ResultDesc: resultDesc 
+                    ResultDesc: 'User cancelled' 
                 });
                 
             } else if (resultCode === 2001) {
+                // INSUFFICIENT BALANCE
                 transaction.status = 'failed';
                 transaction.errorDescription = 'Insufficient M-Pesa balance. Please top up and try again.';
                 transaction.errorCode = resultCode;
+                transaction.completedAt = new Date().toISOString();
                 saveTransactions();
                 
-                console.log(`💰 Insufficient balance: ${resultDesc}`);
+                console.log(`💰 Insufficient balance for transaction: ${transaction.id}`);
                 return sendJson(res, 200, { 
                     ResultCode: resultCode, 
                     ResultDesc: 'Insufficient balance' 
                 });
                 
             } else {
+                // OTHER FAILURE
                 transaction.status = 'failed';
                 transaction.errorDescription = resultDesc || 'Payment failed';
                 transaction.errorCode = resultCode;
+                transaction.completedAt = new Date().toISOString();
                 saveTransactions();
                 
-                console.log(`❌ Payment failed: ${resultDesc}`);
+                console.log(`❌ Payment FAILED for transaction: ${transaction.id} - ${resultDesc}`);
                 return sendJson(res, 200, { 
                     ResultCode: resultCode, 
                     ResultDesc: resultDesc 
@@ -3124,331 +3208,6 @@ const server = http.createServer(async (req, res) => {
         }
 
         // ============================================================
-        // ===================== CLIENT SELF-SERVICE ENDPOINTS =====================
-        // ============================================================
-
-        // ===== CLIENT AUTH WITH GOOGLE =====
-        if (req.method === 'POST' && url.pathname === '/api/client/auth/google') {
-            const body = await readBody(req);
-            const { idToken, email, name, picture } = body;
-
-            if (!idToken || !email) {
-                return sendJson(res, 400, { success: false, message: 'Missing required fields' });
-            }
-
-            try {
-                // Verify Google token
-                const googleData = await verifyGoogleToken(idToken);
-                
-                if (googleData.email !== email) {
-                    return sendJson(res, 401, { success: false, message: 'Email mismatch' });
-                }
-
-                // Check if user exists
-                let user = getClientUserByEmail(email);
-                let organization = getOrganizationByEmail(email);
-
-                if (!user) {
-                    // Create new user
-                    user = {
-                        id: 'USER_' + Date.now() + Math.random().toString(36).substring(7),
-                        email: email,
-                        name: name || email.split('@')[0],
-                        picture: picture || '',
-                        createdAt: new Date().toISOString(),
-                        updatedAt: new Date().toISOString(),
-                        hasOrganization: !!organization
-                    };
-                    clientUsers.push(user);
-                    saveClientUsers();
-                }
-
-                // Generate JWT for client
-                const token = generateToken({
-                    email: email,
-                    userId: user.id,
-                    role: 'client',
-                    exp: Date.now() + 86400000 * 7 // 7 days
-                });
-
-                return sendJson(res, 200, {
-                    success: true,
-                    token: token,
-                    user: {
-                        email: user.email,
-                        name: user.name,
-                        picture: user.picture,
-                        hasOrganization: user.hasOrganization
-                    },
-                    organization: organization || null
-                });
-
-            } catch (error) {
-                console.error('Google auth error:', error);
-                return sendJson(res, 401, { success: false, message: 'Authentication failed: ' + error.message });
-            }
-        }
-
-        // ===== GET CLIENT PROFILE =====
-        if (req.method === 'GET' && url.pathname === '/api/client/me') {
-            if (!isClient(req)) {
-                return sendJson(res, 401, { success: false, message: 'Unauthorized' });
-            }
-            
-            const decoded = verifyToken(req.headers.authorization.replace('Bearer ', ''));
-            const user = getClientUserByEmail(decoded.email);
-            if (!user) {
-                return sendJson(res, 404, { success: false, message: 'User not found' });
-            }
-
-            const organization = getOrganizationByEmail(decoded.email);
-
-            return sendJson(res, 200, {
-                success: true,
-                user: {
-                    email: user.email,
-                    name: user.name,
-                    picture: user.picture,
-                    hasOrganization: user.hasOrganization
-                },
-                organization: organization || null
-            });
-        }
-
-        // ===== CREATE/UPDATE CLIENT ORGANIZATION =====
-        if (req.method === 'POST' && url.pathname === '/api/client/organization') {
-            if (!isClient(req)) {
-                return sendJson(res, 401, { success: false, message: 'Unauthorized' });
-            }
-            
-            const decoded = verifyToken(req.headers.authorization.replace('Bearer ', ''));
-            const body = await readBody(req);
-            const user = getClientUserByEmail(decoded.email);
-            if (!user) {
-                return sendJson(res, 404, { success: false, message: 'User not found' });
-            }
-
-            let organization = getOrganizationByEmail(decoded.email);
-
-            const {
-                businessName,
-                businessTagline,
-                logo,
-                primaryColor,
-                secondaryColor,
-                accentColor,
-                supportPhone,
-                supportEmail,
-                website,
-                plans: customPlans
-            } = body;
-
-            if (!businessName) {
-                return sendJson(res, 400, { success: false, message: 'Business name is required' });
-            }
-
-            if (!organization) {
-                // Create new organization
-                const clientId = generateOrgId();
-                organization = {
-                    id: clientId,
-                    name: businessName,
-                    businessName: businessName,
-                    email: decoded.email,
-                    phone: supportPhone || '',
-                    logo: logo || '',
-                    primaryColor: primaryColor || '#00c853',
-                    secondaryColor: secondaryColor || '#00e676',
-                    accentColor: accentColor || '#0f2027',
-                    textColor: '#ffffff',
-                    headerTextColor: '#ffffff',
-                    buttonTextColor: '#000000',
-                    bgGradient: 'linear-gradient(135deg, #0f2027, #203a43, #2c5364)',
-                    supportPhone: supportPhone || '',
-                    supportEmail: supportEmail || decoded.email,
-                    website: website || '',
-                    businessTagline: businessTagline || 'Fast • Secure • Reliable',
-                    mpesaTill: '',
-                    mpesaShortcode: SHORTCODE,
-                    status: 'active',
-                    createdAt: new Date().toISOString(),
-                    updatedAt: new Date().toISOString(),
-                    plans: customPlans || [
-                        { id: '2_Hours', name: '2 Hours', price: 10, devices: 1, shared_users: 1, duration_seconds: 7200 },
-                        { id: '5_Hours', name: '5 Hours', price: 20, devices: 1, shared_users: 1, duration_seconds: 18000 },
-                        { id: '24_Hours', name: '24 Hours', price: 80, devices: 1, shared_users: 1, duration_seconds: 86400 }
-                    ]
-                };
-                organizations.push(organization);
-                saveOrganizations();
-
-                user.hasOrganization = true;
-                saveClientUsers();
-
-                // Also add to clients for backward compatibility
-                const newClient = {
-                    id: organization.id,
-                    name: businessName,
-                    phone: supportPhone || '',
-                    email: decoded.email,
-                    businessName: businessName,
-                    status: 'active',
-                    createdAt: new Date().toISOString(),
-                    updatedAt: new Date().toISOString(),
-                    isOrganization: true,
-                    organizationId: organization.id
-                };
-                clients.push(newClient);
-                saveClients();
-
-                return sendJson(res, 200, {
-                    success: true,
-                    message: 'Organization created successfully!',
-                    organization: organization,
-                    clientId: organization.id
-                });
-            } else {
-                // Update existing organization
-                organization.businessName = businessName || organization.businessName;
-                organization.name = businessName || organization.name;
-                organization.businessTagline = businessTagline || organization.businessTagline;
-                organization.logo = logo || organization.logo;
-                organization.primaryColor = primaryColor || organization.primaryColor;
-                organization.secondaryColor = secondaryColor || organization.secondaryColor;
-                organization.accentColor = accentColor || organization.accentColor;
-                organization.supportPhone = supportPhone || organization.supportPhone;
-                organization.supportEmail = supportEmail || organization.supportEmail;
-                organization.website = website || organization.website;
-                if (customPlans && customPlans.length > 0) {
-                    organization.plans = customPlans;
-                }
-                organization.updatedAt = new Date().toISOString();
-
-                saveOrganizations();
-
-                // Update clients entry
-                const clientIndex = clients.findIndex(c => c.id === organization.id);
-                if (clientIndex !== -1) {
-                    clients[clientIndex].businessName = businessName || clients[clientIndex].businessName;
-                    clients[clientIndex].phone = supportPhone || clients[clientIndex].phone;
-                    clients[clientIndex].email = decoded.email;
-                    clients[clientIndex].updatedAt = new Date().toISOString();
-                    saveClients();
-                }
-
-                return sendJson(res, 200, {
-                    success: true,
-                    message: 'Organization updated successfully!',
-                    organization: organization
-                });
-            }
-        }
-
-        // ===== CLIENT GET THEIR VOUCHERS =====
-        if (req.method === 'GET' && url.pathname === '/api/client/vouchers') {
-            if (!isClient(req)) {
-                return sendJson(res, 401, { success: false, message: 'Unauthorized' });
-            }
-            
-            const decoded = verifyToken(req.headers.authorization.replace('Bearer ', ''));
-            const organization = getOrganizationByEmail(decoded.email);
-            if (!organization) {
-                return sendJson(res, 404, { success: false, message: 'Organization not found' });
-            }
-
-            const orgVouchers = vouchers.filter(v => v.organizationId === organization.id);
-
-            return sendJson(res, 200, {
-                success: true,
-                data: orgVouchers,
-                count: orgVouchers.length,
-                used: orgVouchers.filter(v => v.used).length,
-                unused: orgVouchers.filter(v => !v.used).length
-            });
-        }
-
-        // ===== CLIENT GENERATE VOUCHERS =====
-        if (req.method === 'POST' && url.pathname === '/api/client/voucher/generate') {
-            if (!isClient(req)) {
-                return sendJson(res, 401, { success: false, message: 'Unauthorized' });
-            }
-            
-            const decoded = verifyToken(req.headers.authorization.replace('Bearer ', ''));
-            const body = await readBody(req);
-            const { planId, count, duration_seconds } = body;
-
-            const organization = getOrganizationByEmail(decoded.email);
-            if (!organization) {
-                return sendJson(res, 404, { success: false, message: 'Organization not found' });
-            }
-
-            const plan = organization.plans.find(p => p.id === planId);
-            if (!plan) {
-                return sendJson(res, 400, { success: false, message: 'Invalid plan ID' });
-            }
-
-            const numVouchers = Math.min(count || 1, 100);
-            const generated = [];
-
-            for (let i = 0; i < numVouchers; i++) {
-                const code = generateVoucherCode();
-                const voucher = {
-                    code: code,
-                    planId: plan.id,
-                    planName: plan.name,
-                    duration_seconds: duration_seconds || plan.duration_seconds,
-                    devices: plan.devices || 1,
-                    organizationId: organization.id,
-                    used: false,
-                    usedBy: null,
-                    usedAt: null,
-                    expiresAt: null,
-                    createdAt: new Date().toISOString()
-                };
-                vouchers.push(voucher);
-                generated.push(code);
-            }
-            saveVouchers();
-
-            return sendJson(res, 200, {
-                success: true,
-                message: `Generated ${generated.length} vouchers`,
-                vouchers: generated,
-                count: generated.length
-            });
-        }
-
-        // ===== CLIENT GET TRANSACTIONS =====
-        if (req.method === 'GET' && url.pathname === '/api/client/transactions') {
-            if (!isClient(req)) {
-                return sendJson(res, 401, { success: false, message: 'Unauthorized' });
-            }
-            
-            const decoded = verifyToken(req.headers.authorization.replace('Bearer ', ''));
-            const organization = getOrganizationByEmail(decoded.email);
-            if (!organization) {
-                return sendJson(res, 404, { success: false, message: 'Organization not found' });
-            }
-
-            // Filter transactions by organization
-            const orgTransactions = transactions.filter(t => t.organizationId === organization.id);
-
-            return sendJson(res, 200, {
-                success: true,
-                data: orgTransactions,
-                count: orgTransactions.length,
-                summary: {
-                    total: orgTransactions.length,
-                    completed: orgTransactions.filter(t => t.status === 'completed').length,
-                    pending: orgTransactions.filter(t => t.status === 'pending').length,
-                    totalRevenue: orgTransactions
-                        .filter(t => t.status === 'completed')
-                        .reduce((sum, t) => sum + (t.amount || 0), 0)
-                }
-            });
-        }
-
-        // ============================================================
         // ===================== API INFO =====================
         // ============================================================
 
@@ -3496,14 +3255,6 @@ const server = http.createServer(async (req, res) => {
                         settings: 'GET/POST /api/master/settings',
                         generate_client_page: 'GET /api/master/generate-client-page/:orgId'
                     },
-                    client: {
-                        auth_google: 'POST /api/client/auth/google',
-                        profile: 'GET /api/client/me',
-                        organization: 'POST /api/client/organization',
-                        vouchers: 'GET /api/client/vouchers',
-                        generate_voucher: 'POST /api/client/voucher/generate',
-                        transactions: 'GET /api/client/transactions'
-                    },
                     client_pages: {
                         direct: 'GET /:orgId/',
                         with_html: 'GET /:orgId/client-page.html',
@@ -3518,8 +3269,7 @@ const server = http.createServer(async (req, res) => {
                     activeVouchers: vouchers.filter(v => !v.used).length,
                     totalClients: clients.length,
                     totalProducts: products.length,
-                    totalOrganizations: organizations.length,
-                    totalClientUsers: clientUsers.length
+                    totalOrganizations: organizations.length
                 }
             });
         }
@@ -3548,13 +3298,11 @@ server.listen(PORT, '0.0.0.0', () => {
     console.log('🔑 Test PIN: 12345');
     console.log(`🛡️ Admin PIN: ${ADMIN_PASSWORD ? '✅ Set' : '⚠️ NOT SET'}`);
     console.log(`👑 Master PIN: ${MASTER_PASSWORD ? '✅ Set' : '⚠️ NOT SET'}`);
-    console.log(`🔑 Google OAuth: ${GOOGLE_CLIENT_ID ? '✅ Configured' : '⚠️ NOT SET'}`);
     console.log('📋 JWT Auth: ✅ Enabled');
     console.log('👤 Client Management: ✅ Enabled');
     console.log('📦 Product Management: ✅ Enabled');
     console.log('🏢 Multi-Tenant: ✅ Enabled');
     console.log(`🏢 Organizations: ${organizations.length}`);
-    console.log(`👤 Client Users: ${clientUsers.length}`);
     console.log('========================================\n');
 });
 
