@@ -29,9 +29,9 @@ const JWT_SECRET = process.env.JWT_SECRET || crypto.randomBytes(32).toString('he
 console.log('\n========================================');
 console.log('🌐 GICH WiFi API');
 console.log('========================================');
-console.log(`   Port: ${PORT}`);
-console.log(`   Admin PIN: ${ADMIN_PASSWORD ? '✅ Configured' : '⚠️ NOT SET'}`);
-console.log(`   Master PIN: ${MASTER_PASSWORD ? '✅ Configured' : '⚠️ NOT SET'}`);
+console.log('   Port: ' + PORT);
+console.log('   Admin PIN: ' + (ADMIN_PASSWORD ? '✅ Configured' : '⚠️ NOT SET'));
+console.log('   Master PIN: ' + (MASTER_PASSWORD ? '✅ Configured' : '⚠️ NOT SET'));
 console.log('========================================\n');
 
 // ============================================================
@@ -39,9 +39,9 @@ console.log('========================================\n');
 // ============================================================
 
 function generateToken(payload) {
-    const header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
-    const body = Buffer.from(JSON.stringify(payload)).toString('base64url');
-    const signature = crypto.createHmac('sha256', JWT_SECRET)
+    var header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
+    var body = Buffer.from(JSON.stringify(payload)).toString('base64url');
+    var signature = crypto.createHmac('sha256', JWT_SECRET)
         .update(header + '.' + body)
         .digest('base64url');
     return header + '.' + body + '.' + signature;
@@ -49,8 +49,11 @@ function generateToken(payload) {
 
 function verifyToken(token) {
     try {
-        const [header, body, signature] = token.split('.');
-        const expectedSignature = crypto.createHmac('sha256', JWT_SECRET)
+        var parts = token.split('.');
+        var header = parts[0];
+        var body = parts[1];
+        var signature = parts[2];
+        var expectedSignature = crypto.createHmac('sha256', JWT_SECRET)
             .update(header + '.' + body)
             .digest('base64url');
         if (signature !== expectedSignature) return null;
@@ -64,7 +67,7 @@ function verifyToken(token) {
 // HTTPS AGENT
 // ============================================================
 
-const agent = new https.Agent({
+var agent = new https.Agent({
     rejectUnauthorized: false,
     keepAlive: true,
     timeout: 60000
@@ -74,31 +77,31 @@ const agent = new https.Agent({
 // DATA STORAGE
 // ============================================================
 
-const TRANSACTIONS_FILE = path.join(__dirname, 'transactions.json');
-const VOUCHERS_FILE = path.join(__dirname, 'vouchers.json');
-const PLANS_FILE = path.join(__dirname, 'plans.json');
-const SETTINGS_FILE = path.join(__dirname, 'settings.json');
-const THEMES_FILE = path.join(__dirname, 'themes.json');
-const CLIENTS_FILE = path.join(__dirname, 'clients.json');
-const PRODUCTS_FILE = path.join(__dirname, 'products.json');
-const ORGANIZATIONS_FILE = path.join(__dirname, 'organizations.json');
-const MASTER_SETTINGS_FILE = path.join(__dirname, 'master-settings.json');
+var TRANSACTIONS_FILE = path.join(__dirname, 'transactions.json');
+var VOUCHERS_FILE = path.join(__dirname, 'vouchers.json');
+var PLANS_FILE = path.join(__dirname, 'plans.json');
+var SETTINGS_FILE = path.join(__dirname, 'settings.json');
+var THEMES_FILE = path.join(__dirname, 'themes.json');
+var CLIENTS_FILE = path.join(__dirname, 'clients.json');
+var PRODUCTS_FILE = path.join(__dirname, 'products.json');
+var ORGANIZATIONS_FILE = path.join(__dirname, 'organizations.json');
+var MASTER_SETTINGS_FILE = path.join(__dirname, 'master-settings.json');
 
-let transactions = [];
-let vouchers = [];
-let plans = [];
-let settings = {};
-let themes = [];
-let clients = [];
-let products = [];
-let organizations = [];
-let masterSettings = {};
+var transactions = [];
+var vouchers = [];
+var plans = [];
+var settings = {};
+var themes = [];
+var clients = [];
+var products = [];
+var organizations = [];
+var masterSettings = {};
 
 // ============================================================
 // DEFAULT SETTINGS
 // ============================================================
 
-const DEFAULT_SETTINGS = {
+var DEFAULT_SETTINGS = {
     businessName: 'GICH WIFI',
     businessTagline: 'Fast • Secure • Reliable',
     supportPhone: '0796587763',
@@ -115,7 +118,7 @@ const DEFAULT_SETTINGS = {
     bgGradient: 'linear-gradient(135deg, #0f2027, #203a43, #2c5364)'
 };
 
-const DEFAULT_MASTER_SETTINGS = {
+var DEFAULT_MASTER_SETTINGS = {
     masterBusinessName: 'GICH WiFi Master',
     masterEmail: 'master@gichwifi.co.ke',
     masterPhone: '0796587763',
@@ -125,7 +128,7 @@ const DEFAULT_MASTER_SETTINGS = {
     createdAt: new Date().toISOString()
 };
 
-const DEFAULT_THEMES = [
+var DEFAULT_THEMES = [
     { id: 'default', name: 'Default Green', preview: '🌿', colors: { primary: '#00c853', secondary: '#00e676', accent: '#0f2027', text: '#ffffff', headerText: '#ffffff', buttonText: '#000000' }, gradient: 'linear-gradient(135deg, #0f2027, #203a43, #2c5364)' },
     { id: 'ocean', name: 'Ocean Blue', preview: '🌊', colors: { primary: '#0077be', secondary: '#00b4d8', accent: '#03045e', text: '#ffffff', headerText: '#ffffff', buttonText: '#000000' }, gradient: 'linear-gradient(135deg, #03045e, #0077be, #00b4d8)' },
     { id: 'sunset', name: 'Sunset Orange', preview: '🌅', colors: { primary: '#ff6b35', secondary: '#ff9a56', accent: '#1a0a00', text: '#ffffff', headerText: '#ffffff', buttonText: '#000000' }, gradient: 'linear-gradient(135deg, #1a0a00, #ff6b35, #ff9a56)' },
@@ -136,7 +139,7 @@ const DEFAULT_THEMES = [
     { id: 'nebula', name: 'Nebula Cosmic', preview: '🌌', colors: { primary: '#e040fb', secondary: '#7c4dff', accent: '#0a0a1a', text: '#ffffff', headerText: '#ffffff', buttonText: '#000000' }, gradient: 'linear-gradient(135deg, #0a0a1a, #7c4dff, #e040fb)' }
 ];
 
-const DEFAULT_PLANS = [
+var DEFAULT_PLANS = [
     { id: '2_Hours', name: '2 Hours', price: 10, devices: 1, shared_users: 1, duration_seconds: 7200 },
     { id: '5_Hours', name: '5 Hours', price: 20, devices: 1, shared_users: 1, duration_seconds: 18000 },
     { id: '8_Hours', name: '8 Hours', price: 30, devices: 1, shared_users: 1, duration_seconds: 28800 },
@@ -154,31 +157,31 @@ const DEFAULT_PLANS = [
 
 function loadAllData() {
     if (fs.existsSync(TRANSACTIONS_FILE)) {
-        try { transactions = JSON.parse(fs.readFileSync(TRANSACTIONS_FILE, 'utf8')); console.log(`📂 Loaded ${transactions.length} transactions`); } catch (e) { console.error('Error loading transactions:', e); }
+        try { transactions = JSON.parse(fs.readFileSync(TRANSACTIONS_FILE, 'utf8')); console.log('📂 Loaded ' + transactions.length + ' transactions'); } catch (e) { console.error('Error loading transactions:', e); }
     }
     if (fs.existsSync(VOUCHERS_FILE)) {
-        try { vouchers = JSON.parse(fs.readFileSync(VOUCHERS_FILE, 'utf8')); console.log(`🎟️ Loaded ${vouchers.length} vouchers`); } catch (e) { console.error('Error loading vouchers:', e); }
+        try { vouchers = JSON.parse(fs.readFileSync(VOUCHERS_FILE, 'utf8')); console.log('🎟️ Loaded ' + vouchers.length + ' vouchers'); } catch (e) { console.error('Error loading vouchers:', e); }
     }
     if (fs.existsSync(PLANS_FILE)) {
-        try { plans = JSON.parse(fs.readFileSync(PLANS_FILE, 'utf8')); console.log(`📦 Loaded ${plans.length} plans`); } catch (e) { console.error('Error loading plans:', e); plans = DEFAULT_PLANS; }
+        try { plans = JSON.parse(fs.readFileSync(PLANS_FILE, 'utf8')); console.log('📦 Loaded ' + plans.length + ' plans'); } catch (e) { console.error('Error loading plans:', e); plans = DEFAULT_PLANS; }
     } else { plans = DEFAULT_PLANS; savePlans(); }
     if (fs.existsSync(SETTINGS_FILE)) {
-        try { settings = JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8')); console.log(`⚙️ Loaded settings`); } catch (e) { console.error('Error loading settings:', e); settings = DEFAULT_SETTINGS; }
+        try { settings = JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8')); console.log('⚙️ Loaded settings'); } catch (e) { console.error('Error loading settings:', e); settings = DEFAULT_SETTINGS; }
     } else { settings = DEFAULT_SETTINGS; saveSettings(); }
     if (fs.existsSync(THEMES_FILE)) {
-        try { themes = JSON.parse(fs.readFileSync(THEMES_FILE, 'utf8')); console.log(`🎨 Loaded ${themes.length} themes`); } catch (e) { console.error('Error loading themes:', e); themes = DEFAULT_THEMES; }
+        try { themes = JSON.parse(fs.readFileSync(THEMES_FILE, 'utf8')); console.log('🎨 Loaded ' + themes.length + ' themes'); } catch (e) { console.error('Error loading themes:', e); themes = DEFAULT_THEMES; }
     } else { themes = DEFAULT_THEMES; saveThemes(); }
     if (fs.existsSync(CLIENTS_FILE)) {
-        try { clients = JSON.parse(fs.readFileSync(CLIENTS_FILE, 'utf8')); console.log(`👤 Loaded ${clients.length} clients`); } catch (e) { console.error('Error loading clients:', e); clients = []; }
+        try { clients = JSON.parse(fs.readFileSync(CLIENTS_FILE, 'utf8')); console.log('👤 Loaded ' + clients.length + ' clients'); } catch (e) { console.error('Error loading clients:', e); clients = []; }
     } else { clients = []; saveClients(); }
     if (fs.existsSync(PRODUCTS_FILE)) {
-        try { products = JSON.parse(fs.readFileSync(PRODUCTS_FILE, 'utf8')); console.log(`📦 Loaded ${products.length} products`); } catch (e) { console.error('Error loading products:', e); products = []; }
+        try { products = JSON.parse(fs.readFileSync(PRODUCTS_FILE, 'utf8')); console.log('📦 Loaded ' + products.length + ' products'); } catch (e) { console.error('Error loading products:', e); products = []; }
     } else { products = []; saveProducts(); }
     if (fs.existsSync(ORGANIZATIONS_FILE)) {
-        try { organizations = JSON.parse(fs.readFileSync(ORGANIZATIONS_FILE, 'utf8')); console.log(`🏢 Loaded ${organizations.length} organizations`); } catch (e) { console.error('Error loading organizations:', e); organizations = []; }
+        try { organizations = JSON.parse(fs.readFileSync(ORGANIZATIONS_FILE, 'utf8')); console.log('🏢 Loaded ' + organizations.length + ' organizations'); } catch (e) { console.error('Error loading organizations:', e); organizations = []; }
     } else { organizations = []; saveOrganizations(); }
     if (fs.existsSync(MASTER_SETTINGS_FILE)) {
-        try { masterSettings = JSON.parse(fs.readFileSync(MASTER_SETTINGS_FILE, 'utf8')); console.log(`⚙️ Loaded master settings`); } catch (e) { console.error('Error loading master settings:', e); masterSettings = DEFAULT_MASTER_SETTINGS; }
+        try { masterSettings = JSON.parse(fs.readFileSync(MASTER_SETTINGS_FILE, 'utf8')); console.log('⚙️ Loaded master settings'); } catch (e) { console.error('Error loading master settings:', e); masterSettings = DEFAULT_MASTER_SETTINGS; }
     } else { masterSettings = DEFAULT_MASTER_SETTINGS; saveMasterSettings(); }
 }
 
@@ -196,46 +199,50 @@ function saveMasterSettings() { try { fs.writeFileSync(MASTER_SETTINGS_FILE, JSO
 // HELPERS
 // ============================================================
 
-function getPlanName(planId) { const plan = plans.find(p => p.id === planId); return plan ? plan.name : planId; }
-function getPlanDuration(planId) { const plan = plans.find(p => p.id === planId); return plan ? plan.duration_seconds : 3600; }
-function generateVoucherCode() { const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'; let code = ''; for (let i = 0; i < 10; i++) { code += chars.charAt(Math.floor(Math.random() * chars.length)); } return code; }
-function normalizePhone(rawPhone) { if (!rawPhone) return null; let digits = String(rawPhone).trim().replace(/[^0-9+]/g, ''); digits = digits.replace(/^\+/, ''); if (digits.startsWith('0')) digits = digits.substring(1); if (digits.length === 9 && digits.startsWith('7')) return '254' + digits; if (digits.length === 10 && digits.startsWith('7')) return '254' + digits; if (digits.startsWith('254')) return digits; return digits; }
-function timestampNow() { const now = new Date(); const pad = (n) => String(n).padStart(2, '0'); return `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`; }
-function generateClientId() { const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'; let code = ''; for (let i = 0; i < 8; i++) { code += chars.charAt(Math.floor(Math.random() * chars.length)); } return 'CLIENT_' + code; }
-function generateProductId() { const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'; let code = ''; for (let i = 0; i < 6; i++) { code += chars.charAt(Math.floor(Math.random() * chars.length)); } return 'PROD_' + code; }
-function generateOrgId() { const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'; let code = ''; for (let i = 0; i < 8; i++) { code += chars.charAt(Math.floor(Math.random() * chars.length)); } return 'CLIENT_' + code; }
-function getOrganizationByClientId(clientId) { return organizations.find(org => org.id === clientId); }
+function getPlanName(planId) { var plan = plans.find(function(p) { return p.id === planId; }); return plan ? plan.name : planId; }
+function getPlanDuration(planId) { var plan = plans.find(function(p) { return p.id === planId; }); return plan ? plan.duration_seconds : 3600; }
+function generateVoucherCode() { var chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'; var code = ''; for (var i = 0; i < 10; i++) { code += chars.charAt(Math.floor(Math.random() * chars.length)); } return code; }
+function normalizePhone(rawPhone) { if (!rawPhone) return null; var digits = String(rawPhone).trim().replace(/[^0-9+]/g, ''); digits = digits.replace(/^\+/, ''); if (digits.startsWith('0')) digits = digits.substring(1); if (digits.length === 9 && digits.startsWith('7')) return '254' + digits; if (digits.length === 10 && digits.startsWith('7')) return '254' + digits; if (digits.startsWith('254')) return digits; return digits; }
+function timestampNow() { var now = new Date(); var pad = function(n) { return String(n).padStart(2, '0'); }; return '' + now.getFullYear() + pad(now.getMonth() + 1) + pad(now.getDate()) + pad(now.getHours()) + pad(now.getMinutes()) + pad(now.getSeconds()); }
+function generateClientId() { var chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'; var code = ''; for (var i = 0; i < 8; i++) { code += chars.charAt(Math.floor(Math.random() * chars.length)); } return 'CLIENT_' + code; }
+function generateProductId() { var chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'; var code = ''; for (var i = 0; i < 6; i++) { code += chars.charAt(Math.floor(Math.random() * chars.length)); } return 'PROD_' + code; }
+function generateOrgId() { var chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'; var code = ''; for (var i = 0; i < 8; i++) { code += chars.charAt(Math.floor(Math.random() * chars.length)); } return 'CLIENT_' + code; }
+function getOrganizationByClientId(clientId) { return organizations.find(function(org) { return org.id === clientId; }); }
 
 // ============================================================
 // REQUEST HELPER
 // ============================================================
 
-function simpleRequest(method, urlString, headers = {}, jsonBody = null) {
-    return new Promise((resolve, reject) => {
-        const url = new URL(urlString);
-        const payload = jsonBody ? JSON.stringify(jsonBody) : null;
-        const options = {
+function simpleRequest(method, urlString, headers, jsonBody) {
+    headers = headers || {};
+    jsonBody = jsonBody || null;
+    return new Promise(function(resolve, reject) {
+        var url = new URL(urlString);
+        var payload = jsonBody ? JSON.stringify(jsonBody) : null;
+        var options = {
             hostname: url.hostname,
             port: url.port || 443,
             path: url.pathname + url.search,
             method: method.toUpperCase(),
-            headers: { ...headers, ...(payload ? { 'Content-Length': Buffer.byteLength(payload) } : {}), 'Connection': 'keep-alive' },
+            headers: headers,
             timeout: 60000,
             agent: agent,
             family: 4
         };
-        const req = https.request(options, (res) => {
-            let chunks = [];
-            res.on('data', (chunk) => chunks.push(chunk));
-            res.on('end', () => {
-                const bodyText = Buffer.concat(chunks).toString('utf8');
-                let bodyJson = null;
+        if (payload) { options.headers['Content-Length'] = Buffer.byteLength(payload); }
+        options.headers['Connection'] = 'keep-alive';
+        var req = https.request(options, function(res) {
+            var chunks = [];
+            res.on('data', function(chunk) { chunks.push(chunk); });
+            res.on('end', function() {
+                var bodyText = Buffer.concat(chunks).toString('utf8');
+                var bodyJson = null;
                 try { bodyJson = JSON.parse(bodyText); } catch (_) {}
-                resolve({ statusCode: res.statusCode, statusMessage: res.statusMessage, bodyText, bodyJson });
+                resolve({ statusCode: res.statusCode, statusMessage: res.statusMessage, bodyText: bodyText, bodyJson: bodyJson });
             });
         });
-        req.on('error', (err) => { reject(new Error(`Request failed: ${err.message}`)); });
-        req.on('timeout', () => { req.destroy(); reject(new Error('Request timed out')); });
+        req.on('error', function(err) { reject(new Error('Request failed: ' + err.message)); });
+        req.on('timeout', function() { req.destroy(); reject(new Error('Request timed out')); });
         if (payload) { req.write(payload); }
         req.end();
     });
@@ -248,9 +255,9 @@ function simpleRequest(method, urlString, headers = {}, jsonBody = null) {
 async function getAccessToken() {
     console.log('\n🔑 Getting access token...');
     if (!CONSUMER_KEY || !CONSUMER_SECRET) { throw new Error('Consumer Key or Secret not configured.'); }
-    const auth = Buffer.from(`${CONSUMER_KEY.trim()}:${CONSUMER_SECRET.trim()}`).toString('base64');
-    const res = await simpleRequest('GET', 'https://sandbox.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials', { 'Authorization': `Basic ${auth}`, 'Accept': 'application/json' });
-    if (res.statusCode !== 200) { throw new Error(`OAuth failed (${res.statusCode}): ${res.bodyText}`); }
+    var auth = Buffer.from(CONSUMER_KEY.trim() + ':' + CONSUMER_SECRET.trim()).toString('base64');
+    var res = await simpleRequest('GET', 'https://sandbox.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials', { 'Authorization': 'Basic ' + auth, 'Accept': 'application/json' });
+    if (res.statusCode !== 200) { throw new Error('OAuth failed (' + res.statusCode + '): ' + res.bodyText); }
     if (!res.bodyJson || !res.bodyJson.access_token) { throw new Error('No access token in response'); }
     console.log('✅ Access token obtained');
     return res.bodyJson.access_token;
@@ -260,18 +267,21 @@ async function getAccessToken() {
 // STK PUSH
 // ============================================================
 
-async function stkPush({ phone, amount, accountReference }) {
+async function stkPush(params) {
+    var phone = params.phone;
+    var amount = params.amount;
+    var accountReference = params.accountReference;
     console.log('\n💳 Starting STK Push...');
-    console.log(`📱 Phone: ${phone}`);
-    console.log(`💰 Amount: ${amount}`);
-    const numericAmount = Math.round(Number(amount));
+    console.log('📱 Phone: ' + phone);
+    console.log('💰 Amount: ' + amount);
+    var numericAmount = Math.round(Number(amount));
     if (isNaN(numericAmount) || numericAmount < 1) { throw new Error('Invalid amount'); }
-    const formattedPhone = normalizePhone(phone);
-    if (!formattedPhone || formattedPhone.length < 10) { throw new Error(`Invalid phone: ${phone}`); }
-    const token = await getAccessToken();
-    const timestamp = timestampNow();
-    const password = Buffer.from(`${SHORTCODE}${PASSKEY}${timestamp}`).toString('base64');
-    const payload = {
+    var formattedPhone = normalizePhone(phone);
+    if (!formattedPhone || formattedPhone.length < 10) { throw new Error('Invalid phone: ' + phone); }
+    var token = await getAccessToken();
+    var timestamp = timestampNow();
+    var password = Buffer.from(SHORTCODE + PASSKEY + timestamp).toString('base64');
+    var payload = {
         BusinessShortCode: SHORTCODE,
         Password: password,
         Timestamp: timestamp,
@@ -285,7 +295,7 @@ async function stkPush({ phone, amount, accountReference }) {
         TransactionDesc: 'GICH WiFi Payment'
     };
     console.log('📤 Sending STK Push to Safaricom...');
-    const res = await simpleRequest('POST', 'https://sandbox.safaricom.co.ke/mpesa/stkpush/v1/processrequest', { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' }, payload);
+    var res = await simpleRequest('POST', 'https://sandbox.safaricom.co.ke/mpesa/stkpush/v1/processrequest', { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' }, payload);
     if (!res.bodyJson) { throw new Error('Invalid response from Safaricom'); }
     if (res.bodyJson.ResponseCode === '0') {
         console.log('✅ STK Push successful!');
@@ -316,10 +326,10 @@ function sendHtml(res, statusCode, html) {
 }
 
 function readBody(req) {
-    return new Promise((resolve, reject) => {
-        let raw = '';
-        req.on('data', (chunk) => raw += chunk);
-        req.on('end', () => {
+    return new Promise(function(resolve, reject) {
+        var raw = '';
+        req.on('data', function(chunk) { raw += chunk; });
+        req.on('end', function() {
             try { resolve(raw ? JSON.parse(raw) : {}); } catch (e) { reject(new Error('Invalid JSON')); }
         });
         req.on('error', reject);
@@ -327,935 +337,852 @@ function readBody(req) {
 }
 
 function findHtmlFile(filename) {
-    const paths = [path.join(__dirname, filename), path.join(__dirname, 'public', filename)];
-    for (const p of paths) { if (fs.existsSync(p)) return p; }
+    var paths = [path.join(__dirname, filename), path.join(__dirname, 'public', filename)];
+    for (var i = 0; i < paths.length; i++) { if (fs.existsSync(paths[i])) return paths[i]; }
     return null;
 }
 
 function serveHtmlFile(res, filename) {
     try {
-        const filePath = findHtmlFile(filename);
+        var filePath = findHtmlFile(filename);
         if (filePath) { sendHtml(res, 200, fs.readFileSync(filePath, 'utf8')); return true; }
-    } catch (err) { console.error(`Error serving ${filename}:`, err); }
+    } catch (err) { console.error('Error serving ' + filename + ':', err); }
     return false;
 }
 
 function isAdmin(req) {
-    const auth = req.headers.authorization;
+    var auth = req.headers.authorization;
     if (!auth) return false;
-    const decoded = verifyToken(auth.replace('Bearer ', ''));
+    var decoded = verifyToken(auth.replace('Bearer ', ''));
     return decoded && decoded.role === 'admin';
 }
 
 function isMasterAdmin(req) {
-    const auth = req.headers.authorization;
+    var auth = req.headers.authorization;
     if (!auth) return false;
-    const decoded = verifyToken(auth.replace('Bearer ', ''));
+    var decoded = verifyToken(auth.replace('Bearer ', ''));
     return decoded && decoded.role === 'master';
 }
 
 // ============================================================
-// GENERATE CLIENT SKELETON HTML - WITH VISIBLE VOUCHER SECTION
+// GENERATE CLIENT SKELETON HTML - USING STRING CONCATENATION
 // ============================================================
 
 function generateClientSkeletonHtml(organization) {
-    const escapeHtml = (str) => {
+    var escapeHtml = function(str) {
         if (!str) return '';
         return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
             .replace(/"/g, '&quot;').replace(/'/g, '&#039;');
     };
 
-    const orgId = escapeHtml(organization.id);
-    const businessName = escapeHtml(organization.businessName || organization.name || 'WiFi Service');
-    const tagline = escapeHtml(organization.businessTagline || 'Fast • Secure • Reliable');
-    const primaryColor = escapeHtml(organization.primaryColor || '#00c853');
-    const secondaryColor = escapeHtml(organization.secondaryColor || '#00e676');
-    const accentColor = escapeHtml(organization.accentColor || '#0f2027');
-    const textColor = escapeHtml(organization.textColor || '#ffffff');
-    const headerTextColor = escapeHtml(organization.headerTextColor || '#ffffff');
-    const buttonTextColor = escapeHtml(organization.buttonTextColor || '#000000');
-    const bgGradient = escapeHtml(organization.bgGradient || 'linear-gradient(135deg, #0f2027, #203a43, #2c5364)');
-    const supportPhone = escapeHtml(organization.supportPhone || '0796587763');
-    const supportEmail = escapeHtml(organization.supportEmail || 'support@example.com');
-    const logo = escapeHtml(organization.logo || '');
-    const plans = organization.plans || [];
+    var orgId = escapeHtml(organization.id);
+    var businessName = escapeHtml(organization.businessName || organization.name || 'WiFi Service');
+    var tagline = escapeHtml(organization.businessTagline || 'Fast • Secure • Reliable');
+    var primaryColor = escapeHtml(organization.primaryColor || '#00c853');
+    var secondaryColor = escapeHtml(organization.secondaryColor || '#00e676');
+    var accentColor = escapeHtml(organization.accentColor || '#0f2027');
+    var textColor = escapeHtml(organization.textColor || '#ffffff');
+    var headerTextColor = escapeHtml(organization.headerTextColor || '#ffffff');
+    var buttonTextColor = escapeHtml(organization.buttonTextColor || '#000000');
+    var bgGradient = escapeHtml(organization.bgGradient || 'linear-gradient(135deg, #0f2027, #203a43, #2c5364)');
+    var supportPhone = escapeHtml(organization.supportPhone || '0796587763');
+    var supportEmail = escapeHtml(organization.supportEmail || 'support@example.com');
+    var logo = escapeHtml(organization.logo || '');
+    var plans = organization.plans || [];
 
-    let plansHtml = '';
+    var plansHtml = '';
     if (plans.length > 0) {
-        plansHtml = plans.map(p => {
-            const duration = p.duration_seconds || 3600;
-            const hours = Math.floor(duration / 3600);
-            const days = Math.floor(duration / 86400);
-            const durationStr = days > 0 ? `${days} day${days > 1 ? 's' : ''}` : `${hours} hour${hours > 1 ? 's' : ''}`;
-            const isPopular = p.id === '1_Week_1_Device' || p.id === '24_Hours';
-            return `
-                <div class="plan-card" data-plan-id="${escapeHtml(p.id)}" onclick="openPaymentModal('${escapeHtml(p.id)}')">
-                    ${isPopular ? '<div class="badge">🔥 Popular</div>' : ''}
-                    <div class="plan-name">${escapeHtml(p.name)}</div>
-                    <div class="plan-price">KES ${p.price} <span>/ ${durationStr}</span></div>
-                    <ul class="plan-features">
-                        <li>${p.devices || 1} device${(p.devices || 1) > 1 ? 's' : ''}</li>
-                        <li>${p.shared_users || 1} user${(p.shared_users || 1) > 1 ? 's' : ''}</li>
-                        <li>Valid for ${durationStr}</li>
-                    </ul>
-                </div>
-            `;
-        }).join('');
+        var planCards = [];
+        for (var i = 0; i < plans.length; i++) {
+            var p = plans[i];
+            var duration = p.duration_seconds || 3600;
+            var hours = Math.floor(duration / 3600);
+            var days = Math.floor(duration / 86400);
+            var durationStr = '';
+            if (days > 0) {
+                durationStr = days + ' day' + (days > 1 ? 's' : '');
+            } else {
+                durationStr = hours + ' hour' + (hours > 1 ? 's' : '');
+            }
+            var isPopular = p.id === '1_Week_1_Device' || p.id === '24_Hours';
+            planCards.push(
+                '<div class="plan-card" data-plan-id="' + escapeHtml(p.id) + '" onclick="openPaymentModal(\'' + escapeHtml(p.id) + '\')">' +
+                (isPopular ? '<div class="badge">🔥 Popular</div>' : '') +
+                '<div class="plan-name">' + escapeHtml(p.name) + '</div>' +
+                '<div class="plan-price">KES ' + p.price + ' <span>/ ' + durationStr + '</span></div>' +
+                '<ul class="plan-features">' +
+                '<li>' + (p.devices || 1) + ' device' + ((p.devices || 1) > 1 ? 's' : '') + '</li>' +
+                '<li>' + (p.shared_users || 1) + ' user' + ((p.shared_users || 1) > 1 ? 's' : '') + '</li>' +
+                '<li>Valid for ' + durationStr + '</li>' +
+                '</ul></div>'
+            );
+        }
+        plansHtml = planCards.join('');
     } else {
-        plansHtml = `<div style="text-align:center;padding:40px;color:#666;">No plans available</div>`;
+        plansHtml = '<div style="text-align:center;padding:40px;color:#666;">No plans available</div>';
     }
 
-    return `<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>${businessName} - WiFi Services</title>
-    <style>
-        :root {
-            --primary-color: ${primaryColor};
-            --secondary-color: ${secondaryColor};
-            --accent-color: ${accentColor};
-            --text-color: ${textColor};
-            --header-text-color: ${headerTextColor};
-            --button-text-color: ${buttonTextColor};
-            --bg-gradient: ${bgGradient};
-        }
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        body {
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-            background: var(--accent-color);
-            color: var(--text-color);
-            min-height: 100vh;
-        }
-        .header {
-            background: var(--bg-gradient);
-            padding: 30px 20px;
-            text-align: center;
-            border-bottom: 3px solid var(--primary-color);
-        }
-        .header .logo {
-            max-width: 150px;
-            max-height: 80px;
-            margin-bottom: 10px;
-            ${logo ? '' : 'display: none;'}
-        }
-        .header h1 { font-size: 32px; color: var(--primary-color); }
-        .header p { color: var(--header-text-color); font-size: 16px; margin-top: 4px; opacity: 0.8; }
-        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
-        
-        .plans-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-            gap: 20px;
-            margin-top: 20px;
-        }
-        .plan-card {
-            background: rgba(255,255,255,0.05);
-            backdrop-filter: blur(10px);
-            border-radius: 16px;
-            padding: 24px;
-            border: 1px solid rgba(255,255,255,0.08);
-            transition: 0.3s;
-            cursor: pointer;
-            position: relative;
-        }
-        .plan-card:hover {
-            transform: translateY(-4px);
-            border-color: var(--primary-color);
-            box-shadow: 0 8px 30px rgba(0,0,0,0.3);
-        }
-        .plan-card.selected {
-            border-color: var(--primary-color);
-            box-shadow: 0 0 0 2px var(--primary-color);
-        }
-        .plan-card .plan-name { font-size: 20px; font-weight: bold; color: var(--text-color); }
-        .plan-card .plan-price { font-size: 28px; font-weight: bold; color: var(--primary-color); margin: 8px 0; }
-        .plan-card .plan-price span { font-size: 14px; color: #888; font-weight: normal; }
-        .plan-card .plan-features { color: #aaa; font-size: 14px; margin: 12px 0; list-style: none; }
-        .plan-card .plan-features li { padding: 4px 0; }
-        .plan-card .plan-features li::before { content: "✓ "; color: var(--primary-color); }
-        .plan-card .badge {
-            position: absolute; top: 12px; right: 12px;
-            background: rgba(0,200,83,0.2); color: var(--primary-color);
-            padding: 2px 12px; border-radius: 20px; font-size: 12px; font-weight: 600;
-        }
-        
-        /* ============================================================
-           VOUCHER SECTION - VISIBLE WITH DASHED BORDER
-           ============================================================ */
-        .voucher-section {
-            background: rgba(255,255,255,0.05);
-            backdrop-filter: blur(10px);
-            border-radius: 16px;
-            padding: 24px;
-            margin-top: 20px;
-            border: 2px dashed var(--primary-color);
-        }
-        .voucher-section h3 {
-            color: var(--primary-color);
-            margin-bottom: 12px;
-            font-size: 20px;
-            font-weight: 700;
-        }
-        .voucher-section .form-row {
-            display: flex;
-            gap: 12px;
-            flex-wrap: wrap;
-        }
-        .voucher-section .form-row input {
-            flex: 1;
-            min-width: 180px;
-            padding: 14px 18px;
-            background: rgba(0,0,0,0.4);
-            border: 2px solid rgba(255,255,255,0.1);
-            border-radius: 10px;
-            color: #fff;
-            font-size: 16px;
-            outline: none;
-            transition: 0.3s;
-        }
-        .voucher-section .form-row input:focus {
-            border-color: var(--primary-color);
-            box-shadow: 0 0 0 3px rgba(0,200,83,0.1);
-        }
-        .voucher-section .form-row input::placeholder {
-            color: #666;
-        }
-        .voucher-section .form-row .btn {
-            padding: 14px 32px;
-            background: var(--primary-color);
-            color: var(--button-text-color);
-            border: none;
-            border-radius: 10px;
-            font-size: 16px;
-            font-weight: bold;
-            cursor: pointer;
-            transition: 0.3s;
-            font-family: inherit;
-            white-space: nowrap;
-        }
-        .voucher-section .form-row .btn:hover {
-            opacity: 0.85;
-            transform: scale(1.02);
-        }
-        .voucher-section .form-row .btn:disabled {
-            opacity: 0.5;
-            cursor: not-allowed;
-            transform: none;
-        }
-        .voucher-section .voucher-result {
-            margin-top: 12px;
-            font-size: 14px;
-            color: #888;
-            padding: 8px 12px;
-            border-radius: 8px;
-        }
-        .voucher-section .voucher-result.success {
-            color: var(--primary-color);
-            background: rgba(0,200,83,0.08);
-        }
-        .voucher-section .voucher-result.error {
-            color: #ff4444;
-            background: rgba(255,68,68,0.08);
-        }
+    var html = '<!DOCTYPE html>\n';
+    html += '<html lang="en">\n';
+    html += '<head>\n';
+    html += '<meta charset="UTF-8">\n';
+    html += '<meta name="viewport" content="width=device-width, initial-scale=1.0">\n';
+    html += '<title>' + businessName + ' - WiFi Services</title>\n';
+    html += '<style>\n';
+    html += ':root {\n';
+    html += '--primary-color: ' + primaryColor + ';\n';
+    html += '--secondary-color: ' + secondaryColor + ';\n';
+    html += '--accent-color: ' + accentColor + ';\n';
+    html += '--text-color: ' + textColor + ';\n';
+    html += '--header-text-color: ' + headerTextColor + ';\n';
+    html += '--button-text-color: ' + buttonTextColor + ';\n';
+    html += '--bg-gradient: ' + bgGradient + ';\n';
+    html += '}\n';
+    html += '* { margin: 0; padding: 0; box-sizing: border-box; }\n';
+    html += 'body {\n';
+    html += 'font-family: \'Segoe UI\', Tahoma, Geneva, Verdana, sans-serif;\n';
+    html += 'background: var(--accent-color);\n';
+    html += 'color: var(--text-color);\n';
+    html += 'min-height: 100vh;\n';
+    html += '}\n';
+    html += '.header {\n';
+    html += 'background: var(--bg-gradient);\n';
+    html += 'padding: 30px 20px;\n';
+    html += 'text-align: center;\n';
+    html += 'border-bottom: 3px solid var(--primary-color);\n';
+    html += '}\n';
+    html += '.header .logo {\n';
+    html += 'max-width: 150px;\n';
+    html += 'max-height: 80px;\n';
+    html += 'margin-bottom: 10px;\n';
+    html += (logo ? '' : 'display: none;') + '\n';
+    html += '}\n';
+    html += '.header h1 { font-size: 32px; color: var(--primary-color); }\n';
+    html += '.header p { color: var(--header-text-color); font-size: 16px; margin-top: 4px; opacity: 0.8; }\n';
+    html += '.container { max-width: 1200px; margin: 0 auto; padding: 20px; }\n';
+    html += '.plans-grid {\n';
+    html += 'display: grid;\n';
+    html += 'grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));\n';
+    html += 'gap: 20px;\n';
+    html += 'margin-top: 20px;\n';
+    html += '}\n';
+    html += '.plan-card {\n';
+    html += 'background: rgba(255,255,255,0.05);\n';
+    html += 'backdrop-filter: blur(10px);\n';
+    html += 'border-radius: 16px;\n';
+    html += 'padding: 24px;\n';
+    html += 'border: 1px solid rgba(255,255,255,0.08);\n';
+    html += 'transition: 0.3s;\n';
+    html += 'cursor: pointer;\n';
+    html += 'position: relative;\n';
+    html += '}\n';
+    html += '.plan-card:hover {\n';
+    html += 'transform: translateY(-4px);\n';
+    html += 'border-color: var(--primary-color);\n';
+    html += 'box-shadow: 0 8px 30px rgba(0,0,0,0.3);\n';
+    html += '}\n';
+    html += '.plan-card.selected {\n';
+    html += 'border-color: var(--primary-color);\n';
+    html += 'box-shadow: 0 0 0 2px var(--primary-color);\n';
+    html += '}\n';
+    html += '.plan-card .plan-name { font-size: 20px; font-weight: bold; color: var(--text-color); }\n';
+    html += '.plan-card .plan-price { font-size: 28px; font-weight: bold; color: var(--primary-color); margin: 8px 0; }\n';
+    html += '.plan-card .plan-price span { font-size: 14px; color: #888; font-weight: normal; }\n';
+    html += '.plan-card .plan-features { color: #aaa; font-size: 14px; margin: 12px 0; list-style: none; }\n';
+    html += '.plan-card .plan-features li { padding: 4px 0; }\n';
+    html += '.plan-card .plan-features li::before { content: "✓ "; color: var(--primary-color); }\n';
+    html += '.plan-card .badge {\n';
+    html += 'position: absolute; top: 12px; right: 12px;\n';
+    html += 'background: rgba(0,200,83,0.2); color: var(--primary-color);\n';
+    html += 'padding: 2px 12px; border-radius: 20px; font-size: 12px; font-weight: 600;\n';
+    html += '}\n';
+    html += '.voucher-section {\n';
+    html += 'background: rgba(255,255,255,0.05);\n';
+    html += 'backdrop-filter: blur(10px);\n';
+    html += 'border-radius: 16px;\n';
+    html += 'padding: 24px;\n';
+    html += 'margin-top: 20px;\n';
+    html += 'border: 2px dashed var(--primary-color);\n';
+    html += '}\n';
+    html += '.voucher-section h3 {\n';
+    html += 'color: var(--primary-color);\n';
+    html += 'margin-bottom: 12px;\n';
+    html += 'font-size: 20px;\n';
+    html += 'font-weight: 700;\n';
+    html += '}\n';
+    html += '.voucher-section .form-row {\n';
+    html += 'display: flex;\n';
+    html += 'gap: 12px;\n';
+    html += 'flex-wrap: wrap;\n';
+    html += '}\n';
+    html += '.voucher-section .form-row input {\n';
+    html += 'flex: 1;\n';
+    html += 'min-width: 180px;\n';
+    html += 'padding: 14px 18px;\n';
+    html += 'background: rgba(0,0,0,0.4);\n';
+    html += 'border: 2px solid rgba(255,255,255,0.1);\n';
+    html += 'border-radius: 10px;\n';
+    html += 'color: #fff;\n';
+    html += 'font-size: 16px;\n';
+    html += 'outline: none;\n';
+    html += 'transition: 0.3s;\n';
+    html += '}\n';
+    html += '.voucher-section .form-row input:focus {\n';
+    html += 'border-color: var(--primary-color);\n';
+    html += 'box-shadow: 0 0 0 3px rgba(0,200,83,0.1);\n';
+    html += '}\n';
+    html += '.voucher-section .form-row input::placeholder {\n';
+    html += 'color: #666;\n';
+    html += '}\n';
+    html += '.voucher-section .form-row .btn {\n';
+    html += 'padding: 14px 32px;\n';
+    html += 'background: var(--primary-color);\n';
+    html += 'color: var(--button-text-color);\n';
+    html += 'border: none;\n';
+    html += 'border-radius: 10px;\n';
+    html += 'font-size: 16px;\n';
+    html += 'font-weight: bold;\n';
+    html += 'cursor: pointer;\n';
+    html += 'transition: 0.3s;\n';
+    html += 'font-family: inherit;\n';
+    html += 'white-space: nowrap;\n';
+    html += '}\n';
+    html += '.voucher-section .form-row .btn:hover {\n';
+    html += 'opacity: 0.85;\n';
+    html += 'transform: scale(1.02);\n';
+    html += '}\n';
+    html += '.voucher-section .form-row .btn:disabled {\n';
+    html += 'opacity: 0.5;\n';
+    html += 'cursor: not-allowed;\n';
+    html += 'transform: none;\n';
+    html += '}\n';
+    html += '.voucher-section .voucher-result {\n';
+    html += 'margin-top: 12px;\n';
+    html += 'font-size: 14px;\n';
+    html += 'color: #888;\n';
+    html += 'padding: 8px 12px;\n';
+    html += 'border-radius: 8px;\n';
+    html += '}\n';
+    html += '.voucher-section .voucher-result.success {\n';
+    html += 'color: var(--primary-color);\n';
+    html += 'background: rgba(0,200,83,0.08);\n';
+    html += '}\n';
+    html += '.voucher-section .voucher-result.error {\n';
+    html += 'color: #ff4444;\n';
+    html += 'background: rgba(255,68,68,0.08);\n';
+    html += '}\n';
+    html += '.check-section {\n';
+    html += 'margin-top: 20px;\n';
+    html += 'text-align: center;\n';
+    html += '}\n';
+    html += '.check-section .btn {\n';
+    html += 'padding: 14px 32px;\n';
+    html += 'background: var(--primary-color);\n';
+    html += 'color: var(--button-text-color);\n';
+    html += 'border: none;\n';
+    html += 'border-radius: 10px;\n';
+    html += 'font-size: 16px;\n';
+    html += 'font-weight: bold;\n';
+    html += 'cursor: pointer;\n';
+    html += 'transition: 0.3s;\n';
+    html += 'font-family: inherit;\n';
+    html += 'width: 100%;\n';
+    html += 'max-width: 400px;\n';
+    html += '}\n';
+    html += '.check-section .btn:hover {\n';
+    html += 'opacity: 0.85;\n';
+    html += 'transform: scale(1.02);\n';
+    html += '}\n';
+    html += '.check-section .result {\n';
+    html += 'margin-top: 12px;\n';
+    html += 'font-size: 14px;\n';
+    html += 'color: #888;\n';
+    html += 'padding: 8px 12px;\n';
+    html += 'border-radius: 8px;\n';
+    html += '}\n';
+    html += '.check-section .result.success {\n';
+    html += 'color: var(--primary-color);\n';
+    html += 'background: rgba(0,200,83,0.08);\n';
+    html += '}\n';
+    html += '.check-section .result.error {\n';
+    html += 'color: #ff4444;\n';
+    html += 'background: rgba(255,68,68,0.08);\n';
+    html += '}\n';
+    html += '.payment-modal-overlay {\n';
+    html += 'position: fixed; top: 0; left: 0; right: 0; bottom: 0;\n';
+    html += 'background: rgba(0,0,0,0.85); backdrop-filter: blur(8px);\n';
+    html += 'display: none; align-items: center; justify-content: center;\n';
+    html += 'z-index: 999; padding: 20px;\n';
+    html += '}\n';
+    html += '.payment-modal-overlay.active { display: flex; }\n';
+    html += '.payment-modal {\n';
+    html += 'background: #1a1a2e; border-radius: 20px; padding: 32px;\n';
+    html += 'max-width: 440px; width: 100%;\n';
+    html += 'border: 1px solid rgba(255,255,255,0.06);\n';
+    html += 'box-shadow: 0 40px 100px rgba(0,0,0,0.6);\n';
+    html += 'animation: modalSlideUp 0.35s ease; position: relative;\n';
+    html += '}\n';
+    html += '@keyframes modalSlideUp {\n';
+    html += 'from { opacity: 0; transform: translateY(30px) scale(0.95); }\n';
+    html += 'to { opacity: 1; transform: translateY(0) scale(1); }\n';
+    html += '}\n';
+    html += '.payment-modal .modal-close {\n';
+    html += 'position: absolute; top: 14px; right: 18px;\n';
+    html += 'background: none; border: none; color: #666;\n';
+    html += 'font-size: 24px; cursor: pointer; transition: 0.2s;\n';
+    html += '}\n';
+    html += '.payment-modal .modal-close:hover { color: #fff; }\n';
+    html += '.payment-modal .plan-detail { text-align: center; margin: 10px 0 20px 0; }\n';
+    html += '.payment-modal .plan-detail .name { font-size: 22px; font-weight: bold; color: #fff; }\n';
+    html += '.payment-modal .plan-detail .price { font-size: 32px; font-weight: bold; color: var(--primary-color); margin-top: 4px; }\n';
+    html += '.payment-modal .plan-detail .duration { color: #888; font-size: 14px; }\n';
+    html += '.payment-modal .form-group { margin-bottom: 16px; }\n';
+    html += '.payment-modal .form-group label { display: block; color: #aaa; font-size: 13px; margin-bottom: 6px; font-weight: 600; }\n';
+    html += '.payment-modal .form-group input {\n';
+    html += 'width: 100%; padding: 12px 16px;\n';
+    html += 'background: #0a0a1a; border: 2px solid rgba(255,255,255,0.06);\n';
+    html += 'border-radius: 10px; color: #fff; font-size: 16px;\n';
+    html += 'outline: none; transition: 0.25s;\n';
+    html += '}\n';
+    html += '.payment-modal .form-group input:focus { border-color: var(--primary-color); }\n';
+    html += '.payment-modal .btn {\n';
+    html += 'width: 100%; padding: 14px;\n';
+    html += 'background: var(--primary-color); color: var(--button-text-color);\n';
+    html += 'border: none; border-radius: 10px;\n';
+    html += 'font-size: 16px; font-weight: bold; cursor: pointer; transition: 0.2s;\n';
+    html += '}\n';
+    html += '.payment-modal .btn:hover { opacity: 0.85; transform: scale(1.01); }\n';
+    html += '.payment-modal .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }\n';
+    html += '.payment-modal .error-msg { color: #ff4444; font-size: 13px; margin-top: 8px; display: none; text-align: center; }\n';
+    html += '.payment-modal .error-msg.show { display: block; }\n';
+    html += '.payment-modal .test-hint { text-align: center; color: #555; font-size: 11px; margin-top: 12px; border-top: 1px solid rgba(255,255,255,0.04); padding-top: 12px; }\n';
+    html += '.success-overlay {\n';
+    html += 'position: fixed; top: 0; left: 0; right: 0; bottom: 0;\n';
+    html += 'background: var(--bg-gradient);\n';
+    html += 'display: none; flex-direction: column; align-items: center; justify-content: center;\n';
+    html += 'z-index: 1000; padding: 40px 20px;\n';
+    html += 'animation: fadeIn 0.6s ease;\n';
+    html += '}\n';
+    html += '.success-overlay.active { display: flex; }\n';
+    html += '@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }\n';
+    html += '.success-overlay .logo { max-width: 120px; max-height: 70px; margin-bottom: 12px; ' + (logo ? '' : 'display: none;') + ' }\n';
+    html += '.success-overlay .icon { font-size: 72px; margin-bottom: 12px; }\n';
+    html += '.success-overlay .title { font-size: 36px; font-weight: 700; color: var(--primary-color); text-align: center; }\n';
+    html += '.success-overlay .subtitle { font-size: 18px; color: #aaa; text-align: center; margin-top: 4px; }\n';
+    html += '.success-overlay .business-name { font-size: 22px; color: #fff; margin-top: 8px; text-align: center; }\n';
+    html += '.success-overlay .timer-container { margin: 25px 0 10px 0; text-align: center; padding: 25px 40px; background: rgba(0,0,0,0.3); border-radius: 16px; border: 1px solid rgba(255,255,255,0.05); }\n';
+    html += '.success-overlay .timer-label { color: #888; font-size: 14px; text-transform: uppercase; letter-spacing: 2px; }\n';
+    html += '.success-overlay .timer { font-size: 56px; font-weight: 700; color: var(--primary-color); font-family: \'Courier New\', monospace; letter-spacing: 4px; margin-top: 4px; }\n';
+    html += '.success-overlay .timer.expired { color: #ff4444; }\n';
+    html += '.success-overlay .enjoy-text { color: var(--primary-color); font-size: 18px; margin-top: 16px; opacity: 0.9; text-align: center; }\n';
+    html += '.success-overlay .credentials { background: rgba(0,0,0,0.3); border-radius: 12px; padding: 16px 24px; margin-top: 16px; border: 1px solid rgba(255,255,255,0.05); width: 100%; max-width: 400px; }\n';
+    html += '.success-overlay .credentials .row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.03); }\n';
+    html += '.success-overlay .credentials .row:last-child { border-bottom: none; }\n';
+    html += '.success-overlay .credentials .label { color: #888; font-size: 13px; }\n';
+    html += '.success-overlay .credentials .value { color: #fff; font-family: monospace; font-size: 13px; }\n';
+    html += '.success-overlay .auto-close { color: #555; font-size: 12px; margin-top: 20px; animation: pulse 2s infinite; }\n';
+    html += '@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }\n';
+    html += '.success-overlay .powered-by { color: #444; font-size: 12px; margin-top: 30px; }\n';
+    html += '.success-overlay .powered-by .brand { color: var(--primary-color); font-weight: bold; }\n';
+    html += '.toast {\n';
+    html += 'position: fixed; bottom: 30px; right: 30px;\n';
+    html += 'padding: 14px 22px; border-radius: 12px;\n';
+    html += 'background: #1a1a2e; border: 1px solid rgba(255,255,255,0.05);\n';
+    html += 'color: #fff; font-size: 14px; z-index: 999;\n';
+    html += 'transform: translateY(100px); opacity: 0;\n';
+    html += 'transition: 0.35s ease; max-width: 400px;\n';
+    html += 'box-shadow: 0 20px 60px rgba(0,0,0,0.4);\n';
+    html += '}\n';
+    html += '.toast.show { transform: translateY(0); opacity: 1; }\n';
+    html += '.toast.success { border-color: var(--primary-color); }\n';
+    html += '.toast.error { border-color: #ff4444; }\n';
+    html += '.toast.info { border-color: #2196f3; }\n';
+    html += '.loading {\n';
+    html += 'display: inline-block;\n';
+    html += 'width: 20px;\n';
+    html += 'height: 20px;\n';
+    html += 'border: 3px solid rgba(255,255,255,0.1);\n';
+    html += 'border-top-color: var(--primary-color);\n';
+    html += 'border-radius: 50%;\n';
+    html += 'animation: spin 0.8s linear infinite;\n';
+    html += 'vertical-align: middle;\n';
+    html += 'margin-right: 8px;\n';
+    html += '}\n';
+    html += '@keyframes spin { to { transform: rotate(360deg); } }\n';
+    html += '@media (max-width: 600px) {\n';
+    html += '.header h1 { font-size: 24px; }\n';
+    html += '.plans-grid { grid-template-columns: 1fr 1fr; gap: 12px; }\n';
+    html += '.plan-card { padding: 16px; }\n';
+    html += '.plan-card .plan-name { font-size: 16px; }\n';
+    html += '.plan-card .plan-price { font-size: 22px; }\n';
+    html += '.payment-modal { padding: 24px 20px; }\n';
+    html += '.success-overlay .timer { font-size: 38px; }\n';
+    html += '.success-overlay .title { font-size: 28px; }\n';
+    html += '.success-overlay .timer-container { padding: 20px; min-width: 200px; }\n';
+    html += '.voucher-section .form-row { flex-direction: column; }\n';
+    html += '.voucher-section .form-row .btn { width: 100%; }\n';
+    html += '}\n';
+    html += '@media (max-width: 400px) { .plans-grid { grid-template-columns: 1fr; } }\n';
+    html += '::-webkit-scrollbar { width: 6px; }\n';
+    html += '::-webkit-scrollbar-track { background: var(--accent-color); }\n';
+    html += '::-webkit-scrollbar-thumb { background: #2a2a4a; border-radius: 3px; }\n';
+    html += '</style>\n';
+    html += '</head>\n';
+    html += '<body>\n';
 
-        /* ============================================================
-           CHECK & CONNECT
-           ============================================================ */
-        .check-section {
-            margin-top: 20px;
-            text-align: center;
-        }
-        .check-section .btn {
-            padding: 14px 32px;
-            background: var(--primary-color);
-            color: var(--button-text-color);
-            border: none;
-            border-radius: 10px;
-            font-size: 16px;
-            font-weight: bold;
-            cursor: pointer;
-            transition: 0.3s;
-            font-family: inherit;
-            width: 100%;
-            max-width: 400px;
-        }
-        .check-section .btn:hover {
-            opacity: 0.85;
-            transform: scale(1.02);
-        }
-        .check-section .result {
-            margin-top: 12px;
-            font-size: 14px;
-            color: #888;
-            padding: 8px 12px;
-            border-radius: 8px;
-        }
-        .check-section .result.success {
-            color: var(--primary-color);
-            background: rgba(0,200,83,0.08);
-        }
-        .check-section .result.error {
-            color: #ff4444;
-            background: rgba(255,68,68,0.08);
-        }
+    // HEADER
+    html += '<div class="header" id="pageHeader">\n';
+    if (logo) {
+        html += '<img id="logoImage" src="' + logo + '" alt="' + businessName + '" class="logo">\n';
+    } else {
+        html += '<img id="logoImage" src="" alt="Logo" class="logo" style="display:none;">\n';
+    }
+    html += '<h1 id="businessName">🌐 ' + businessName + '</h1>\n';
+    html += '<p id="tagline">' + tagline + '</p>\n';
+    html += '</div>\n';
 
-        /* ============================================================
-           PAYMENT MODAL
-           ============================================================ */
-        .payment-modal-overlay {
-            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-            background: rgba(0,0,0,0.85); backdrop-filter: blur(8px);
-            display: none; align-items: center; justify-content: center;
-            z-index: 999; padding: 20px;
-        }
-        .payment-modal-overlay.active { display: flex; }
-        .payment-modal {
-            background: #1a1a2e; border-radius: 20px; padding: 32px;
-            max-width: 440px; width: 100%;
-            border: 1px solid rgba(255,255,255,0.06);
-            box-shadow: 0 40px 100px rgba(0,0,0,0.6);
-            animation: modalSlideUp 0.35s ease; position: relative;
-        }
-        @keyframes modalSlideUp {
-            from { opacity: 0; transform: translateY(30px) scale(0.95); }
-            to { opacity: 1; transform: translateY(0) scale(1); }
-        }
-        .payment-modal .modal-close {
-            position: absolute; top: 14px; right: 18px;
-            background: none; border: none; color: #666;
-            font-size: 24px; cursor: pointer; transition: 0.2s;
-        }
-        .payment-modal .modal-close:hover { color: #fff; }
-        .payment-modal .plan-detail { text-align: center; margin: 10px 0 20px 0; }
-        .payment-modal .plan-detail .name { font-size: 22px; font-weight: bold; color: #fff; }
-        .payment-modal .plan-detail .price { font-size: 32px; font-weight: bold; color: var(--primary-color); margin-top: 4px; }
-        .payment-modal .plan-detail .duration { color: #888; font-size: 14px; }
-        .payment-modal .form-group { margin-bottom: 16px; }
-        .payment-modal .form-group label { display: block; color: #aaa; font-size: 13px; margin-bottom: 6px; font-weight: 600; }
-        .payment-modal .form-group input {
-            width: 100%; padding: 12px 16px;
-            background: #0a0a1a; border: 2px solid rgba(255,255,255,0.06);
-            border-radius: 10px; color: #fff; font-size: 16px;
-            outline: none; transition: 0.25s;
-        }
-        .payment-modal .form-group input:focus { border-color: var(--primary-color); }
-        .payment-modal .btn {
-            width: 100%; padding: 14px;
-            background: var(--primary-color); color: var(--button-text-color);
-            border: none; border-radius: 10px;
-            font-size: 16px; font-weight: bold; cursor: pointer; transition: 0.2s;
-        }
-        .payment-modal .btn:hover { opacity: 0.85; transform: scale(1.01); }
-        .payment-modal .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
-        .payment-modal .error-msg { color: #ff4444; font-size: 13px; margin-top: 8px; display: none; text-align: center; }
-        .payment-modal .error-msg.show { display: block; }
-        .payment-modal .test-hint { text-align: center; color: #555; font-size: 11px; margin-top: 12px; border-top: 1px solid rgba(255,255,255,0.04); padding-top: 12px; }
+    // CONTAINER
+    html += '<div class="container" id="mainContainer">\n';
+    html += '<h2 style="color:var(--primary-color); margin-bottom:8px;">📶 Choose Your Plan</h2>\n';
+    html += '<p style="color:#888; margin-bottom:16px;">Select a package that fits your needs</p>\n';
+    html += '<div class="plans-grid" id="plansGrid">\n';
+    html += '<div style="text-align:center;padding:40px;color:#888;grid-column:1/-1;">\n';
+    html += '<span class="loading"></span> Loading plans...\n';
+    html += '</div>\n';
+    html += '</div>\n';
 
-        /* ============================================================
-           SUCCESS OVERLAY
-           ============================================================ */
-        .success-overlay {
-            position: fixed; top: 0; left: 0; right: 0; bottom: 0;
-            background: var(--bg-gradient);
-            display: none; flex-direction: column; align-items: center; justify-content: center;
-            z-index: 1000; padding: 40px 20px;
-            animation: fadeIn 0.6s ease;
-        }
-        .success-overlay.active { display: flex; }
-        @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
-        .success-overlay .logo { max-width: 120px; max-height: 70px; margin-bottom: 12px; ${logo ? '' : 'display: none;'} }
-        .success-overlay .icon { font-size: 72px; margin-bottom: 12px; }
-        .success-overlay .title { font-size: 36px; font-weight: 700; color: var(--primary-color); text-align: center; }
-        .success-overlay .subtitle { font-size: 18px; color: #aaa; text-align: center; margin-top: 4px; }
-        .success-overlay .business-name { font-size: 22px; color: #fff; margin-top: 8px; text-align: center; }
-        .success-overlay .timer-container { margin: 25px 0 10px 0; text-align: center; padding: 25px 40px; background: rgba(0,0,0,0.3); border-radius: 16px; border: 1px solid rgba(255,255,255,0.05); }
-        .success-overlay .timer-label { color: #888; font-size: 14px; text-transform: uppercase; letter-spacing: 2px; }
-        .success-overlay .timer { font-size: 56px; font-weight: 700; color: var(--primary-color); font-family: 'Courier New', monospace; letter-spacing: 4px; margin-top: 4px; }
-        .success-overlay .timer.expired { color: #ff4444; }
-        .success-overlay .enjoy-text { color: var(--primary-color); font-size: 18px; margin-top: 16px; opacity: 0.9; text-align: center; }
-        .success-overlay .credentials { background: rgba(0,0,0,0.3); border-radius: 12px; padding: 16px 24px; margin-top: 16px; border: 1px solid rgba(255,255,255,0.05); width: 100%; max-width: 400px; }
-        .success-overlay .credentials .row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.03); }
-        .success-overlay .credentials .row:last-child { border-bottom: none; }
-        .success-overlay .credentials .label { color: #888; font-size: 13px; }
-        .success-overlay .credentials .value { color: #fff; font-family: monospace; font-size: 13px; }
-        .success-overlay .auto-close { color: #555; font-size: 12px; margin-top: 20px; animation: pulse 2s infinite; }
-        @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }
-        .success-overlay .powered-by { color: #444; font-size: 12px; margin-top: 30px; }
-        .success-overlay .powered-by .brand { color: var(--primary-color); font-weight: bold; }
+    // VOUCHER SECTION
+    html += '<div class="voucher-section" id="voucherSection">\n';
+    html += '<h3>🎟️ Have a Voucher?</h3>\n';
+    html += '<div class="form-row">\n';
+    html += '<input type="text" id="voucherInput" placeholder="Enter voucher code (e.g., ABC123XYZ)" autocomplete="off">\n';
+    html += '<input type="tel" id="voucherPhoneInput" placeholder="📱 Your phone number" autocomplete="off">\n';
+    html += '<button class="btn" id="voucherRedeemBtn" onclick="redeemVoucher()">🎟️ Redeem</button>\n';
+    html += '</div>\n';
+    html += '<div class="voucher-result" id="voucherResult"></div>\n';
+    html += '</div>\n';
 
-        .toast {
-            position: fixed; bottom: 30px; right: 30px;
-            padding: 14px 22px; border-radius: 12px;
-            background: #1a1a2e; border: 1px solid rgba(255,255,255,0.05);
-            color: #fff; font-size: 14px; z-index: 999;
-            transform: translateY(100px); opacity: 0;
-            transition: 0.35s ease; max-width: 400px;
-            box-shadow: 0 20px 60px rgba(0,0,0,0.4);
-        }
-        .toast.show { transform: translateY(0); opacity: 1; }
-        .toast.success { border-color: var(--primary-color); }
-        .toast.error { border-color: #ff4444; }
-        .toast.info { border-color: #2196f3; }
+    // CHECK & CONNECT
+    html += '<div class="check-section">\n';
+    html += '<button class="btn" onclick="checkAndConnect()">🔌 Check & Connect</button>\n';
+    html += '<div class="result" id="checkResult"></div>\n';
+    html += '</div>\n';
+    html += '</div>\n';
 
-        .loading {
-            display: inline-block;
-            width: 20px;
-            height: 20px;
-            border: 3px solid rgba(255,255,255,0.1);
-            border-top-color: var(--primary-color);
-            border-radius: 50%;
-            animation: spin 0.8s linear infinite;
-            vertical-align: middle;
-            margin-right: 8px;
-        }
-        @keyframes spin { to { transform: rotate(360deg); } }
+    // PAYMENT MODAL
+    html += '<div class="payment-modal-overlay" id="paymentModal">\n';
+    html += '<div class="payment-modal">\n';
+    html += '<button class="modal-close" onclick="closePaymentModal()">✕</button>\n';
+    html += '<div class="plan-detail">\n';
+    html += '<div class="name" id="modalPlanName">2 Hours</div>\n';
+    html += '<div class="price" id="modalPlanPrice">KES 10</div>\n';
+    html += '<div class="duration" id="modalPlanDuration">Valid for 2 hours</div>\n';
+    html += '</div>\n';
+    html += '<div class="form-group">\n';
+    html += '<label>📱 Phone Number</label>\n';
+    html += '<input type="tel" id="modalPhone" placeholder="0712345678" autofocus>\n';
+    html += '</div>\n';
+    html += '<button class="btn" id="modalPayBtn" onclick="modalPay()">💳 Pay Now</button>\n';
+    html += '<div class="error-msg" id="modalError">Please enter a valid phone number</div>\n';
+    html += '<div class="test-hint">🔑 Test PIN: 12345</div>\n';
+    html += '</div>\n';
+    html += '</div>\n';
 
-        @media (max-width: 600px) {
-            .header h1 { font-size: 24px; }
-            .plans-grid { grid-template-columns: 1fr 1fr; gap: 12px; }
-            .plan-card { padding: 16px; }
-            .plan-card .plan-name { font-size: 16px; }
-            .plan-card .plan-price { font-size: 22px; }
-            .payment-modal { padding: 24px 20px; }
-            .success-overlay .timer { font-size: 38px; }
-            .success-overlay .title { font-size: 28px; }
-            .success-overlay .timer-container { padding: 20px; min-width: 200px; }
-            .voucher-section .form-row { flex-direction: column; }
-            .voucher-section .form-row .btn { width: 100%; }
-        }
-        @media (max-width: 400px) { .plans-grid { grid-template-columns: 1fr; } }
-        ::-webkit-scrollbar { width: 6px; }
-        ::-webkit-scrollbar-track { background: var(--accent-color); }
-        ::-webkit-scrollbar-thumb { background: #2a2a4a; border-radius: 3px; }
-    </style>
-</head>
-<body>
+    // SUCCESS OVERLAY
+    html += '<div class="success-overlay" id="successOverlay">\n';
+    if (logo) {
+        html += '<img id="successLogo" src="' + logo + '" alt="' + businessName + '" class="logo">\n';
+    } else {
+        html += '<img id="successLogo" src="" alt="Logo" class="logo" style="display:none;">\n';
+    }
+    html += '<div class="icon">🎉</div>\n';
+    html += '<div class="title">You\'re Connected!</div>\n';
+    html += '<div class="subtitle">Enjoy your high-speed internet</div>\n';
+    html += '<div class="business-name" id="successBusinessName">' + businessName + '</div>\n';
+    html += '<div class="timer-container">\n';
+    html += '<div class="timer-label">⏱ Time Remaining</div>\n';
+    html += '<div class="timer" id="successTimer">--:--:--</div>\n';
+    html += '</div>\n';
+    html += '<div class="credentials" id="successCredentials">\n';
+    html += '<div class="row"><span class="label">Username</span><span class="value" id="credUsername">-</span></div>\n';
+    html += '<div class="row"><span class="label">Password</span><span class="value" id="credPassword">-</span></div>\n';
+    html += '<div class="row"><span class="label">Plan</span><span class="value" id="credPlan">-</span></div>\n';
+    html += '</div>\n';
+    html += '<div class="enjoy-text" id="enjoyText">🌐 Enjoy your browsing!</div>\n';
+    html += '<div class="auto-close">⏳ This page will close automatically when your plan expires</div>\n';
+    html += '<div class="powered-by">Powered by <span class="brand" id="brandName">' + businessName + '</span></div>\n';
+    html += '</div>\n';
 
-    <div class="header" id="pageHeader">
-        ${logo ? `<img src="${logo}" alt="${businessName}" class="logo">` : ''}
-        <h1>🌐 ${businessName}</h1>
-        <p id="tagline">${tagline}</p>
-    </div>
+    // TOAST
+    html += '<div class="toast" id="toast">\n';
+    html += '<span id="toastIcon">✅</span>\n';
+    html += '<span id="toastMessage">Success!</span>\n';
+    html += '</div>\n';
 
-    <div class="container" id="mainContainer">
-        <h2 style="color:var(--primary-color); margin-bottom:8px;">📶 Choose Your Plan</h2>
-        <p style="color:#888; margin-bottom:16px;">Select a package that fits your needs</p>
-        <div class="plans-grid" id="plansGrid">
-            <div style="text-align:center;padding:40px;color:#888;grid-column:1/-1;">
-                <span class="loading"></span> Loading plans...
-            </div>
-        </div>
+    // JAVASCRIPT
+    html += '<script>\n';
+    html += 'var RENDER_URL = "' + (process.env.RENDER_URL || 'https://billing-system-fm9a.onrender.com') + '";\n';
+    html += 'var currentHost = window.location.hostname;\n';
+    html += 'var isLocal = currentHost === "localhost" || currentHost === "127.0.0.1" || currentHost === "" || currentHost === "192.168.88.1" || currentHost === "192.168.1.1" || window.location.protocol === "file:";\n';
+    html += 'var API_URL = isLocal ? RENDER_URL + "/api" : window.location.origin + "/api";\n';
+    html += 'console.log("📡 API URL:", API_URL);\n';
 
-        <!-- ============================================================
-        VOUCHER SECTION - VISIBLE ON PAGE
-        ============================================================ -->
-        <div class="voucher-section" id="voucherSection">
-            <h3>🎟️ Have a Voucher?</h3>
-            <div class="form-row">
-                <input type="text" id="voucherInput" placeholder="Enter voucher code (e.g., ABC123XYZ)" autocomplete="off">
-                <input type="tel" id="voucherPhoneInput" placeholder="📱 Your phone number" autocomplete="off">
-                <button class="btn" id="voucherRedeemBtn" onclick="redeemVoucher()">🎟️ Redeem</button>
-            </div>
-            <div class="voucher-result" id="voucherResult"></div>
-        </div>
+    html += 'var ORG_ID = "' + orgId + '";\n';
+    html += 'if (!ORG_ID || ORG_ID === "") {\n';
+    html += 'var pathParts = window.location.pathname.split("/");\n';
+    html += 'for (var i = 0; i < pathParts.length; i++) {\n';
+    html += 'if (pathParts[i].startsWith("CLIENT_")) { ORG_ID = pathParts[i]; break; }\n';
+    html += '}\n';
+    html += '}\n';
+    html += 'if (!ORG_ID || ORG_ID === "") {\n';
+    html += 'var urlParams = new URLSearchParams(window.location.search);\n';
+    html += 'ORG_ID = urlParams.get("org") || urlParams.get("client") || "";\n';
+    html += '}\n';
+    html += 'console.log("🏢 Organization ID:", ORG_ID);\n';
 
-        <!-- ============================================================
-        CHECK & CONNECT
-        ============================================================ -->
-        <div class="check-section">
-            <button class="btn" onclick="checkAndConnect()">🔌 Check & Connect</button>
-            <div class="result" id="checkResult"></div>
-        </div>
-    </div>
+    html += 'var plans = [];\n';
+    html += 'var selectedPlan = null;\n';
+    html += 'var pollingInterval = null;\n';
+    html += 'var currentTransactionId = null;\n';
+    html += 'var countdownInterval = null;\n';
+    html += 'var credentials = null;\n';
+    html += 'var pollingActive = false;\n';
+    html += 'var plansGrid = document.getElementById("plansGrid");\n';
 
-    <!-- PAYMENT MODAL -->
-    <div class="payment-modal-overlay" id="paymentModal">
-        <div class="payment-modal">
-            <button class="modal-close" onclick="closePaymentModal()">✕</button>
-            <div class="plan-detail">
-                <div class="name" id="modalPlanName">2 Hours</div>
-                <div class="price" id="modalPlanPrice">KES 10</div>
-                <div class="duration" id="modalPlanDuration">Valid for 2 hours</div>
-            </div>
-            <div class="form-group">
-                <label>📱 Phone Number</label>
-                <input type="tel" id="modalPhone" placeholder="0712345678" autofocus>
-            </div>
-            <button class="btn" id="modalPayBtn" onclick="modalPay()">💳 Pay Now</button>
-            <div class="error-msg" id="modalError">Please enter a valid phone number</div>
-            <div class="test-hint">🔑 Test PIN: 12345</div>
-        </div>
-    </div>
+    html += 'document.addEventListener("DOMContentLoaded", function() {\n';
+    html += 'if (ORG_ID && ORG_ID !== "") {\n';
+    html += 'loadOrganizationData();\n';
+    html += '} else {\n';
+    html += 'plansGrid.innerHTML = "<div style=\\"text-align:center;padding:40px;color:#ff4444;grid-column:1/-1;\\">❌ Organization ID not found</div>";\n';
+    html += '}\n';
+    html += '});\n';
 
-    <!-- SUCCESS OVERLAY -->
-    <div class="success-overlay" id="successOverlay">
-        ${logo ? `<img src="${logo}" alt="${businessName}" class="logo">` : ''}
-        <div class="icon">🎉</div>
-        <div class="title">You're Connected!</div>
-        <div class="subtitle">Enjoy your high-speed internet</div>
-        <div class="business-name" id="successBusinessName">${businessName}</div>
-        <div class="timer-container">
-            <div class="timer-label">⏱ Time Remaining</div>
-            <div class="timer" id="successTimer">--:--:--</div>
-        </div>
-        <div class="credentials" id="successCredentials">
-            <div class="row"><span class="label">Username</span><span class="value" id="credUsername">-</span></div>
-            <div class="row"><span class="label">Password</span><span class="value" id="credPassword">-</span></div>
-            <div class="row"><span class="label">Plan</span><span class="value" id="credPlan">-</span></div>
-        </div>
-        <div class="enjoy-text" id="enjoyText">🌐 Enjoy your browsing!</div>
-        <div class="auto-close">⏳ This page will close automatically when your plan expires</div>
-        <div class="powered-by">Powered by <span class="brand" id="brandName">${businessName}</span></div>
-    </div>
+    html += 'function loadOrganizationData() {\n';
+    html += 'fetch(API_URL + "/organization/" + ORG_ID)\n';
+    html += '.then(function(r) { return r.json(); })\n';
+    html += '.then(function(data) {\n';
+    html += 'if (data.success) {\n';
+    html += 'var org = data.data;\n';
+    html += 'plans = org.plans || [];\n';
+    html += 'if (org.primaryColor) {\n';
+    html += 'document.documentElement.style.setProperty("--primary-color", org.primaryColor);\n';
+    html += '}\n';
+    html += 'if (org.businessName) {\n';
+    html += 'document.getElementById("businessName").textContent = "🌐 " + org.businessName;\n';
+    html += 'document.getElementById("successBusinessName").textContent = org.businessName;\n';
+    html += 'document.getElementById("brandName").textContent = org.businessName;\n';
+    html += 'document.title = org.businessName + " - WiFi Services";\n';
+    html += '}\n';
+    html += 'if (org.businessTagline) {\n';
+    html += 'document.getElementById("tagline").textContent = org.businessTagline;\n';
+    html += '}\n';
+    html += 'if (org.logo) {\n';
+    html += 'var logoImg = document.getElementById("logoImage");\n';
+    html += 'logoImg.src = org.logo;\n';
+    html += 'logoImg.style.display = "block";\n';
+    html += 'var successLogo = document.getElementById("successLogo");\n';
+    html += 'successLogo.src = org.logo;\n';
+    html += 'successLogo.style.display = "block";\n';
+    html += '}\n';
+    html += 'renderPlans();\n';
+    html += '} else {\n';
+    html += 'plansGrid.innerHTML = "<div style=\\"text-align:center;padding:40px;color:#ff4444;grid-column:1/-1;\\">❌ " + (data.message || "Failed to load plans") + "</div>";\n';
+    html += '}\n';
+    html += '})\n';
+    html += '.catch(function(err) {\n';
+    html += 'plansGrid.innerHTML = "<div style=\\"text-align:center;padding:40px;color:#ff4444;grid-column:1/-1;\\">❌ Network error loading plans<br><button onclick=\\"loadOrganizationData()\\" style=\\"padding:8px 20px;background:var(--primary-color);color:#000;border:none;border-radius:6px;cursor:pointer;\\">🔄 Retry</button></div>";\n';
+    html += '});\n';
+    html += '}\n';
 
-    <div class="toast" id="toast">
-        <span id="toastIcon">✅</span>
-        <span id="toastMessage">Success!</span>
-    </div>
+    html += 'function renderPlans() {\n';
+    html += 'if (!plans || plans.length === 0) {\n';
+    html += 'plansGrid.innerHTML = "<div style=\\"text-align:center;padding:40px;color:#666;grid-column:1/-1;\\">No plans available</div>";\n';
+    html += 'return;\n';
+    html += '}\n';
+    html += 'var html = "";\n';
+    html += 'for (var i = 0; i < plans.length; i++) {\n';
+    html += 'var p = plans[i];\n';
+    html += 'var duration = p.duration_seconds || 3600;\n';
+    html += 'var hours = Math.floor(duration / 3600);\n';
+    html += 'var days = Math.floor(duration / 86400);\n';
+    html += 'var durationStr = "";\n';
+    html += 'if (days > 0) { durationStr = days + " day" + (days > 1 ? "s" : ""); } else { durationStr = hours + " hour" + (hours > 1 ? "s" : ""); }\n';
+    html += 'var isPopular = p.id === "1_Week_1_Device" || p.id === "24_Hours";\n';
+    html += 'html += "<div class=\\"plan-card\\" onclick=\\"openPaymentModal(\'" + p.id + "\')\\" data-plan-id=\\"" + p.id + "\\">";\n';
+    html += 'if (isPopular) { html += "<div class=\\"badge\\">🔥 Popular</div>"; }\n';
+    html += 'html += "<div class=\\"plan-name\\">" + p.name + "</div>";\n';
+    html += 'html += "<div class=\\"plan-price\\">KES " + p.price + " <span>/ " + durationStr + "</span></div>";\n';
+    html += 'html += "<ul class=\\"plan-features\\">";\n';
+    html += 'html += "<li>" + (p.devices || 1) + " device" + ((p.devices || 1) > 1 ? "s" : "") + "</li>";\n';
+    html += 'html += "<li>" + (p.shared_users || 1) + " user" + ((p.shared_users || 1) > 1 ? "s" : "") + "</li>";\n';
+    html += 'html += "<li>Valid for " + durationStr + "</li>";\n';
+    html += 'html += "</ul></div>";\n';
+    html += '}\n';
+    html += 'plansGrid.innerHTML = html;\n';
+    html += '}\n';
 
-    <script>
-        // ============================================================
-        // CONFIGURATION
-        // ============================================================
-        const RENDER_URL = 'https://billing-system-fm9a.onrender.com';
-        const currentHost = window.location.hostname;
-        const isLocal = currentHost === 'localhost' || currentHost === '127.0.0.1' || currentHost === '' ||
-                        currentHost === '192.168.88.1' || currentHost === '192.168.1.1' ||
-                        window.location.protocol === 'file:';
+    html += 'function redeemVoucher() {\n';
+    html += 'var code = document.getElementById("voucherInput").value.trim().toUpperCase();\n';
+    html += 'var phone = document.getElementById("voucherPhoneInput").value.trim();\n';
+    html += 'var resultEl = document.getElementById("voucherResult");\n';
+    html += 'var btn = document.getElementById("voucherRedeemBtn");\n';
+    html += 'if (!code) { resultEl.textContent = "❌ Please enter a voucher code"; resultEl.className = "voucher-result error"; return; }\n';
+    html += 'if (!phone || phone.length < 10) { resultEl.textContent = "❌ Please enter a valid phone number"; resultEl.className = "voucher-result error"; return; }\n';
+    html += 'btn.disabled = true;\n';
+    html += 'btn.innerHTML = "<span class=\\"loading\\"></span> Processing...";\n';
+    html += 'resultEl.innerHTML = "<span class=\\"loading\\"></span> Redeeming...";\n';
+    html += 'resultEl.className = "voucher-result";\n';
+    html += 'fetch(API_URL + "/voucher/redeem", {\n';
+    html += 'method: "POST",\n';
+    html += 'headers: { "Content-Type": "application/json" },\n';
+    html += 'body: JSON.stringify({ code: code, phoneNumber: phone })\n';
+    html += '})\n';
+    html += '.then(function(r) { return r.json(); })\n';
+    html += '.then(function(data) {\n';
+    html += 'btn.disabled = false;\n';
+    html += 'btn.innerHTML = "🎟️ Redeem";\n';
+    html += 'if (data.success) {\n';
+    html += 'resultEl.textContent = "✅ Voucher redeemed successfully! Connecting...";\n';
+    html += 'resultEl.className = "voucher-result success";\n';
+    html += 'showToast("🎟️ Voucher redeemed!", "success");\n';
+    html += 'credentials = { username: data.data.username || "voucher_user", password: data.data.password || "pass_" + Date.now(), plan: data.data.planName || "Voucher Plan", expiresAt: data.data.expiresAt || new Date(Date.now() + 3600000).toISOString() };\n';
+    html += 'showSuccessScreen(credentials);\n';
+    html += '} else {\n';
+    html += 'resultEl.textContent = "❌ " + (data.message || "Invalid voucher");\n';
+    html += 'resultEl.className = "voucher-result error";\n';
+    html += 'showToast("❌ " + data.message, "error");\n';
+    html += '}\n';
+    html += '})\n';
+    html += '.catch(function(err) {\n';
+    html += 'btn.disabled = false;\n';
+    html += 'btn.innerHTML = "🎟️ Redeem";\n';
+    html += 'resultEl.textContent = "❌ Network error";\n';
+    html += 'resultEl.className = "voucher-result error";\n';
+    html += '});\n';
+    html += '}\n';
 
-        let API_URL = isLocal ? RENDER_URL + '/api' : window.location.origin + '/api';
-        console.log('📡 API URL:', API_URL);
+    html += 'function checkAndConnect() {\n';
+    html += 'var phone = prompt("📱 Enter your phone number to check for active plan:");\n';
+    html += 'if (!phone || phone.length < 10) { showToast("Please enter a valid phone number", "error"); return; }\n';
+    html += 'var resultEl = document.getElementById("checkResult");\n';
+    html += 'resultEl.innerHTML = "<span class=\\"loading\\"></span> Checking...";\n';
+    html += 'resultEl.className = "result";\n';
+    html += 'fetch(API_URL + "/check-active?phone=" + encodeURIComponent(phone))\n';
+    html += '.then(function(r) { return r.json(); })\n';
+    html += '.then(function(data) {\n';
+    html += 'if (data.success && data.active) {\n';
+    html += 'resultEl.innerHTML = "✅ Active Plan Found! Connecting...";\n';
+    html += 'resultEl.className = "result success";\n';
+    html += 'credentials = { username: data.data.username, password: data.data.password, plan: data.data.planName, expiresAt: data.data.expiresAt };\n';
+    html += 'showSuccessScreen(credentials);\n';
+    html += '} else {\n';
+    html += 'resultEl.innerHTML = "❌ No active plan found. Please purchase a plan below.";\n';
+    html += 'resultEl.className = "result error";\n';
+    html += 'showToast("No active plan found. Please purchase a plan.", "error");\n';
+    html += '}\n';
+    html += '})\n';
+    html += '.catch(function(err) {\n';
+    html += 'resultEl.innerHTML = "❌ Network error checking status";\n';
+    html += 'resultEl.className = "result error";\n';
+    html += '});\n';
+    html += '}\n';
 
-        // ============================================================
-        // ORGANIZATION ID - MULTIPLE DETECTION METHODS
-        // ============================================================
-        let ORG_ID = '${orgId}';
-        if (!ORG_ID || ORG_ID === '') {
-            const pathParts = window.location.pathname.split('/');
-            for (const part of pathParts) {
-                if (part.startsWith('CLIENT_')) { ORG_ID = part; break; }
-            }
-        }
-        if (!ORG_ID || ORG_ID === '') {
-            const urlParams = new URLSearchParams(window.location.search);
-            ORG_ID = urlParams.get('org') || urlParams.get('client') || '';
-        }
-        if (!ORG_ID || ORG_ID === '') {
-            ORG_ID = localStorage.getItem('client_org_id') || '';
-        }
-        console.log('🏢 Organization ID:', ORG_ID);
-        if (ORG_ID && ORG_ID !== '') { localStorage.setItem('client_org_id', ORG_ID); }
+    html += 'function openPaymentModal(planId) {\n';
+    html += 'var plan = null;\n';
+    html += 'for (var i = 0; i < plans.length; i++) { if (plans[i].id === planId) { plan = plans[i]; break; } }\n';
+    html += 'if (!plan) { showToast("Plan not found", "error"); return; }\n';
+    html += 'selectedPlan = plan;\n';
+    html += 'var duration = plan.duration_seconds || 3600;\n';
+    html += 'var hours = Math.floor(duration / 3600);\n';
+    html += 'var days = Math.floor(duration / 86400);\n';
+    html += 'var durationStr = "";\n';
+    html += 'if (days > 0) { durationStr = days + " day" + (days > 1 ? "s" : ""); } else { durationStr = hours + " hour" + (hours > 1 ? "s" : ""); }\n';
+    html += 'document.getElementById("modalPlanName").textContent = plan.name;\n';
+    html += 'document.getElementById("modalPlanPrice").textContent = "KES " + plan.price;\n';
+    html += 'document.getElementById("modalPlanDuration").textContent = "Valid for " + durationStr;\n';
+    html += 'document.getElementById("modalPhone").value = "";\n';
+    html += 'document.getElementById("modalError").classList.remove("show");\n';
+    html += 'document.getElementById("paymentModal").classList.add("active");\n';
+    html += 'setTimeout(function() { document.getElementById("modalPhone").focus(); }, 300);\n';
+    html += '}\n';
 
-        // ============================================================
-        // STATE
-        // ============================================================
-        let plans = [];
-        let selectedPlan = null;
-        let pollingInterval = null;
-        let currentTransactionId = null;
-        let countdownInterval = null;
-        let credentials = null;
-        let pollingActive = false;
+    html += 'function closePaymentModal() {\n';
+    html += 'document.getElementById("paymentModal").classList.remove("active");\n';
+    html += 'document.getElementById("modalError").classList.remove("show");\n';
+    html += '}\n';
 
-        const plansGrid = document.getElementById('plansGrid');
+    html += 'document.getElementById("paymentModal").addEventListener("click", function(e) {\n';
+    html += 'if (e.target === this) closePaymentModal();\n';
+    html += '});\n';
 
-        // ============================================================
-        // INIT
-        // ============================================================
-        document.addEventListener('DOMContentLoaded', () => {
-            if (ORG_ID && ORG_ID !== '') {
-                loadOrganizationData();
-            } else {
-                plansGrid.innerHTML = '<div style="text-align:center;padding:40px;color:#ff4444;grid-column:1/-1;">❌ Organization ID not found</div>';
-            }
-        });
+    html += 'document.getElementById("modalPhone").addEventListener("keydown", function(e) {\n';
+    html += 'if (e.key === "Enter") modalPay();\n';
+    html += '});\n';
 
-        // ============================================================
-        // LOAD ORGANIZATION DATA
-        // ============================================================
-        function loadOrganizationData() {
-            fetch(API_URL + '/organization/' + ORG_ID)
-                .then(r => r.json())
-                .then(data => {
-                    if (data.success) {
-                        const org = data.data;
-                        plans = org.plans || [];
-                        if (org.primaryColor) {
-                            document.documentElement.style.setProperty('--primary-color', org.primaryColor);
-                        }
-                        if (org.businessName) {
-                            document.querySelector('.header h1').textContent = '🌐 ' + org.businessName;
-                            document.getElementById('successBusinessName').textContent = org.businessName;
-                            document.getElementById('brandName').textContent = org.businessName;
-                        }
-                        if (org.businessTagline) {
-                            document.getElementById('tagline').textContent = org.businessTagline;
-                        }
-                        if (org.logo) {
-                            document.querySelector('.header .logo').src = org.logo;
-                            document.querySelector('.header .logo').style.display = 'block';
-                            document.getElementById('successLogo').src = org.logo;
-                            document.getElementById('successLogo').style.display = 'block';
-                        }
-                        renderPlans();
-                    } else {
-                        plansGrid.innerHTML = '<div style="text-align:center;padding:40px;color:#ff4444;grid-column:1/-1;">❌ ' + (data.message || 'Failed to load plans') + '</div>';
-                    }
-                })
-                .catch(err => {
-                    plansGrid.innerHTML = '<div style="text-align:center;padding:40px;color:#ff4444;grid-column:1/-1;">❌ Network error loading plans<br><button onclick="loadOrganizationData()" style="padding:8px 20px;background:var(--primary-color);color:#000;border:none;border-radius:6px;cursor:pointer;">🔄 Retry</button></div>';
-                });
-        }
+    html += 'function modalPay() {\n';
+    html += 'var phone = document.getElementById("modalPhone").value.trim();\n';
+    html += 'var errorEl = document.getElementById("modalError");\n';
+    html += 'if (!phone || phone.length < 10) {\n';
+    html += 'errorEl.textContent = "📱 Please enter a valid phone number";\n';
+    html += 'errorEl.classList.add("show");\n';
+    html += 'return;\n';
+    html += '}\n';
+    html += 'errorEl.classList.remove("show");\n';
+    html += 'var btn = document.getElementById("modalPayBtn");\n';
+    html += 'btn.disabled = true;\n';
+    html += 'btn.innerHTML = "<span class=\\"loading\\"></span> Processing...";\n';
+    html += 'fetch(API_URL + "/payment/initiate", {\n';
+    html += 'method: "POST",\n';
+    html += 'headers: { "Content-Type": "application/json" },\n';
+    html += 'body: JSON.stringify({ phoneNumber: phone, amount: selectedPlan.price, planId: selectedPlan.id })\n';
+    html += '})\n';
+    html += '.then(function(r) { return r.json(); })\n';
+    html += '.then(function(data) {\n';
+    html += 'btn.disabled = false;\n';
+    html += 'btn.innerHTML = "💳 Pay Now";\n';
+    html += 'if (data.success) {\n';
+    html += 'if (data.isFree) {\n';
+    html += 'closePaymentModal();\n';
+    html += 'showToast("🎉 Free plan activated!", "success");\n';
+    html += 'fetchCredentials(data.transactionId);\n';
+    html += 'return;\n';
+    html += '}\n';
+    html += 'currentTransactionId = data.transactionId;\n';
+    html += 'closePaymentModal();\n';
+    html += 'showToast("📱 STK Push sent! Check your phone.", "info");\n';
+    html += 'startPolling(data.transactionId);\n';
+    html += '} else {\n';
+    html += 'errorEl.textContent = "❌ " + (data.message || "Payment failed");\n';
+    html += 'errorEl.classList.add("show");\n';
+    html += 'showToast("❌ Payment failed", "error");\n';
+    html += '}\n';
+    html += '})\n';
+    html += '.catch(function(err) {\n';
+    html += 'btn.disabled = false;\n';
+    html += 'btn.innerHTML = "💳 Pay Now";\n';
+    html += 'errorEl.textContent = "❌ Network error";\n';
+    html += 'errorEl.classList.add("show");\n';
+    html += '});\n';
+    html += '}\n';
 
-        // ============================================================
-        // RENDER PLANS
-        // ============================================================
-        function renderPlans() {
-            if (!plans || plans.length === 0) {
-                plansGrid.innerHTML = '<div style="text-align:center;padding:40px;color:#666;grid-column:1/-1;">No plans available</div>';
-                return;
-            }
-            plansGrid.innerHTML = plans.map(p => {
-                const duration = p.duration_seconds || 3600;
-                const hours = Math.floor(duration / 3600);
-                const days = Math.floor(duration / 86400);
-                const durationStr = days > 0 ? `${days} day${days > 1 ? 's' : ''}` : `${hours} hour${hours > 1 ? 's' : ''}`;
-                const isPopular = p.id === '1_Week_1_Device' || p.id === '24_Hours';
-                return \`
-                    <div class="plan-card" onclick="openPaymentModal('\${p.id}')" data-plan-id="\${p.id}">
-                        \${isPopular ? '<div class="badge">🔥 Popular</div>' : ''}
-                        <div class="plan-name">\${p.name}</div>
-                        <div class="plan-price">KES \${p.price} <span>/ \${durationStr}</span></div>
-                        <ul class="plan-features">
-                            <li>\${p.devices || 1} device\${(p.devices || 1) > 1 ? 's' : ''}</li>
-                            <li>\${p.shared_users || 1} user\${(p.shared_users || 1) > 1 ? 's' : ''}</li>
-                            <li>Valid for \${durationStr}</li>
-                        </ul>
-                    </div>
-                \`;
-            }).join('');
-        }
+    html += 'function startPolling(transactionId) {\n';
+    html += 'if (pollingInterval) { clearInterval(pollingInterval); pollingInterval = null; }\n';
+    html += 'if (pollingActive) return;\n';
+    html += 'pollingActive = true;\n';
+    html += 'var attempts = 0;\n';
+    html += 'var maxAttempts = 40;\n';
+    html += 'showToast("⏳ Waiting for payment confirmation...", "info");\n';
+    html += 'pollingInterval = setInterval(function() {\n';
+    html += 'attempts++;\n';
+    html += 'if (attempts > maxAttempts) {\n';
+    html += 'clearInterval(pollingInterval); pollingInterval = null; pollingActive = false;\n';
+    html += 'showToast("⏱️ Payment timed out.", "error");\n';
+    html += 'return;\n';
+    html += '}\n';
+    html += 'fetch(API_URL + "/transaction/" + transactionId)\n';
+    html += '.then(function(r) { return r.json(); })\n';
+    html += '.then(function(data) {\n';
+    html += 'if (data.success) {\n';
+    html += 'var tx = data.data;\n';
+    html += 'if (tx.status === "completed") {\n';
+    html += 'clearInterval(pollingInterval); pollingInterval = null; pollingActive = false;\n';
+    html += 'showToast("🎉 Payment successful!", "success");\n';
+    html += 'fetchCredentials(transactionId);\n';
+    html += '} else if (tx.status === "cancelled") {\n';
+    html += 'clearInterval(pollingInterval); pollingInterval = null; pollingActive = false;\n';
+    html += 'showToast("❌ Payment cancelled by user", "error");\n';
+    html += '} else if (tx.status === "failed") {\n';
+    html += 'clearInterval(pollingInterval); pollingInterval = null; pollingActive = false;\n';
+    html += 'showToast("❌ " + (tx.errorDescription || "Payment failed"), "error");\n';
+    html += '}\n';
+    html += '}\n';
+    html += '})\n';
+    html += '.catch(function(err) { console.error("Polling error:", err); });\n';
+    html += '}, 3000);\n';
+    html += '}\n';
 
-        // ============================================================
-        // REDEEM VOUCHER - VISIBLE ON PAGE
-        // ============================================================
-        function redeemVoucher() {
-            const code = document.getElementById('voucherInput').value.trim().toUpperCase();
-            const phone = document.getElementById('voucherPhoneInput').value.trim();
-            const resultEl = document.getElementById('voucherResult');
-            const btn = document.getElementById('voucherRedeemBtn');
+    html += 'function fetchCredentials(transactionId) {\n';
+    html += 'fetch(API_URL + "/get-credentials/" + transactionId)\n';
+    html += '.then(function(r) { return r.json(); })\n';
+    html += '.then(function(data) {\n';
+    html += 'if (data.success) {\n';
+    html += 'credentials = { username: data.username || "N/A", password: data.password || "N/A", plan: data.plan || "N/A", expiresAt: data.expiresAt };\n';
+    html += 'showSuccessScreen(credentials);\n';
+    html += '}\n';
+    html += '})\n';
+    html += '.catch(function(err) { console.error(err); });\n';
+    html += '}\n';
 
-            if (!code) {
-                resultEl.textContent = '❌ Please enter a voucher code';
-                resultEl.className = 'voucher-result error';
-                return;
-            }
-            if (!phone || phone.length < 10) {
-                resultEl.textContent = '❌ Please enter a valid phone number';
-                resultEl.className = 'voucher-result error';
-                return;
-            }
+    html += 'function showSuccessScreen(cred) {\n';
+    html += 'document.getElementById("mainContainer").style.display = "none";\n';
+    html += 'document.querySelector(".header").style.display = "none";\n';
+    html += 'document.getElementById("credUsername").textContent = cred.username;\n';
+    html += 'document.getElementById("credPassword").textContent = cred.password;\n';
+    html += 'document.getElementById("credPlan").textContent = cred.plan;\n';
+    html += 'document.getElementById("successOverlay").classList.add("active");\n';
+    html += 'if (cred.expiresAt) { startCountdown(cred.expiresAt); }\n';
+    html += '}\n';
 
-            btn.disabled = true;
-            btn.innerHTML = '<span class="loading"></span> Processing...';
-            resultEl.innerHTML = '<span class="loading"></span> Redeeming...';
-            resultEl.className = 'voucher-result';
+    html += 'function startCountdown(expiresAt) {\n';
+    html += 'if (countdownInterval) clearInterval(countdownInterval);\n';
+    html += 'var timerEl = document.getElementById("successTimer");\n';
+    html += 'function update() {\n';
+    html += 'var now = Date.now();\n';
+    html += 'var expiry = new Date(expiresAt).getTime();\n';
+    html += 'var diff = Math.max(0, expiry - now);\n';
+    html += 'if (diff <= 0) {\n';
+    html += 'timerEl.textContent = "00:00:00";\n';
+    html += 'timerEl.classList.add("expired");\n';
+    html += 'clearInterval(countdownInterval);\n';
+    html += 'setTimeout(function() {\n';
+    html += 'try { window.close(); } catch (e) {\n';
+    html += 'document.getElementById("enjoyText").textContent = "⏰ Your plan has expired. Please reconnect.";\n';
+    html += 'document.querySelector(".auto-close").textContent = "🔄 Refresh to purchase a new plan";\n';
+    html += '}\n';
+    html += '}, 3000);\n';
+    html += 'return;\n';
+    html += '}\n';
+    html += 'timerEl.classList.remove("expired");\n';
+    html += 'var hours = Math.floor(diff / 3600000);\n';
+    html += 'var mins = Math.floor((diff % 3600000) / 60000);\n';
+    html += 'var secs = Math.floor((diff % 60000) / 1000);\n';
+    html += 'timerEl.textContent = String(hours).padStart(2, "0") + ":" + String(mins).padStart(2, "0") + ":" + String(secs).padStart(2, "0");\n';
+    html += '}\n';
+    html += 'update();\n';
+    html += 'countdownInterval = setInterval(update, 1000);\n';
+    html += '}\n';
 
-            fetch(API_URL + '/voucher/redeem', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ code: code, phoneNumber: phone })
-            })
-            .then(r => r.json())
-            .then(data => {
-                btn.disabled = false;
-                btn.innerHTML = '🎟️ Redeem';
-                if (data.success) {
-                    resultEl.textContent = '✅ Voucher redeemed successfully! Connecting...';
-                    resultEl.className = 'voucher-result success';
-                    showToast('🎟️ Voucher redeemed!', 'success');
-                    credentials = {
-                        username: data.data.username || 'voucher_user',
-                        password: data.data.password || 'pass_' + Date.now(),
-                        plan: data.data.planName || 'Voucher Plan',
-                        expiresAt: data.data.expiresAt || new Date(Date.now() + 3600000).toISOString()
-                    };
-                    showSuccessScreen(credentials);
-                } else {
-                    resultEl.textContent = '❌ ' + (data.message || 'Invalid voucher');
-                    resultEl.className = 'voucher-result error';
-                    showToast('❌ ' + data.message, 'error');
-                }
-            })
-            .catch(err => {
-                btn.disabled = false;
-                btn.innerHTML = '🎟️ Redeem';
-                resultEl.textContent = '❌ Network error';
-                resultEl.className = 'voucher-result error';
-            });
-        }
+    html += 'function showToast(message, type) {\n';
+    html += 'type = type || "success";\n';
+    html += 'var icons = { success: "✅", error: "❌", info: "ℹ️" };\n';
+    html += 'var toast = document.getElementById("toast");\n';
+    html += 'toast.className = "toast " + type;\n';
+    html += 'document.getElementById("toastIcon").textContent = icons[type] || "✅";\n';
+    html += 'document.getElementById("toastMessage").textContent = message;\n';
+    html += 'toast.classList.add("show");\n';
+    html += 'clearTimeout(toast._timeout);\n';
+    html += 'toast._timeout = setTimeout(function() { toast.classList.remove("show"); }, 4000);\n';
+    html += '}\n';
 
-        // ============================================================
-        // CHECK & CONNECT - ONE CLICK
-        // ============================================================
-        function checkAndConnect() {
-            const phone = prompt('📱 Enter your phone number to check for active plan:');
-            if (!phone || phone.length < 10) {
-                showToast('Please enter a valid phone number', 'error');
-                return;
-            }
-            const resultEl = document.getElementById('checkResult');
-            resultEl.innerHTML = '<span class="loading"></span> Checking...';
-            resultEl.className = 'result';
+    html += 'document.getElementById("voucherInput").addEventListener("keydown", function(e) {\n';
+    html += 'if (e.key === "Enter") { document.getElementById("voucherPhoneInput").focus(); }\n';
+    html += '});\n';
+    html += 'document.getElementById("voucherPhoneInput").addEventListener("keydown", function(e) {\n';
+    html += 'if (e.key === "Enter") { redeemVoucher(); }\n';
+    html += '});\n';
 
-            fetch(API_URL + '/check-active?phone=' + encodeURIComponent(phone))
-                .then(r => r.json())
-                .then(data => {
-                    if (data.success && data.active) {
-                        resultEl.innerHTML = '✅ Active Plan Found! Connecting...';
-                        resultEl.className = 'result success';
-                        credentials = {
-                            username: data.data.username,
-                            password: data.data.password,
-                            plan: data.data.planName,
-                            expiresAt: data.data.expiresAt
-                        };
-                        showSuccessScreen(credentials);
-                    } else {
-                        resultEl.innerHTML = '❌ No active plan found. Please purchase a plan below.';
-                        resultEl.className = 'result error';
-                        showToast('No active plan found. Please purchase a plan.', 'error');
-                    }
-                })
-                .catch(err => {
-                    resultEl.innerHTML = '❌ Network error checking status';
-                    resultEl.className = 'result error';
-                });
-        }
+    html += '</script>\n';
+    html += '</body>\n';
+    html += '</html>';
 
-        // ============================================================
-        // OPEN PAYMENT MODAL
-        // ============================================================
-        function openPaymentModal(planId) {
-            const plan = plans.find(p => p.id === planId);
-            if (!plan) { showToast('Plan not found', 'error'); return; }
-            selectedPlan = plan;
-            const duration = plan.duration_seconds || 3600;
-            const hours = Math.floor(duration / 3600);
-            const days = Math.floor(duration / 86400);
-            const durationStr = days > 0 ? `${days} day${days > 1 ? 's' : ''}` : `${hours} hour${hours > 1 ? 's' : ''}`;
-            document.getElementById('modalPlanName').textContent = plan.name;
-            document.getElementById('modalPlanPrice').textContent = 'KES ' + plan.price;
-            document.getElementById('modalPlanDuration').textContent = 'Valid for ' + durationStr;
-            document.getElementById('modalPhone').value = '';
-            document.getElementById('modalError').classList.remove('show');
-            document.getElementById('paymentModal').classList.add('active');
-            setTimeout(() => { document.getElementById('modalPhone').focus(); }, 300);
-        }
-
-        function closePaymentModal() {
-            document.getElementById('paymentModal').classList.remove('active');
-            document.getElementById('modalError').classList.remove('show');
-        }
-
-        document.getElementById('paymentModal').addEventListener('click', function(e) {
-            if (e.target === this) closePaymentModal();
-        });
-
-        document.getElementById('modalPhone').addEventListener('keydown', function(e) {
-            if (e.key === 'Enter') modalPay();
-        });
-
-        // ============================================================
-        // MODAL PAYMENT
-        // ============================================================
-        function modalPay() {
-            const phone = document.getElementById('modalPhone').value.trim();
-            const errorEl = document.getElementById('modalError');
-            if (!phone || phone.length < 10) {
-                errorEl.textContent = '📱 Please enter a valid phone number';
-                errorEl.classList.add('show');
-                return;
-            }
-            errorEl.classList.remove('show');
-            const btn = document.getElementById('modalPayBtn');
-            btn.disabled = true;
-            btn.innerHTML = '<span class="loading"></span> Processing...';
-
-            fetch(API_URL + '/payment/initiate', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ phoneNumber: phone, amount: selectedPlan.price, planId: selectedPlan.id })
-            })
-            .then(r => r.json())
-            .then(data => {
-                btn.disabled = false;
-                btn.innerHTML = '💳 Pay Now';
-                if (data.success) {
-                    if (data.isFree) {
-                        closePaymentModal();
-                        showToast('🎉 Free plan activated!', 'success');
-                        fetchCredentials(data.transactionId);
-                        return;
-                    }
-                    currentTransactionId = data.transactionId;
-                    closePaymentModal();
-                    showToast('📱 STK Push sent! Check your phone.', 'info');
-                    startPolling(data.transactionId);
-                } else {
-                    errorEl.textContent = '❌ ' + (data.message || 'Payment failed');
-                    errorEl.classList.add('show');
-                    showToast('❌ Payment failed', 'error');
-                }
-            })
-            .catch(err => {
-                btn.disabled = false;
-                btn.innerHTML = '💳 Pay Now';
-                errorEl.textContent = '❌ Network error';
-                errorEl.classList.add('show');
-            });
-        }
-
-        // ============================================================
-        // POLLING - WITH CANCELLATION HANDLING
-        // ============================================================
-        function startPolling(transactionId) {
-            if (pollingInterval) { clearInterval(pollingInterval); pollingInterval = null; }
-            if (pollingActive) return;
-            pollingActive = true;
-            let attempts = 0;
-            const maxAttempts = 40;
-            showToast('⏳ Waiting for payment confirmation...', 'info');
-
-            pollingInterval = setInterval(() => {
-                attempts++;
-                if (attempts > maxAttempts) {
-                    clearInterval(pollingInterval); pollingInterval = null; pollingActive = false;
-                    showToast('⏱️ Payment timed out.', 'error');
-                    return;
-                }
-                fetch(API_URL + '/transaction/' + transactionId)
-                    .then(r => r.json())
-                    .then(data => {
-                        if (data.success) {
-                            const tx = data.data;
-                            if (tx.status === 'completed') {
-                                clearInterval(pollingInterval); pollingInterval = null; pollingActive = false;
-                                showToast('🎉 Payment successful!', 'success');
-                                fetchCredentials(transactionId);
-                            } else if (tx.status === 'cancelled') {
-                                clearInterval(pollingInterval); pollingInterval = null; pollingActive = false;
-                                showToast('❌ Payment cancelled by user', 'error');
-                            } else if (tx.status === 'failed') {
-                                clearInterval(pollingInterval); pollingInterval = null; pollingActive = false;
-                                showToast('❌ ' + (tx.errorDescription || 'Payment failed'), 'error');
-                            }
-                        }
-                    })
-                    .catch(err => { console.error('Polling error:', err); });
-            }, 3000);
-        }
-
-        // ============================================================
-        // FETCH CREDENTIALS & SHOW SUCCESS
-        // ============================================================
-        function fetchCredentials(transactionId) {
-            fetch(API_URL + '/get-credentials/' + transactionId)
-                .then(r => r.json())
-                .then(data => {
-                    if (data.success) {
-                        credentials = {
-                            username: data.username || 'N/A',
-                            password: data.password || 'N/A',
-                            plan: data.plan || 'N/A',
-                            expiresAt: data.expiresAt
-                        };
-                        showSuccessScreen(credentials);
-                    }
-                })
-                .catch(console.error);
-        }
-
-        // ============================================================
-        // SHOW SUCCESS FULL-SCREEN
-        // ============================================================
-        function showSuccessScreen(cred) {
-            document.getElementById('mainContainer').style.display = 'none';
-            document.querySelector('.header').style.display = 'none';
-            document.getElementById('credUsername').textContent = cred.username;
-            document.getElementById('credPassword').textContent = cred.password;
-            document.getElementById('credPlan').textContent = cred.plan;
-            document.getElementById('successOverlay').classList.add('active');
-            if (cred.expiresAt) { startCountdown(cred.expiresAt); }
-        }
-
-        // ============================================================
-        // COUNTDOWN TIMER
-        // ============================================================
-        function startCountdown(expiresAt) {
-            if (countdownInterval) clearInterval(countdownInterval);
-            const timerEl = document.getElementById('successTimer');
-            function update() {
-                const now = Date.now();
-                const expiry = new Date(expiresAt).getTime();
-                const diff = Math.max(0, expiry - now);
-                if (diff <= 0) {
-                    timerEl.textContent = '00:00:00';
-                    timerEl.classList.add('expired');
-                    clearInterval(countdownInterval);
-                    setTimeout(() => {
-                        try { window.close(); } catch (e) {
-                            document.getElementById('enjoyText').textContent = '⏰ Your plan has expired. Please reconnect.';
-                            document.querySelector('.auto-close').textContent = '🔄 Refresh to purchase a new plan';
-                        }
-                    }, 3000);
-                    return;
-                }
-                timerEl.classList.remove('expired');
-                const hours = Math.floor(diff / 3600000);
-                const mins = Math.floor((diff % 3600000) / 60000);
-                const secs = Math.floor((diff % 60000) / 1000);
-                timerEl.textContent = String(hours).padStart(2, '0') + ':' + String(mins).padStart(2, '0') + ':' + String(secs).padStart(2, '0');
-            }
-            update();
-            countdownInterval = setInterval(update, 1000);
-        }
-
-        // ============================================================
-        // TOAST
-        // ============================================================
-        function showToast(message, type = 'success') {
-            const icons = { success: '✅', error: '❌', info: 'ℹ️' };
-            const toast = document.getElementById('toast');
-            toast.className = 'toast ' + type;
-            document.getElementById('toastIcon').textContent = icons[type] || '✅';
-            document.getElementById('toastMessage').textContent = message;
-            toast.classList.add('show');
-            clearTimeout(toast._timeout);
-            toast._timeout = setTimeout(() => { toast.classList.remove('show'); }, 4000);
-        }
-
-        // ============================================================
-        // ENTER KEY SUPPORT FOR VOUCHER
-        // ============================================================
-        document.getElementById('voucherInput').addEventListener('keydown', function(e) {
-            if (e.key === 'Enter') { document.getElementById('voucherPhoneInput').focus(); }
-        });
-        document.getElementById('voucherPhoneInput').addEventListener('keydown', function(e) {
-            if (e.key === 'Enter') { redeemVoucher(); }
-        });
-    </script>
-</body>
-</html>`;
+    return html;
 }
 
 // ============================================================
 // CREATE SERVER
 // ============================================================
 
-const server = http.createServer(async (req, res) => {
+var server = http.createServer(async function(req, res) {
     res.setHeader('Access-Control-Allow-Origin', '*');
     res.setHeader('Access-Control-Allow-Methods', 'POST, GET, PUT, DELETE, OPTIONS');
     res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
@@ -1267,20 +1194,20 @@ const server = http.createServer(async (req, res) => {
         return;
     }
 
-    const url = new URL(req.url, `http://${req.headers.host}`);
-    console.log(`📥 ${req.method} ${url.pathname}`);
+    var url = new URL(req.url, 'http://' + req.headers.host);
+    console.log('📥 ' + req.method + ' ' + url.pathname);
 
     try {
         // ===== SERVE HTML FILES =====
         if (req.method === 'GET' && url.pathname === '/') {
             if (serveHtmlFile(res, 'GICH_wifi.html')) return;
-            sendHtml(res, 200, `<h1>🌐 GICH WiFi Server</h1><p>✅ Server is running!</p>`);
+            sendHtml(res, 200, '<h1>🌐 GICH WiFi Server</h1><p>✅ Server is running!</p>');
             return;
         }
 
         if (req.method === 'GET' && (url.pathname === '/GICH_wifi.html' || url.pathname === '/GICH%20wifi.html')) {
             if (serveHtmlFile(res, 'GICH_wifi.html')) return;
-            sendHtml(res, 404, `<h1>File not found</h1>`);
+            sendHtml(res, 404, '<h1>File not found</h1>');
             return;
         }
 
@@ -1315,8 +1242,11 @@ const server = http.createServer(async (req, res) => {
 
         // Get Transaction
         if (req.method === 'GET' && url.pathname.startsWith('/api/transaction/')) {
-            const id = url.pathname.split('/').pop();
-            const transaction = transactions.find(t => t.id === id);
+            var id = url.pathname.split('/').pop();
+            var transaction = null;
+            for (var i = 0; i < transactions.length; i++) {
+                if (transactions[i].id === id) { transaction = transactions[i]; break; }
+            }
             if (!transaction) return sendJson(res, 404, { success: false, message: 'Transaction not found' });
             return sendJson(res, 200, {
                 success: true,
@@ -1337,16 +1267,23 @@ const server = http.createServer(async (req, res) => {
 
         // Get All Transactions
         if (req.method === 'GET' && url.pathname === '/api/transactions') {
-            const phone = url.searchParams.get('phone');
-            let filtered = phone ? transactions.filter(t => t.phoneNumber === phone) : transactions;
+            var phone = url.searchParams.get('phone');
+            var filtered = phone ? transactions.filter(function(t) { return t.phoneNumber === phone; }) : transactions;
             return sendJson(res, 200, { success: true, data: filtered, count: filtered.length });
         }
 
         // Check Active Plan
         if (req.method === 'GET' && url.pathname === '/api/check-active') {
-            const phone = url.searchParams.get('phone');
+            var phone = url.searchParams.get('phone');
             if (!phone) return sendJson(res, 400, { success: false, message: 'Phone number required' });
-            const active = transactions.find(t => t.phoneNumber === phone && t.status === 'completed' && t.mikrotikCreated && (!t.expiresAt || new Date(t.expiresAt) > new Date()));
+            var active = null;
+            for (var i = 0; i < transactions.length; i++) {
+                var t = transactions[i];
+                if (t.phoneNumber === phone && t.status === 'completed' && t.mikrotikCreated && (!t.expiresAt || new Date(t.expiresAt) > new Date())) {
+                    active = t;
+                    break;
+                }
+            }
             if (active) {
                 return sendJson(res, 200, {
                     success: true,
@@ -1371,21 +1308,23 @@ const server = http.createServer(async (req, res) => {
 
         // Initiate Payment
         if (req.method === 'POST' && url.pathname === '/api/payment/initiate') {
-            const body = await readBody(req);
-            const { phoneNumber, amount, planId } = body;
+            var body = await readBody(req);
+            var phoneNumber = body.phoneNumber;
+            var amount = body.amount;
+            var planId = body.planId;
             if (!phoneNumber || phoneNumber.length < 10) {
                 return sendJson(res, 400, { success: false, message: 'Invalid phone number' });
             }
             try {
-                const transactionId = 'GICH' + Date.now() + Math.random().toString(36).substring(7);
-                const duration = getPlanDuration(planId);
-                const planName = getPlanName(planId);
-                const transaction = {
+                var transactionId = 'GICH' + Date.now() + Math.random().toString(36).substring(7);
+                var duration = getPlanDuration(planId);
+                var planName = getPlanName(planId);
+                var transaction = {
                     id: transactionId,
-                    phoneNumber,
-                    amount,
-                    planId,
-                    planName,
+                    phoneNumber: phoneNumber,
+                    amount: amount,
+                    planId: planId,
+                    planName: planName,
                     status: 'pending',
                     timestamp: new Date().toISOString(),
                     mpesaCode: null,
@@ -1407,14 +1346,14 @@ const server = http.createServer(async (req, res) => {
                     transaction.mikrotikPassword = 'pass_' + Date.now().toString(36);
                     transaction.mikrotikCreated = true;
                     saveTransactions();
-                    return sendJson(res, 200, { success: true, message: 'Free plan activated!', transactionId, isFree: true });
+                    return sendJson(res, 200, { success: true, message: 'Free plan activated!', transactionId: transactionId, isFree: true });
                 }
 
-                const result = await stkPush({ phone: phoneNumber, amount, accountReference: 'GICH' + Date.now().toString().slice(-8) });
+                var result = await stkPush({ phone: phoneNumber, amount: amount, accountReference: 'GICH' + Date.now().toString().slice(-8) });
                 if (result.success) {
                     transaction.checkoutId = result.checkoutId;
                     saveTransactions();
-                    return sendJson(res, 200, { success: true, message: 'STK Push sent!', transactionId, checkoutId: result.checkoutId });
+                    return sendJson(res, 200, { success: true, message: 'STK Push sent!', transactionId: transactionId, checkoutId: result.checkoutId });
                 } else {
                     transaction.status = 'completed';
                     transaction.mpesaCode = 'MOCK' + Date.now();
@@ -1423,7 +1362,7 @@ const server = http.createServer(async (req, res) => {
                     transaction.mikrotikPassword = 'pass_' + Date.now().toString(36);
                     transaction.mikrotikCreated = true;
                     saveTransactions();
-                    return sendJson(res, 200, { success: true, message: 'MOCK MODE: Payment simulated.', transactionId, mock: true });
+                    return sendJson(res, 200, { success: true, message: 'MOCK MODE: Payment simulated.', transactionId: transactionId, mock: true });
                 }
             } catch (error) {
                 return sendJson(res, 502, { success: false, message: 'Payment failed: ' + error.message });
@@ -1432,17 +1371,31 @@ const server = http.createServer(async (req, res) => {
 
         // ===== MPESA CALLBACK =====
         if (req.method === 'POST' && url.pathname === '/api/mpesa-callback') {
-            const callback = await readBody(req);
-            const resultCode = callback.Body?.stkCallback?.ResultCode;
-            const checkoutId = callback.Body?.stkCallback?.CheckoutRequestID;
-            const receipt = callback.Body?.stkCallback?.CallbackMetadata?.Item?.find(item => item.Name === 'MpesaReceiptNumber')?.Value;
-            const amount = callback.Body?.stkCallback?.CallbackMetadata?.Item?.find(item => item.Name === 'Amount')?.Value;
-            const phoneNumber = callback.Body?.stkCallback?.CallbackMetadata?.Item?.find(item => item.Name === 'PhoneNumber')?.Value;
-            const resultDesc = callback.Body?.stkCallback?.ResultDesc || 'Unknown error';
+            var callback = await readBody(req);
+            var resultCode = callback.Body && callback.Body.stkCallback ? callback.Body.stkCallback.ResultCode : null;
+            var checkoutId = callback.Body && callback.Body.stkCallback ? callback.Body.stkCallback.CheckoutRequestID : null;
+            var receipt = null;
+            var amount = null;
+            var phoneNumber = null;
+            var resultDesc = callback.Body && callback.Body.stkCallback ? callback.Body.stkCallback.ResultDesc || 'Unknown error' : 'Unknown error';
 
-            let transaction = transactions.find(t => t.checkoutId === checkoutId);
+            if (callback.Body && callback.Body.stkCallback && callback.Body.stkCallback.CallbackMetadata && callback.Body.stkCallback.CallbackMetadata.Item) {
+                var items = callback.Body.stkCallback.CallbackMetadata.Item;
+                for (var i = 0; i < items.length; i++) {
+                    if (items[i].Name === 'MpesaReceiptNumber') receipt = items[i].Value;
+                    if (items[i].Name === 'Amount') amount = items[i].Value;
+                    if (items[i].Name === 'PhoneNumber') phoneNumber = items[i].Value;
+                }
+            }
+
+            var transaction = null;
+            for (var i = 0; i < transactions.length; i++) {
+                if (transactions[i].checkoutId === checkoutId) { transaction = transactions[i]; break; }
+            }
             if (!transaction) {
-                transaction = transactions.find(t => t.mpesaResponse?.CheckoutRequestID === checkoutId);
+                for (var i = 0; i < transactions.length; i++) {
+                    if (transactions[i].mpesaResponse && transactions[i].mpesaResponse.CheckoutRequestID === checkoutId) { transaction = transactions[i]; break; }
+                }
             }
             if (!transaction) {
                 return sendJson(res, 200, { ResultCode: 1, ResultDesc: 'Transaction not found' });
@@ -1491,10 +1444,14 @@ const server = http.createServer(async (req, res) => {
 
         // Redeem Voucher
         if (req.method === 'POST' && url.pathname === '/api/voucher/redeem') {
-            const body = await readBody(req);
-            const { code, phoneNumber } = body;
+            var body = await readBody(req);
+            var code = body.code;
+            var phoneNumber = body.phoneNumber;
             if (!code) return sendJson(res, 400, { success: false, message: 'Voucher code required' });
-            const voucher = vouchers.find(v => v.code === code && !v.used);
+            var voucher = null;
+            for (var i = 0; i < vouchers.length; i++) {
+                if (vouchers[i].code === code && !vouchers[i].used) { voucher = vouchers[i]; break; }
+            }
             if (!voucher) return sendJson(res, 404, { success: false, message: 'Invalid or already used voucher' });
             if (voucher.expiresAt && new Date(voucher.expiresAt) < new Date()) {
                 return sendJson(res, 400, { success: false, message: 'Voucher has expired' });
@@ -1504,10 +1461,10 @@ const server = http.createServer(async (req, res) => {
             voucher.usedAt = new Date().toISOString();
             saveVouchers();
 
-            const transactionId = 'VOUCH' + Date.now() + Math.random().toString(36).substring(7);
-            const duration = voucher.duration_seconds || 3600;
-            const planName = voucher.planName || 'Voucher Plan';
-            const transaction = {
+            var transactionId = 'VOUCH' + Date.now() + Math.random().toString(36).substring(7);
+            var duration = voucher.duration_seconds || 3600;
+            var planName = voucher.planName || 'Voucher Plan';
+            var transaction = {
                 id: transactionId,
                 phoneNumber: phoneNumber || 'voucher_user',
                 amount: 0,
@@ -1542,21 +1499,21 @@ const server = http.createServer(async (req, res) => {
         }
 
         // ============================================================
-        // ADMIN ENDPOINTS
+        // ADMIN ENDPOINTS (Full CRUD)
         // ============================================================
 
         // Admin Verify
         if (req.method === 'POST' && url.pathname === '/api/admin/verify') {
-            const body = await readBody(req);
+            var body = await readBody(req);
             if (body.pin === ADMIN_PASSWORD) {
-                const token = generateToken({ username: 'admin', role: 'admin', exp: Date.now() + 86400000 });
-                return sendJson(res, 200, { success: true, message: 'Admin verified', token });
+                var token = generateToken({ username: 'admin', role: 'admin', exp: Date.now() + 86400000 });
+                return sendJson(res, 200, { success: true, message: 'Admin verified', token: token });
             } else {
                 return sendJson(res, 401, { success: false, message: 'Invalid PIN' });
             }
         }
 
-        // Admin Clients CRUD
+        // Admin Clients
         if (req.method === 'GET' && url.pathname === '/api/admin/clients') {
             if (!isAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
             return sendJson(res, 200, { success: true, data: clients, count: clients.length });
@@ -1564,19 +1521,9 @@ const server = http.createServer(async (req, res) => {
 
         if (req.method === 'POST' && url.pathname === '/api/admin/clients') {
             if (!isAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
-            const body = await readBody(req);
+            var body = await readBody(req);
             if (!body.name || !body.phone) return sendJson(res, 400, { success: false, message: 'Name and phone required' });
-            const newClient = {
-                id: generateClientId(),
-                name: body.name,
-                phone: body.phone,
-                email: body.email || '',
-                businessName: body.businessName || '',
-                mpesaTill: body.mpesaTill || '',
-                status: 'active',
-                createdAt: new Date().toISOString(),
-                updatedAt: new Date().toISOString()
-            };
+            var newClient = { id: generateClientId(), name: body.name, phone: body.phone, email: body.email || '', businessName: body.businessName || '', mpesaTill: body.mpesaTill || '', status: 'active', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
             clients.push(newClient);
             saveClients();
             return sendJson(res, 200, { success: true, message: 'Client created', data: newClient });
@@ -1584,26 +1531,28 @@ const server = http.createServer(async (req, res) => {
 
         if (req.method === 'PUT' && url.pathname.startsWith('/api/admin/clients/')) {
             if (!isAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
-            const clientId = url.pathname.split('/').pop();
-            const body = await readBody(req);
-            const index = clients.findIndex(c => c.id === clientId);
+            var clientId = url.pathname.split('/').pop();
+            var body = await readBody(req);
+            var index = -1;
+            for (var i = 0; i < clients.length; i++) { if (clients[i].id === clientId) { index = i; break; } }
             if (index === -1) return sendJson(res, 404, { success: false, message: 'Client not found' });
-            clients[index] = { ...clients[index], ...body, updatedAt: new Date().toISOString() };
+            clients[index] = { id: clients[index].id, name: body.name || clients[index].name, phone: body.phone || clients[index].phone, email: body.email || clients[index].email, businessName: body.businessName || clients[index].businessName, mpesaTill: body.mpesaTill || clients[index].mpesaTill, status: body.status || clients[index].status, createdAt: clients[index].createdAt, updatedAt: new Date().toISOString() };
             saveClients();
             return sendJson(res, 200, { success: true, message: 'Client updated', data: clients[index] });
         }
 
         if (req.method === 'DELETE' && url.pathname.startsWith('/api/admin/clients/')) {
             if (!isAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
-            const clientId = url.pathname.split('/').pop();
-            const index = clients.findIndex(c => c.id === clientId);
+            var clientId = url.pathname.split('/').pop();
+            var index = -1;
+            for (var i = 0; i < clients.length; i++) { if (clients[i].id === clientId) { index = i; break; } }
             if (index === -1) return sendJson(res, 404, { success: false, message: 'Client not found' });
             clients.splice(index, 1);
             saveClients();
             return sendJson(res, 200, { success: true, message: 'Client deleted' });
         }
 
-        // Admin Products CRUD
+        // Admin Products
         if (req.method === 'GET' && url.pathname === '/api/admin/products') {
             if (!isAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
             return sendJson(res, 200, { success: true, data: products, count: products.length });
@@ -1611,19 +1560,9 @@ const server = http.createServer(async (req, res) => {
 
         if (req.method === 'POST' && url.pathname === '/api/admin/products') {
             if (!isAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
-            const body = await readBody(req);
+            var body = await readBody(req);
             if (!body.name || body.price === undefined) return sendJson(res, 400, { success: false, message: 'Name and price required' });
-            const newProduct = {
-                id: generateProductId(),
-                name: body.name,
-                description: body.description || '',
-                price: Number(body.price),
-                imageUrl: body.imageUrl || '',
-                category: body.category || 'general',
-                status: 'active',
-                createdAt: new Date().toISOString(),
-                updatedAt: new Date().toISOString()
-            };
+            var newProduct = { id: generateProductId(), name: body.name, description: body.description || '', price: Number(body.price), imageUrl: body.imageUrl || '', category: body.category || 'general', status: 'active', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
             products.push(newProduct);
             saveProducts();
             return sendJson(res, 200, { success: true, message: 'Product created', data: newProduct });
@@ -1631,19 +1570,21 @@ const server = http.createServer(async (req, res) => {
 
         if (req.method === 'PUT' && url.pathname.startsWith('/api/admin/products/')) {
             if (!isAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
-            const productId = url.pathname.split('/').pop();
-            const body = await readBody(req);
-            const index = products.findIndex(p => p.id === productId);
+            var productId = url.pathname.split('/').pop();
+            var body = await readBody(req);
+            var index = -1;
+            for (var i = 0; i < products.length; i++) { if (products[i].id === productId) { index = i; break; } }
             if (index === -1) return sendJson(res, 404, { success: false, message: 'Product not found' });
-            products[index] = { ...products[index], ...body, price: body.price !== undefined ? Number(body.price) : products[index].price, updatedAt: new Date().toISOString() };
+            products[index] = { id: products[index].id, name: body.name || products[index].name, description: body.description || products[index].description, price: body.price !== undefined ? Number(body.price) : products[index].price, imageUrl: body.imageUrl || products[index].imageUrl, category: body.category || products[index].category, status: body.status || products[index].status, createdAt: products[index].createdAt, updatedAt: new Date().toISOString() };
             saveProducts();
             return sendJson(res, 200, { success: true, message: 'Product updated', data: products[index] });
         }
 
         if (req.method === 'DELETE' && url.pathname.startsWith('/api/admin/products/')) {
             if (!isAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
-            const productId = url.pathname.split('/').pop();
-            const index = products.findIndex(p => p.id === productId);
+            var productId = url.pathname.split('/').pop();
+            var index = -1;
+            for (var i = 0; i < products.length; i++) { if (products[i].id === productId) { index = i; break; } }
             if (index === -1) return sendJson(res, 404, { success: false, message: 'Product not found' });
             products.splice(index, 1);
             saveProducts();
@@ -1658,9 +1599,9 @@ const server = http.createServer(async (req, res) => {
 
         if (req.method === 'POST' && url.pathname === '/api/admin/plans') {
             if (!isAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
-            const body = await readBody(req);
+            var body = await readBody(req);
             if (!body.id || !body.name || body.price === undefined) return sendJson(res, 400, { success: false, message: 'ID, name, and price required' });
-            if (plans.find(p => p.id === body.id)) return sendJson(res, 400, { success: false, message: 'Plan ID already exists' });
+            for (var i = 0; i < plans.length; i++) { if (plans[i].id === body.id) { return sendJson(res, 400, { success: false, message: 'Plan ID already exists' }); } }
             plans.push({ id: body.id, name: body.name, price: Number(body.price), devices: body.devices || 1, shared_users: body.shared_users || 1, duration_seconds: body.duration_seconds || 3600 });
             savePlans();
             return sendJson(res, 200, { success: true, message: 'Plan created', data: plans[plans.length - 1] });
@@ -1668,9 +1609,10 @@ const server = http.createServer(async (req, res) => {
 
         if (req.method === 'PUT' && url.pathname.startsWith('/api/admin/plans/')) {
             if (!isAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
-            const planId = url.pathname.split('/').pop();
-            const body = await readBody(req);
-            const plan = plans.find(p => p.id === planId);
+            var planId = url.pathname.split('/').pop();
+            var body = await readBody(req);
+            var plan = null;
+            for (var i = 0; i < plans.length; i++) { if (plans[i].id === planId) { plan = plans[i]; break; } }
             if (!plan) return sendJson(res, 404, { success: false, message: 'Plan not found' });
             if (body.name) plan.name = body.name;
             if (body.price !== undefined) plan.price = Number(body.price);
@@ -1683,8 +1625,9 @@ const server = http.createServer(async (req, res) => {
 
         if (req.method === 'DELETE' && url.pathname.startsWith('/api/admin/plans/')) {
             if (!isAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
-            const planId = url.pathname.split('/').pop();
-            const index = plans.findIndex(p => p.id === planId);
+            var planId = url.pathname.split('/').pop();
+            var index = -1;
+            for (var i = 0; i < plans.length; i++) { if (plans[i].id === planId) { index = i; break; } }
             if (index === -1) return sendJson(res, 404, { success: false, message: 'Plan not found' });
             plans.splice(index, 1);
             savePlans();
@@ -1694,25 +1637,15 @@ const server = http.createServer(async (req, res) => {
         // Admin Vouchers
         if (req.method === 'POST' && url.pathname === '/api/admin/voucher/generate') {
             if (!isAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
-            const body = await readBody(req);
-            const plan = plans.find(p => p.id === body.planId);
+            var body = await readBody(req);
+            var plan = null;
+            for (var i = 0; i < plans.length; i++) { if (plans[i].id === body.planId) { plan = plans[i]; break; } }
             if (!plan) return sendJson(res, 400, { success: false, message: 'Invalid plan ID' });
-            const count = Math.min(body.count || 1, 100);
-            const generated = [];
-            for (let i = 0; i < count; i++) {
-                const code = generateVoucherCode();
-                vouchers.push({
-                    code: code,
-                    planId: plan.id,
-                    planName: plan.name,
-                    duration_seconds: body.duration_seconds || plan.duration_seconds,
-                    devices: plan.devices || 1,
-                    used: false,
-                    usedBy: null,
-                    usedAt: null,
-                    expiresAt: null,
-                    createdAt: new Date().toISOString()
-                });
+            var count = Math.min(body.count || 1, 100);
+            var generated = [];
+            for (var i = 0; i < count; i++) {
+                var code = generateVoucherCode();
+                vouchers.push({ code: code, planId: plan.id, planName: plan.name, duration_seconds: body.duration_seconds || plan.duration_seconds, devices: plan.devices || 1, used: false, usedBy: null, usedAt: null, expiresAt: null, createdAt: new Date().toISOString() });
                 generated.push(code);
             }
             saveVouchers();
@@ -1721,23 +1654,33 @@ const server = http.createServer(async (req, res) => {
 
         if (req.method === 'GET' && url.pathname === '/api/admin/vouchers') {
             if (!isAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
-            return sendJson(res, 200, { success: true, data: vouchers, count: vouchers.length, used: vouchers.filter(v => v.used).length, unused: vouchers.filter(v => !v.used).length });
+            var used = 0;
+            for (var i = 0; i < vouchers.length; i++) { if (vouchers[i].used) used++; }
+            return sendJson(res, 200, { success: true, data: vouchers, count: vouchers.length, used: used, unused: vouchers.length - used });
         }
 
         // Admin Transactions
         if (req.method === 'GET' && url.pathname === '/api/admin/transactions') {
             if (!isAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
+            var completed = 0, pending = 0, cancelled = 0, failed = 0, totalRevenue = 0;
+            for (var i = 0; i < transactions.length; i++) {
+                var t = transactions[i];
+                if (t.status === 'completed') { completed++; totalRevenue += (t.amount || 0); }
+                else if (t.status === 'pending') pending++;
+                else if (t.status === 'cancelled') cancelled++;
+                else if (t.status === 'failed') failed++;
+            }
             return sendJson(res, 200, {
                 success: true,
                 data: transactions,
                 count: transactions.length,
                 summary: {
                     total: transactions.length,
-                    completed: transactions.filter(t => t.status === 'completed').length,
-                    pending: transactions.filter(t => t.status === 'pending').length,
-                    cancelled: transactions.filter(t => t.status === 'cancelled').length,
-                    failed: transactions.filter(t => t.status === 'failed').length,
-                    totalRevenue: transactions.filter(t => t.status === 'completed').reduce((sum, t) => sum + (t.amount || 0), 0)
+                    completed: completed,
+                    pending: pending,
+                    cancelled: cancelled,
+                    failed: failed,
+                    totalRevenue: totalRevenue
                 }
             });
         }
@@ -1750,9 +1693,10 @@ const server = http.createServer(async (req, res) => {
 
         if (req.method === 'POST' && url.pathname === '/api/admin/settings') {
             if (!isAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
-            const body = await readBody(req);
+            var body = await readBody(req);
             if (body.theme) {
-                const theme = themes.find(t => t.id === body.theme);
+                var theme = null;
+                for (var i = 0; i < themes.length; i++) { if (themes[i].id === body.theme) { theme = themes[i]; break; } }
                 if (theme) {
                     settings.theme = theme.id;
                     settings.primaryColor = theme.colors.primary;
@@ -1785,14 +1729,8 @@ const server = http.createServer(async (req, res) => {
 
         if (req.method === 'POST' && url.pathname === '/api/admin/themes') {
             if (!isAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
-            const body = await readBody(req);
-            const newTheme = {
-                id: body.id || 'theme_' + Date.now(),
-                name: body.name || 'Custom Theme',
-                preview: body.preview || '🎨',
-                colors: body.colors || { primary: '#00c853', secondary: '#00e676', accent: '#0f2027', text: '#ffffff', headerText: '#ffffff', buttonText: '#000000' },
-                gradient: body.gradient || 'linear-gradient(135deg, #0f2027, #203a43, #2c5364)'
-            };
+            var body = await readBody(req);
+            var newTheme = { id: body.id || 'theme_' + Date.now(), name: body.name || 'Custom Theme', preview: body.preview || '🎨', colors: body.colors || { primary: '#00c853', secondary: '#00e676', accent: '#0f2027', text: '#ffffff', headerText: '#ffffff', buttonText: '#000000' }, gradient: body.gradient || 'linear-gradient(135deg, #0f2027, #203a43, #2c5364)' };
             themes.push(newTheme);
             saveThemes();
             return sendJson(res, 200, { success: true, message: 'Theme added', data: newTheme });
@@ -1800,9 +1738,10 @@ const server = http.createServer(async (req, res) => {
 
         if (req.method === 'DELETE' && url.pathname.startsWith('/api/admin/themes/')) {
             if (!isAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
-            const themeId = url.pathname.split('/').pop();
+            var themeId = url.pathname.split('/').pop();
             if (themeId === 'default') return sendJson(res, 400, { success: false, message: 'Cannot delete default theme' });
-            const index = themes.findIndex(t => t.id === themeId);
+            var index = -1;
+            for (var i = 0; i < themes.length; i++) { if (themes[i].id === themeId) { index = i; break; } }
             if (index === -1) return sendJson(res, 404, { success: false, message: 'Theme not found' });
             themes.splice(index, 1);
             saveThemes();
@@ -1811,8 +1750,9 @@ const server = http.createServer(async (req, res) => {
 
         // Get Credentials
         if (req.method === 'GET' && url.pathname.startsWith('/api/get-credentials/')) {
-            const transactionId = url.pathname.split('/').pop();
-            const transaction = transactions.find(t => t.id === transactionId);
+            var transactionId = url.pathname.split('/').pop();
+            var transaction = null;
+            for (var i = 0; i < transactions.length; i++) { if (transactions[i].id === transactionId) { transaction = transactions[i]; break; } }
             if (!transaction) return sendJson(res, 404, { success: false, message: 'Transaction not found' });
             if (transaction.status !== 'completed') return sendJson(res, 400, { success: false, message: 'Payment not completed' });
             return sendJson(res, 200, {
@@ -1830,10 +1770,10 @@ const server = http.createServer(async (req, res) => {
 
         // Master Admin Verify
         if (req.method === 'POST' && url.pathname === '/api/master/verify') {
-            const body = await readBody(req);
+            var body = await readBody(req);
             if (body.pin === MASTER_PASSWORD) {
-                const token = generateToken({ username: 'master', role: 'master', exp: Date.now() + 86400000 });
-                return sendJson(res, 200, { success: true, message: 'Master verified', token, role: 'master' });
+                var token = generateToken({ username: 'master', role: 'master', exp: Date.now() + 86400000 });
+                return sendJson(res, 200, { success: true, message: 'Master verified', token: token, role: 'master' });
             } else {
                 return sendJson(res, 401, { success: false, message: 'Invalid PIN' });
             }
@@ -1848,12 +1788,12 @@ const server = http.createServer(async (req, res) => {
         // Create Organization
         if (req.method === 'POST' && url.pathname === '/api/master/organizations') {
             if (!isMasterAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
-            const body = await readBody(req);
+            var body = await readBody(req);
             if (!body.name || !body.businessName || !body.email || !body.phone) {
                 return sendJson(res, 400, { success: false, message: 'Name, Business Name, Email, and Phone are required' });
             }
-            const clientId = generateOrgId();
-            const newOrganization = {
+            var clientId = generateOrgId();
+            var newOrganization = {
                 id: clientId,
                 name: body.name,
                 businessName: body.businessName,
@@ -1885,20 +1825,7 @@ const server = http.createServer(async (req, res) => {
             organizations.push(newOrganization);
             saveOrganizations();
 
-            // Also add to clients
-            clients.push({
-                id: clientId,
-                name: body.name,
-                phone: body.phone,
-                email: body.email,
-                businessName: body.businessName,
-                mpesaTill: body.mpesaTill || '',
-                status: 'active',
-                createdAt: new Date().toISOString(),
-                updatedAt: new Date().toISOString(),
-                isOrganization: true,
-                organizationId: clientId
-            });
+            clients.push({ id: clientId, name: body.name, phone: body.phone, email: body.email, businessName: body.businessName, mpesaTill: body.mpesaTill || '', status: 'active', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), isOrganization: true, organizationId: clientId });
             saveClients();
 
             return sendJson(res, 200, {
@@ -1906,17 +1833,17 @@ const server = http.createServer(async (req, res) => {
                 message: 'Organization created!',
                 data: newOrganization,
                 clientId: clientId,
-                clientPageUrl: `/${clientId}/client-page.html`
+                clientPageUrl: '/' + clientId + '/client-page.html'
             });
         }
 
         // Get Organization by ID
         if (req.method === 'GET' && url.pathname.startsWith('/api/organization/')) {
-            const orgId = url.pathname.split('/').pop();
+            var orgId = url.pathname.split('/').pop();
             if (!orgId || orgId === 'organizations') {
                 return sendJson(res, 400, { success: false, message: 'Invalid organization ID' });
             }
-            const organization = getOrganizationByClientId(orgId);
+            var organization = getOrganizationByClientId(orgId);
             if (!organization) return sendJson(res, 404, { success: false, message: 'Organization not found' });
             return sendJson(res, 200, {
                 success: true,
@@ -1944,16 +1871,18 @@ const server = http.createServer(async (req, res) => {
         // Update Organization
         if (req.method === 'PUT' && url.pathname.startsWith('/api/master/organizations/')) {
             if (!isMasterAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
-            const orgId = url.pathname.split('/').pop();
-            const body = await readBody(req);
-            const index = organizations.findIndex(o => o.id === orgId);
+            var orgId = url.pathname.split('/').pop();
+            var body = await readBody(req);
+            var index = -1;
+            for (var i = 0; i < organizations.length; i++) { if (organizations[i].id === orgId) { index = i; break; } }
             if (index === -1) return sendJson(res, 404, { success: false, message: 'Organization not found' });
-            organizations[index] = { ...organizations[index], ...body, updatedAt: new Date().toISOString() };
+            organizations[index] = { id: organizations[index].id, name: body.name || organizations[index].name, businessName: body.businessName || organizations[index].businessName, email: body.email || organizations[index].email, phone: body.phone || organizations[index].phone, logo: body.logo || organizations[index].logo, primaryColor: body.primaryColor || organizations[index].primaryColor, secondaryColor: body.secondaryColor || organizations[index].secondaryColor, accentColor: body.accentColor || organizations[index].accentColor, supportPhone: body.supportPhone || organizations[index].supportPhone, supportEmail: body.supportEmail || organizations[index].supportEmail, website: body.website || organizations[index].website, businessTagline: body.businessTagline || organizations[index].businessTagline, mpesaTill: body.mpesaTill || organizations[index].mpesaTill, status: body.status || organizations[index].status, plans: body.plans || organizations[index].plans, createdAt: organizations[index].createdAt, updatedAt: new Date().toISOString() };
             saveOrganizations();
 
-            const clientIndex = clients.findIndex(c => c.id === orgId);
+            var clientIndex = -1;
+            for (var i = 0; i < clients.length; i++) { if (clients[i].id === orgId) { clientIndex = i; break; } }
             if (clientIndex !== -1) {
-                clients[clientIndex] = { ...clients[clientIndex], ...body, updatedAt: new Date().toISOString() };
+                clients[clientIndex] = { id: clients[clientIndex].id, name: body.name || clients[clientIndex].name, phone: body.phone || clients[clientIndex].phone, email: body.email || clients[clientIndex].email, businessName: body.businessName || clients[clientIndex].businessName, mpesaTill: body.mpesaTill || clients[clientIndex].mpesaTill, status: body.status || clients[clientIndex].status, isOrganization: true, organizationId: orgId, createdAt: clients[clientIndex].createdAt, updatedAt: new Date().toISOString() };
                 saveClients();
             }
             return sendJson(res, 200, { success: true, message: 'Organization updated', data: organizations[index] });
@@ -1962,13 +1891,15 @@ const server = http.createServer(async (req, res) => {
         // Delete Organization
         if (req.method === 'DELETE' && url.pathname.startsWith('/api/master/organizations/')) {
             if (!isMasterAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
-            const orgId = url.pathname.split('/').pop();
-            const orgIndex = organizations.findIndex(o => o.id === orgId);
-            if (orgIndex === -1) return sendJson(res, 404, { success: false, message: 'Organization not found' });
-            organizations.splice(orgIndex, 1);
+            var orgId = url.pathname.split('/').pop();
+            var index = -1;
+            for (var i = 0; i < organizations.length; i++) { if (organizations[i].id === orgId) { index = i; break; } }
+            if (index === -1) return sendJson(res, 404, { success: false, message: 'Organization not found' });
+            organizations.splice(index, 1);
             saveOrganizations();
 
-            const clientIndex = clients.findIndex(c => c.id === orgId);
+            var clientIndex = -1;
+            for (var i = 0; i < clients.length; i++) { if (clients[i].id === orgId) { clientIndex = i; break; } }
             if (clientIndex !== -1) { clients.splice(clientIndex, 1);
                 saveClients(); }
             return sendJson(res, 200, { success: true, message: 'Organization deleted' });
@@ -1982,8 +1913,8 @@ const server = http.createServer(async (req, res) => {
 
         if (req.method === 'POST' && url.pathname === '/api/master/settings') {
             if (!isMasterAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
-            const body = await readBody(req);
-            masterSettings = { ...masterSettings, ...body, updatedAt: new Date().toISOString() };
+            var body = await readBody(req);
+            masterSettings = { id: masterSettings.id || 'master_settings', masterBusinessName: body.masterBusinessName || masterSettings.masterBusinessName, masterEmail: body.masterEmail || masterSettings.masterEmail, masterPhone: body.masterPhone || masterSettings.masterPhone, defaultPrimaryColor: body.defaultPrimaryColor || masterSettings.defaultPrimaryColor, defaultBgGradient: body.defaultBgGradient || masterSettings.defaultBgGradient, commissionRate: body.commissionRate !== undefined ? Number(body.commissionRate) : masterSettings.commissionRate, createdAt: masterSettings.createdAt || new Date().toISOString(), updatedAt: new Date().toISOString() };
             saveMasterSettings();
             return sendJson(res, 200, { success: true, message: 'Master settings updated', data: masterSettings });
         }
@@ -1991,47 +1922,41 @@ const server = http.createServer(async (req, res) => {
         // Generate Client HTML
         if (req.method === 'GET' && url.pathname.startsWith('/api/master/generate-client-page/')) {
             if (!isMasterAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
-            const orgId = url.pathname.split('/').pop();
-            const organization = getOrganizationByClientId(orgId);
+            var orgId = url.pathname.split('/').pop();
+            var organization = getOrganizationByClientId(orgId);
             if (!organization) return sendJson(res, 404, { success: false, message: 'Organization not found' });
-            const html = generateClientSkeletonHtml(organization);
+            var html = generateClientSkeletonHtml(organization);
             return sendJson(res, 200, {
                 success: true,
                 html: html,
-                filename: `${orgId}_client_page.html`,
+                filename: orgId + '_client_page.html',
                 instructions: 'Copy this HTML and give it to your client. Works on local WiFi (MikroTik), local PC, and online!'
             });
         }
 
         // Serve Client Page
         if (req.method === 'GET' && url.pathname.match(/^\/CLIENT_[A-Z0-9]+\/client-page\.html$/)) {
-            const pathParts = url.pathname.split('/');
-            const orgId = pathParts[1];
-            const organization = getOrganizationByClientId(orgId);
-            if (!organization) {
-                return sendHtml(res, 404, `<h1>❌ Organization Not Found</h1><p>ID: ${orgId}</p>`);
-            }
-            const html = generateClientSkeletonHtml(organization);
+            var pathParts = url.pathname.split('/');
+            var orgId = pathParts[1];
+            var organization = getOrganizationByClientId(orgId);
+            if (!organization) { return sendHtml(res, 404, '<h1>❌ Organization Not Found</h1><p>ID: ' + orgId + '</p>'); }
+            var html = generateClientSkeletonHtml(organization);
             return sendHtml(res, 200, html);
         }
 
         if (req.method === 'GET' && url.pathname.match(/^\/CLIENT_[A-Z0-9]+\/?$/)) {
-            const orgId = url.pathname.replace('/', '');
-            const organization = getOrganizationByClientId(orgId);
-            if (!organization) {
-                return sendHtml(res, 404, `<h1>❌ Organization Not Found</h1><p>ID: ${orgId}</p>`);
-            }
-            const html = generateClientSkeletonHtml(organization);
+            var orgId = url.pathname.replace('/', '');
+            var organization = getOrganizationByClientId(orgId);
+            if (!organization) { return sendHtml(res, 404, '<h1>❌ Organization Not Found</h1><p>ID: ' + orgId + '</p>'); }
+            var html = generateClientSkeletonHtml(organization);
             return sendHtml(res, 200, html);
         }
 
         if (req.method === 'GET' && url.pathname === '/client-page.html' && url.searchParams.has('org')) {
-            const orgId = url.searchParams.get('org');
-            const organization = getOrganizationByClientId(orgId);
-            if (!organization) {
-                return sendHtml(res, 404, `<h1>❌ Organization Not Found</h1><p>ID: ${orgId}</p>`);
-            }
-            const html = generateClientSkeletonHtml(organization);
+            var orgId = url.searchParams.get('org');
+            var organization = getOrganizationByClientId(orgId);
+            if (!organization) { return sendHtml(res, 404, '<h1>❌ Organization Not Found</h1><p>ID: ' + orgId + '</p>'); }
+            var html = generateClientSkeletonHtml(organization);
             return sendHtml(res, 200, html);
         }
 
@@ -2040,14 +1965,18 @@ const server = http.createServer(async (req, res) => {
         // ============================================================
 
         if (req.method === 'GET' && url.pathname === '/api') {
+            var totalRevenue = 0;
+            for (var i = 0; i < transactions.length; i++) {
+                if (transactions[i].status === 'completed') totalRevenue += (transactions[i].amount || 0);
+            }
             return sendJson(res, 200, {
                 name: 'GICH WiFi API',
                 version: '3.0.0',
                 status: 'Running',
                 statistics: {
                     totalTransactions: transactions.length,
-                    totalRevenue: transactions.filter(t => t.status === 'completed').reduce((sum, t) => sum + (t.amount || 0), 0),
-                    activeVouchers: vouchers.filter(v => !v.used).length,
+                    totalRevenue: totalRevenue,
+                    activeVouchers: vouchers.filter(function(v) { return !v.used; }).length,
                     totalClients: clients.length,
                     totalProducts: products.length,
                     totalOrganizations: organizations.length
@@ -2069,19 +1998,19 @@ const server = http.createServer(async (req, res) => {
 
 loadAllData();
 
-server.listen(PORT, '0.0.0.0', () => {
+server.listen(PORT, '0.0.0.0', function() {
     console.log('\n========================================');
     console.log('🌐 GICH WiFi API');
     console.log('========================================');
-    console.log(`✅ Server running on port: ${PORT}`);
-    console.log(`📍 http://localhost:${PORT}/`);
-    console.log(`📍 http://localhost:${PORT}/api/health`);
+    console.log('✅ Server running on port: ' + PORT);
+    console.log('📍 http://localhost:' + PORT + '/');
+    console.log('📍 http://localhost:' + PORT + '/api/health');
     console.log('========================================');
-    console.log(`🛡️ Admin PIN: ${ADMIN_PASSWORD ? '✅ Set' : '⚠️ NOT SET'}`);
-    console.log(`👑 Master PIN: ${MASTER_PASSWORD ? '✅ Set' : '⚠️ NOT SET'}`);
-    console.log(`🏢 Organizations: ${organizations.length}`);
+    console.log('🛡️ Admin PIN: ' + (ADMIN_PASSWORD ? '✅ Set' : '⚠️ NOT SET'));
+    console.log('👑 Master PIN: ' + (MASTER_PASSWORD ? '✅ Set' : '⚠️ NOT SET'));
+    console.log('🏢 Organizations: ' + organizations.length);
     console.log('========================================\n');
 });
 
-process.on('uncaughtException', (err) => console.error('❌ Uncaught Exception:', err));
-process.on('unhandledRejection', (reason) => console.error('❌ Unhandled Rejection:', reason));
+process.on('uncaughtException', function(err) { console.error('❌ Uncaught Exception:', err); });
+process.on('unhandledRejection', function(reason) { console.error('❌ Unhandled Rejection:', reason); });
