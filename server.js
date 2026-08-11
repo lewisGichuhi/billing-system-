@@ -208,6 +208,7 @@ function generateClientId() { var chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'
 function generateProductId() { var chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'; var code = ''; for (var i = 0; i < 6; i++) { code += chars.charAt(Math.floor(Math.random() * chars.length)); } return 'PROD_' + code; }
 function generateOrgId() { var chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'; var code = ''; for (var i = 0; i < 8; i++) { code += chars.charAt(Math.floor(Math.random() * chars.length)); } return 'CLIENT_' + code; }
 function getOrganizationByClientId(clientId) { return organizations.find(function(org) { return org.id === clientId; }); }
+function getOrganizationByEmail(email) { return organizations.find(function(org) { return org.email === email; }); }
 
 // ============================================================
 // REQUEST HELPER
@@ -1400,66 +1401,17 @@ var server = http.createServer(async function(req, res) {
         // CLIENT CREATE/UPDATE ORGANIZATION
         // ============================================================
         if (req.method === 'POST' && url.pathname === '/api/client/organization') {
-            // Check if the user is authenticated (or using master bypass)
-            var auth = req.headers.authorization;
-            var isAuthorized = false;
-            var email = 'unknown@example.com';
-
-            if (auth) {
-                var token = auth.replace('Bearer ', '');
-                // Check for master bypass token
-                if (token && token.indexOf('master_bypass_') === 0) {
-                    isAuthorized = true;
-                    email = 'master@demo.com';
-                    console.log('🔐 Master bypass creating organization');
-                }
-                // Check for demo token
-                else if (token && token.indexOf('demo_token_') === 0) {
-                    isAuthorized = true;
-                    email = 'demo@example.com';
-                    console.log('🔐 Demo token creating organization');
-                }
-                // Check for regular JWT
-                else {
-                    var decoded = verifyToken(token);
-                    if (decoded && decoded.role === 'client') {
-                        isAuthorized = true;
-                        email = decoded.email || 'client@example.com';
-                    }
-                }
-            }
-
-            // If not authorized, try to get email from body
-            if (!isAuthorized) {
-                var bodyCheck = await readBody(req);
-                if (bodyCheck.email) {
-                    email = bodyCheck.email;
-                    isAuthorized = true;
-                    console.log('🔐 Using email from body: ' + email);
-                } else {
-                    return sendJson(res, 401, { success: false, message: 'Unauthorized' });
-                }
-            }
-
-            // Read the request body
+            console.log('📥 Received organization creation request');
+            
+            // Read the body
             var body = await readBody(req);
-
-            var businessName = body.businessName || body.name;
-            var businessTagline = body.businessTagline || 'Fast • Secure • Reliable';
-            var logo = body.logo || '';
-            var primaryColor = body.primaryColor || '#00c853';
-            var secondaryColor = body.secondaryColor || '#00e676';
-            var accentColor = body.accentColor || '#0f2027';
-            var supportPhone = body.supportPhone || '0712345678';
-            var supportEmail = body.supportEmail || email;
-            var website = body.website || '';
-            var customPlans = body.plans || [];
-
-            if (!businessName) {
-                return sendJson(res, 400, { success: false, message: 'Business name is required' });
-            }
-
-            // Check if organization already exists for this email
+            console.log('📥 Body:', body);
+            
+            // Get email from body
+            var email = body.email || 'unknown@example.com';
+            console.log('📧 Email:', email);
+            
+            // Check if org exists
             var existingOrg = null;
             for (var i = 0; i < organizations.length; i++) {
                 if (organizations[i].email === email) {
@@ -1467,92 +1419,74 @@ var server = http.createServer(async function(req, res) {
                     break;
                 }
             }
-
+            
             if (existingOrg) {
-                // Update existing organization
-                existingOrg.businessName = businessName || existingOrg.businessName;
-                existingOrg.name = businessName || existingOrg.name;
-                existingOrg.businessTagline = businessTagline || existingOrg.businessTagline;
-                existingOrg.logo = logo || existingOrg.logo;
-                existingOrg.primaryColor = primaryColor || existingOrg.primaryColor;
-                existingOrg.secondaryColor = secondaryColor || existingOrg.secondaryColor;
-                existingOrg.accentColor = accentColor || existingOrg.accentColor;
-                existingOrg.supportPhone = supportPhone || existingOrg.supportPhone;
-                existingOrg.supportEmail = supportEmail || existingOrg.supportEmail;
-                existingOrg.website = website || existingOrg.website;
-                if (customPlans && customPlans.length > 0) {
-                    existingOrg.plans = customPlans;
-                }
-                existingOrg.updatedAt = new Date().toISOString();
-                saveOrganizations();
-
-                console.log('✅ Organization updated: ' + existingOrg.id);
-
+                console.log('✅ Organization already exists:', existingOrg.id);
                 return sendJson(res, 200, {
                     success: true,
-                    message: 'Organization updated successfully!',
+                    message: 'Organization already exists',
                     organization: existingOrg
                 });
-            } else {
-                // Create new organization
-                var clientId = generateOrgId();
-                var newOrganization = {
-                    id: clientId,
-                    name: businessName,
-                    businessName: businessName,
-                    email: email,
-                    phone: supportPhone,
-                    logo: logo,
-                    primaryColor: primaryColor,
-                    secondaryColor: secondaryColor,
-                    accentColor: accentColor,
-                    textColor: '#ffffff',
-                    headerTextColor: '#ffffff',
-                    buttonTextColor: '#000000',
-                    bgGradient: 'linear-gradient(135deg, #0f2027, #203a43, #2c5364)',
-                    supportPhone: supportPhone,
-                    supportEmail: supportEmail,
-                    website: website,
-                    businessTagline: businessTagline,
-                    mpesaTill: '',
-                    mpesaShortcode: SHORTCODE,
-                    status: 'active',
-                    createdAt: new Date().toISOString(),
-                    updatedAt: new Date().toISOString(),
-                    plans: customPlans.length > 0 ? customPlans : [
-                        { id: '2_Hours', name: '2 Hours', price: 10, devices: 1, shared_users: 1, duration_seconds: 7200 },
-                        { id: '5_Hours', name: '5 Hours', price: 20, devices: 1, shared_users: 1, duration_seconds: 18000 },
-                        { id: '24_Hours', name: '24 Hours', price: 80, devices: 1, shared_users: 1, duration_seconds: 86400 }
-                    ]
-                };
-                organizations.push(newOrganization);
-                saveOrganizations();
-
-                // Also add to clients for backward compatibility
-                clients.push({
-                    id: clientId,
-                    name: businessName,
-                    phone: supportPhone,
-                    email: email,
-                    businessName: businessName,
-                    mpesaTill: '',
-                    status: 'active',
-                    createdAt: new Date().toISOString(),
-                    updatedAt: new Date().toISOString(),
-                    isOrganization: true,
-                    organizationId: clientId
-                });
-                saveClients();
-
-                console.log('✅ New organization created via client portal: ' + clientId);
-
-                return sendJson(res, 200, {
-                    success: true,
-                    message: 'Organization created successfully!',
-                    organization: newOrganization,
-                    clientId: clientId
-                });
             }
+            
+            // Create new organization
+            var clientId = generateOrgId();
+            var newOrganization = {
+                id: clientId,
+                name: body.businessName || body.name || 'New Business',
+                businessName: body.businessName || body.name || 'New Business',
+                email: email,
+                phone: body.phone || '0712345678',
+                logo: body.logo || '',
+                primaryColor: body.primaryColor || '#ff6b35',
+                secondaryColor: body.secondaryColor || '#ff9a56',
+                accentColor: body.accentColor || '#1a0a00',
+                textColor: '#ffffff',
+                headerTextColor: '#ffffff',
+                buttonTextColor: '#000000',
+                bgGradient: 'linear-gradient(135deg, #1a0a00, #ff6b35, #ff9a56)',
+                supportPhone: body.supportPhone || '0712345678',
+                supportEmail: body.supportEmail || email,
+                website: body.website || '',
+                businessTagline: body.businessTagline || 'Fast • Secure • Reliable',
+                mpesaTill: '',
+                mpesaShortcode: SHORTCODE,
+                status: 'active',
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+                plans: body.plans || [
+                    { id: '2_Hours', name: '2 Hours', price: 10, devices: 1, shared_users: 1, duration_seconds: 7200 },
+                    { id: '5_Hours', name: '5 Hours', price: 20, devices: 1, shared_users: 1, duration_seconds: 18000 },
+                    { id: '24_Hours', name: '24 Hours', price: 80, devices: 1, shared_users: 1, duration_seconds: 86400 }
+                ]
+            };
+            
+            organizations.push(newOrganization);
+            saveOrganizations();
+            console.log('✅ Organization created:', clientId);
+            
+            // Also add to clients
+            clients.push({
+                id: clientId,
+                name: newOrganization.businessName,
+                phone: newOrganization.phone,
+                email: newOrganization.email,
+                businessName: newOrganization.businessName,
+                mpesaTill: '',
+                status: 'active',
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+                isOrganization: true,
+                organizationId: clientId
+            });
+            saveClients();
+            
+            return sendJson(res, 200, {
+                success: true,
+                message: 'Organization created successfully!',
+                organization: newOrganization,
+                clientId: clientId
+            });
         }
 
         // ============================================================
