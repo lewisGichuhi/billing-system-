@@ -1407,11 +1407,11 @@ var server = http.createServer(async function(req, res) {
             var body = await readBody(req);
             console.log('📥 Body:', body);
             
-            // Get email from body
-            var email = body.email || 'unknown@example.com';
+            // Get email from body or use default
+            var email = body.email || 'master@demo.com';
             console.log('📧 Email:', email);
             
-            // Check if org exists
+            // Check if org already exists for this email
             var existingOrg = null;
             for (var i = 0; i < organizations.length; i++) {
                 if (organizations[i].email === email) {
@@ -1421,20 +1421,23 @@ var server = http.createServer(async function(req, res) {
             }
             
             if (existingOrg) {
-                console.log('✅ Organization already exists:', existingOrg.id);
+                console.log('✅ Organization already exists for this email:', existingOrg.id);
                 return sendJson(res, 200, {
                     success: true,
                     message: 'Organization already exists',
-                    organization: existingOrg
+                    organization: existingOrg,
+                    clientId: existingOrg.id
                 });
             }
             
             // Create new organization
             var clientId = generateOrgId();
+            var businessName = body.businessName || body.name || 'Demo WiFi Business';
+            
             var newOrganization = {
                 id: clientId,
-                name: body.businessName || body.name || 'New Business',
-                businessName: body.businessName || body.name || 'New Business',
+                name: businessName,
+                businessName: businessName,
                 email: email,
                 phone: body.phone || '0712345678',
                 logo: body.logo || '',
@@ -1448,7 +1451,7 @@ var server = http.createServer(async function(req, res) {
                 supportPhone: body.supportPhone || '0712345678',
                 supportEmail: body.supportEmail || email,
                 website: body.website || '',
-                businessTagline: body.businessTagline || 'Fast • Secure • Reliable',
+                businessTagline: body.businessTagline || 'Full Access Mode',
                 mpesaTill: '',
                 mpesaShortcode: SHORTCODE,
                 status: 'active',
@@ -1457,21 +1460,24 @@ var server = http.createServer(async function(req, res) {
                 plans: body.plans || [
                     { id: '2_Hours', name: '2 Hours', price: 10, devices: 1, shared_users: 1, duration_seconds: 7200 },
                     { id: '5_Hours', name: '5 Hours', price: 20, devices: 1, shared_users: 1, duration_seconds: 18000 },
+                    { id: '8_Hours', name: '8 Hours', price: 30, devices: 1, shared_users: 1, duration_seconds: 28800 },
+                    { id: '12_Hours', name: '12 Hours', price: 50, devices: 1, shared_users: 1, duration_seconds: 43200 },
                     { id: '24_Hours', name: '24 Hours', price: 80, devices: 1, shared_users: 1, duration_seconds: 86400 }
                 ]
             };
             
             organizations.push(newOrganization);
             saveOrganizations();
-            console.log('✅ Organization created:', clientId);
+            console.log('✅ Organization created on server:', clientId);
+            console.log('📁 Total organizations:', organizations.length);
             
-            // Also add to clients
+            // Also add to clients for backward compatibility
             clients.push({
                 id: clientId,
-                name: newOrganization.businessName,
+                name: businessName,
                 phone: newOrganization.phone,
-                email: newOrganization.email,
-                businessName: newOrganization.businessName,
+                email: email,
+                businessName: businessName,
                 mpesaTill: '',
                 status: 'active',
                 createdAt: new Date().toISOString(),
