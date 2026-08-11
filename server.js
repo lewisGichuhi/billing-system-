@@ -372,10 +372,6 @@ if (fs.existsSync(PRODUCTS_FILE)) {
     saveProducts();
 }
 
-// ============================================================
-// ===================== MULTI-TENANT DATA LOADING =====================
-// ============================================================
-
 // Load organizations (Multi-Tenant)
 if (fs.existsSync(ORGANIZATIONS_FILE)) {
     try {
@@ -580,10 +576,6 @@ function generateProductId() {
     }
     return 'PROD_' + code;
 }
-
-// ============================================================
-// ===================== MULTI-TENANT HELPERS =====================
-// ============================================================
 
 function generateOrgId() {
     const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
@@ -1093,7 +1085,11 @@ function generateClientSkeletonHtml(organization) {
     <div class="container">
         <h2 style="color:var(--primary-color); margin-bottom:8px;">📶 Choose Your Plan</h2>
         <p style="color:#888; margin-bottom:16px;">Select a package that fits your needs</p>
-        <div class="plans-grid" id="plansGrid">${plansHtml}</div>
+        <div class="plans-grid" id="plansGrid">
+            <div style="text-align:center;padding:40px;color:#888;">
+                <span class="loading"></span> Loading plans...
+            </div>
+        </div>
 
         <div class="payment-section" id="paymentSection">
             <h2>💳 Pay with M-Pesa</h2>
@@ -1153,10 +1149,39 @@ function generateClientSkeletonHtml(organization) {
 
     <script>
         // ============================================================
-        // CONFIGURATION
+        // CONFIGURATION - FIXED FOR LOCAL & REMOTE (MIKROTIK SUPPORT)
+        // ============================================================
+        console.log('🌐 Client Page Loading...');
+        console.log('📡 Current Host:', window.location.hostname);
+
+        // THE RENDER URL - CHANGE THIS TO YOUR ACTUAL URL
+        const RENDER_URL = 'https://billing-system-fm9a.onrender.com';
+
+        const currentHost = window.location.hostname;
+        const isLocal = currentHost === 'localhost' || 
+                       currentHost === '127.0.0.1' || 
+                       currentHost === '' || 
+                       currentHost === '192.168.88.1' ||  // MikroTik hotspot
+                       window.location.protocol === 'file:';
+
+        // Determine API URL based on environment
+        let API_URL;
+        if (isLocal) {
+            // When running locally or on MikroTik, use the Render URL
+            API_URL = RENDER_URL + '/api';
+            console.log('📍 LOCAL/MIKROTIK MODE: Using Render API:', API_URL);
+        } else {
+            // When running on Render or any server, use relative path
+            API_URL = window.location.origin + '/api';
+            console.log('📍 SERVER MODE: Using relative API:', API_URL);
+        }
+
+        console.log('📡 API URL:', API_URL);
+
+        // ============================================================
+        // ORGANIZATION ID
         // ============================================================
         const ORG_ID = '${orgId}';
-        const API_BASE = '';
 
         let plans = [];
         let selectedPlan = null;
@@ -1167,6 +1192,8 @@ function generateClientSkeletonHtml(organization) {
         // INIT
         // ============================================================
         document.addEventListener('DOMContentLoaded', () => {
+            console.log('🚀 Client Page Initialized');
+            console.log('🏢 Organization ID:', ORG_ID);
             loadOrganizationData();
         });
 
@@ -1174,25 +1201,47 @@ function generateClientSkeletonHtml(organization) {
         // LOAD ORGANIZATION DATA
         // ============================================================
         function loadOrganizationData() {
-            fetch(\`/api/organization/\${ORG_ID}\`)
-                .then(r => r.json())
+            const url = API_URL + '/organization/' + ORG_ID;
+            console.log('📥 Fetching organization data from:', url);
+
+            fetch(url)
+                .then(r => {
+                    console.log('📥 Response status:', r.status);
+                    return r.json();
+                })
                 .then(data => {
+                    console.log('📥 Organization data:', data);
                     if (data.success) {
                         const org = data.data;
                         plans = org.plans || [];
+                        console.log('📦 Plans loaded:', plans.length);
                         renderPlans();
                         if (org.primaryColor) {
                             document.documentElement.style.setProperty('--primary-color', org.primaryColor);
                         }
+                        if (org.businessName) {
+                            document.querySelector('.header h1').textContent = '🌐 ' + org.businessName;
+                        }
+                        if (org.businessTagline) {
+                            document.getElementById('tagline').textContent = org.businessTagline;
+                        }
                     } else {
+                        console.error('❌ Failed to load organization:', data.message);
                         document.getElementById('plansGrid').innerHTML =
-                            '<div style="text-align:center;padding:40px;color:#ff4444;">Failed to load plans</div>';
+                            '<div style="text-align:center;padding:40px;color:#ff4444;">❌ ' + (data.message ||
+                                'Failed to load plans') + '</div>';
                     }
                 })
                 .catch(err => {
-                    console.error(err);
-                    document.getElementById('plansGrid').innerHTML =
-                        '<div style="text-align:center;padding:40px;color:#ff4444;">Network error loading plans</div>';
+                    console.error('❌ Network error loading plans:', err);
+                    document.getElementById('plansGrid').innerHTML = \`
+                        <div style="text-align:center;padding:40px;color:#ff4444;">
+                            ❌ Network error loading plans<br>
+                            <small style="color:#666;font-size:12px;">\${err.message}</small>
+                            <br><br>
+                            <button onclick="loadOrganizationData()" style="padding:8px 20px;background:var(--primary-color);color:#000;border:none;border-radius:6px;cursor:pointer;">🔄 Retry</button>
+                        </div>
+                    \`;
                 });
         }
 
@@ -1201,7 +1250,7 @@ function generateClientSkeletonHtml(organization) {
         // ============================================================
         function renderPlans() {
             const grid = document.getElementById('plansGrid');
-            if (plans.length === 0) {
+            if (!plans || plans.length === 0) {
                 grid.innerHTML = '<div style="text-align:center;padding:40px;color:#666;">No plans available</div>';
                 return;
             }
@@ -1225,6 +1274,8 @@ function generateClientSkeletonHtml(organization) {
                     </div>
                 \`;
             }).join('');
+
+            console.log('✅ Plans rendered successfully');
         }
 
         // ============================================================
@@ -1271,7 +1322,10 @@ function generateClientSkeletonHtml(organization) {
             statusBox.className = 'status-box show info';
             statusBox.innerHTML = '⏳ Initiating payment... Please wait.';
 
-            fetch('/api/payment/initiate', {
+            const url = API_URL + '/payment/initiate';
+            console.log('📤 Sending payment to:', url);
+
+            fetch(url, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -1314,7 +1368,7 @@ function generateClientSkeletonHtml(organization) {
                 }
             })
             .catch(err => {
-                console.error(err);
+                console.error('Payment error:', err);
                 btn.disabled = false;
                 btn.innerHTML = '💳 Pay Now';
                 statusBox.className = 'status-box show error';
@@ -1343,7 +1397,7 @@ function generateClientSkeletonHtml(organization) {
                     return;
                 }
 
-                fetch(\`/api/transaction/\${transactionId}\`)
+                fetch(API_URL + '/transaction/' + transactionId)
                     .then(r => r.json())
                     .then(data => {
                         if (data.success) {
@@ -1360,7 +1414,8 @@ function generateClientSkeletonHtml(organization) {
                                 clearInterval(pollingInterval);
                                 const statusBox = document.getElementById('statusBox');
                                 statusBox.className = 'status-box show error';
-                                statusBox.innerHTML = '❌ ' + (tx.errorDescription || 'Payment failed. Please try again.');
+                                statusBox.innerHTML = '❌ ' + (tx.errorDescription ||
+                                    'Payment failed. Please try again.');
                                 showToast('❌ Payment failed', 'error');
                             }
                         }
@@ -1373,14 +1428,15 @@ function generateClientSkeletonHtml(organization) {
         // FETCH CREDENTIALS
         // ============================================================
         function fetchCredentials(transactionId) {
-            fetch(\`/api/get-credentials/\${transactionId}\`)
+            fetch(API_URL + '/get-credentials/' + transactionId)
                 .then(r => r.json())
                 .then(data => {
                     if (data.success) {
                         document.getElementById('credUsername').textContent = data.username || 'N/A';
                         document.getElementById('credPassword').textContent = data.password || 'N/A';
                         document.getElementById('credPlan').textContent = data.plan || 'N/A';
-                        document.getElementById('credExpires').textContent = data.expiresAt ? new Date(data.expiresAt).toLocaleString() : 'N/A';
+                        document.getElementById('credExpires').textContent = data.expiresAt ? new Date(data
+                            .expiresAt).toLocaleString() : 'N/A';
                     }
                 })
                 .catch(console.error);
@@ -1400,7 +1456,7 @@ function generateClientSkeletonHtml(organization) {
             result.innerHTML = '<span class="loading"></span> Checking...';
             result.style.color = '#888';
 
-            fetch(\`/api/check-active?phone=\${encodeURIComponent(phone)}\`)
+            fetch(API_URL + '/check-active?phone=' + encodeURIComponent(phone))
                 .then(r => r.json())
                 .then(data => {
                     if (data.success && data.active) {
@@ -1416,7 +1472,8 @@ function generateClientSkeletonHtml(organization) {
                         document.getElementById('credUsername').textContent = data.data.username || 'N/A';
                         document.getElementById('credPassword').textContent = data.data.password || 'N/A';
                         document.getElementById('credPlan').textContent = data.data.planName || 'N/A';
-                        document.getElementById('credExpires').textContent = data.data.expiresAt ? new Date(data.data.expiresAt).toLocaleString() : 'N/A';
+                        document.getElementById('credExpires').textContent = data.data.expiresAt ? new Date(data
+                            .data.expiresAt).toLocaleString() : 'N/A';
                     } else {
                         result.innerHTML = '❌ No active plan found for this number.';
                         result.style.color = '#ff4444';
@@ -1444,7 +1501,7 @@ function generateClientSkeletonHtml(organization) {
             status.innerHTML = '<span class="loading"></span> Redeeming...';
             status.style.color = '#888';
 
-            fetch('/api/voucher/redeem', {
+            fetch(API_URL + '/voucher/redeem', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ code, phoneNumber: document.getElementById('phoneNumber').value.trim() })
@@ -1461,7 +1518,8 @@ function generateClientSkeletonHtml(organization) {
                         document.getElementById('credUsername').textContent = data.data.username || 'N/A';
                         document.getElementById('credPassword').textContent = data.data.password || 'N/A';
                         document.getElementById('credPlan').textContent = data.data.planName || 'N/A';
-                        document.getElementById('credExpires').textContent = data.data.expiresAt ? new Date(data.data.expiresAt).toLocaleString() : 'N/A';
+                        document.getElementById('credExpires').textContent = data.data.expiresAt ? new Date(data
+                            .data.expiresAt).toLocaleString() : 'N/A';
                     }
                 } else {
                     status.innerHTML = '❌ ' + (data.message || 'Invalid voucher');
@@ -2888,7 +2946,7 @@ const server = http.createServer(async (req, res) => {
                 success: true,
                 html: skeletonHtml,
                 filename: `${orgId}_client_page.html`,
-                instructions: 'Copy this HTML and give it to your client. They only need to open this file in a browser.'
+                instructions: 'Copy this HTML and give it to your client. Works on local WiFi, local PC, and online!'
             });
         }
 
