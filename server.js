@@ -13,6 +13,127 @@ const path = require('path');
 const crypto = require('crypto');
 
 // ============================================================
+// DEVICE TRACKING SYSTEM - NEW FEATURE
+// ============================================================
+
+// Store active device connections
+var ACTIVE_DEVICES_FILE = path.join(__dirname, 'active_devices.json');
+var activeDevices = [];
+
+function loadActiveDevices() {
+    if (fs.existsSync(ACTIVE_DEVICES_FILE)) {
+        try {
+            activeDevices = JSON.parse(fs.readFileSync(ACTIVE_DEVICES_FILE, 'utf8'));
+            console.log('📱 Loaded ' + activeDevices.length + ' active devices');
+        } catch (e) {
+            console.error('Error loading active devices:', e);
+            activeDevices = [];
+        }
+    } else {
+        activeDevices = [];
+        saveActiveDevices();
+    }
+}
+
+function saveActiveDevices() {
+    try {
+        fs.writeFileSync(ACTIVE_DEVICES_FILE, JSON.stringify(activeDevices, null, 2));
+    } catch (e) {
+        console.error('⚠️ Could not save active devices:', e.message);
+    }
+}
+
+function getDeviceFingerprint(req) {
+    // Create a unique device fingerprint from IP and User-Agent
+    var ip = req.headers['x-forwarded-for'] || req.connection.remoteAddress || req.socket.remoteAddress || 'unknown';
+    var userAgent = req.headers['user-agent'] || 'unknown';
+    // Simple fingerprint - combination of IP and browser info
+    var fingerprint = crypto.createHash('sha256')
+        .update(ip + '|' + userAgent)
+        .digest('hex');
+    return fingerprint;
+}
+
+function checkDeviceAlreadyConnected(deviceFingerprint, phoneNumber) {
+    var now = new Date();
+    // Clean up expired connections (older than 1 hour)
+    activeDevices = activeDevices.filter(function(d) {
+        var connectedAt = new Date(d.connectedAt);
+        var diffMinutes = (now - connectedAt) / (1000 * 60);
+        return diffMinutes < 60; // Remove after 1 hour of inactivity
+    });
+    saveActiveDevices();
+    
+    // Check if this device is already connected with an active plan
+    var existing = activeDevices.find(function(d) {
+        return d.fingerprint === deviceFingerprint && 
+               d.phoneNumber === phoneNumber &&
+               d.active === true;
+    });
+    
+    if (existing) {
+        // Update the timestamp to keep it alive
+        existing.connectedAt = now.toISOString();
+        saveActiveDevices();
+        return true;
+    }
+    return false;
+}
+
+function registerDeviceConnection(deviceFingerprint, phoneNumber, username, planName, expiresAt) {
+    var now = new Date();
+    // Remove any existing entry for this device
+    activeDevices = activeDevices.filter(function(d) {
+        return d.fingerprint !== deviceFingerprint;
+    });
+    
+    activeDevices.push({
+        fingerprint: deviceFingerprint,
+        phoneNumber: phoneNumber,
+        username: username,
+        planName: planName,
+        expiresAt: expiresAt,
+        connectedAt: now.toISOString(),
+        active: true
+    });
+    saveActiveDevices();
+}
+
+function removeDeviceConnection(deviceFingerprint) {
+    activeDevices = activeDevices.filter(function(d) {
+        return d.fingerprint !== deviceFingerprint;
+    });
+    saveActiveDevices();
+}
+
+// Auto-cleanup expired devices every 5 minutes
+setInterval(function() {
+    var now = new Date();
+    var removed = 0;
+    activeDevices = activeDevices.filter(function(d) {
+        var connectedAt = new Date(d.connectedAt);
+        var diffMinutes = (now - connectedAt) / (1000 * 60);
+        if (diffMinutes > 60) {
+            removed++;
+            return false;
+        }
+        // Also check if subscription expired
+        if (d.expiresAt) {
+            var expiry = new Date(d.expiresAt);
+            if (now > expiry) {
+                removed++;
+                return false;
+            }
+        }
+        return true;
+    });
+    if (removed > 0) {
+        saveActiveDevices();
+        console.log('🧹 Cleaned up ' + removed + ' expired device connections');
+    }
+}, 5 * 60 * 1000);
+
+// ============================================================
 // CONFIGURATION
 // ============================================================
 
@@ -61,6 +182,7 @@ console.log('   Port: ' + PORT);
 console.log('   Admin PIN: ' + (ADMIN_PASSWORD ? '✅ Configured' : '⚠️ NOT SET'));
 console.log('   Master PIN: ' + (MASTER_PASSWORD ? '✅ Configured' : '⚠️ NOT SET'));
 console.log('   M-Pesa Shortcode: ' + SHORTCODE);
+console.log('📱 Device Tracking: ✅ ENABLED');
 console.log('========================================\n');
 
 // ============================================================
@@ -171,6 +293,7 @@ function loadAllData() {
     if (fs.existsSync(SUBSCRIPTIONS_FILE)) {
         try { subscriptions = JSON.parse(fs.readFileSync(SUBSCRIPTIONS_FILE, 'utf8')); console.log('📋 Loaded ' + subscriptions.length + ' subscriptions'); } catch (e) { console.error('Error loading subscriptions:', e); subscriptions = []; }
     } else { subscriptions = []; saveSubscriptions(); }
+    loadActiveDevices();
 }
 
 function saveTransactions() { try { fs.writeFileSync(TRANSACTIONS_FILE, JSON.stringify(transactions, null, 2)); } catch (e) { console.error('⚠️ Could not save transactions:', e.message); } }
@@ -1360,6 +1483,71 @@ var server = http.createServer(async function(req, res) {
         }
 
         // ============================================================
+        // DEVICE CONNECTION CHECK - NEW ENDPOINT
+        // ============================================================
+        if (req.method === 'POST' && url.pathname === '/api/device/check') {
+            var body = await readBody(req);
+            var phoneNumber = body.phoneNumber;
+            var deviceFingerprint = body.deviceFingerprint || getDeviceFingerprint(req);
+            
+            if (!phoneNumber) {
+                return sendJson(res, 400, { success: false, message: 'Phone number required' });
+            }
+            
+            // Check if device is already connected
+            var alreadyConnected = checkDeviceAlreadyConnected(deviceFingerprint, phoneNumber);
+            
+            if (alreadyConnected) {
+                // Find the active session
+                var activeSession = activeDevices.find(function(d) {
+                    return d.fingerprint === deviceFingerprint && d.phoneNumber === phoneNumber;
+                });
+                
+                return sendJson(res, 200, {
+                    success: true,
+                    alreadyConnected: true,
+                    message: 'You are already connected on this device',
+                    session: activeSession ? {
+                        username: activeSession.username,
+                        planName: activeSession.planName,
+                        expiresAt: activeSession.expiresAt,
+                        connectedAt: activeSession.connectedAt
+                    } : null,
+                    shouldClose: true // Tell client to close itself
+                });
+            }
+            
+            return sendJson(res, 200, {
+                success: true,
+                alreadyConnected: false,
+                message: 'Device not connected'
+            });
+        }
+
+        // ============================================================
+        // REGISTER DEVICE CONNECTION
+        // ============================================================
+        if (req.method === 'POST' && url.pathname === '/api/device/register') {
+            var body = await readBody(req);
+            var phoneNumber = body.phoneNumber;
+            var username = body.username;
+            var planName = body.planName;
+            var expiresAt = body.expiresAt;
+            var deviceFingerprint = body.deviceFingerprint || getDeviceFingerprint(req);
+            
+            if (!phoneNumber) {
+                return sendJson(res, 400, { success: false, message: 'Phone number required' });
+            }
+            
+            registerDeviceConnection(deviceFingerprint, phoneNumber, username || 'user', planName || 'Unknown Plan', expiresAt);
+            
+            return sendJson(res, 200, {
+                success: true,
+                message: 'Device registered successfully'
+            });
+        }
+
+        // ============================================================
         // CLIENT PORTAL ENDPOINTS
         // ============================================================
 
@@ -2131,7 +2319,8 @@ var server = http.createServer(async function(req, res) {
                     totalRevenue: totalRevenue,
                     activeVouchers: vouchers.filter(function(v) { return !v.used; }).length,
                     totalOrganizations: organizations.length,
-                    activeSubscriptions: activeSubscriptions
+                    activeSubscriptions: activeSubscriptions,
+                    activeDevices: activeDevices.length
                 }
             });
         }
@@ -2163,6 +2352,7 @@ server.listen(PORT, '0.0.0.0', function() {
     console.log('📋 Active Subscriptions: ' + subscriptions.filter(function(s) { return s.status === 'active' || s.status === 'trial'; }).length);
     console.log('📂 Transactions: ' + transactions.length);
     console.log('🎟️ Vouchers: ' + vouchers.length);
+    console.log('📱 Active Devices: ' + activeDevices.length);
     console.log('========================================\n');
 });
 
