@@ -631,7 +631,7 @@ function generateRedirectHtml(organization) {
 }
 
 // ============================================================
-// GENERATE CUSTOMER BILLING PAGE - FULLY REWRITTEN
+// GENERATE CUSTOMER BILLING PAGE - COMPLETELY FIXED
 // ============================================================
 
 function generateCustomerBillingPage(organization) {
@@ -863,7 +863,7 @@ function generateCustomerBillingPage(organization) {
     html += '    <span id="toastMessage">Success!</span>\n';
     html += '</div>\n';
 
-    // JavaScript - COMPLETELY REWRITTEN to avoid any variable reference errors
+    // JavaScript - COMPLETELY REWRITTEN - NO "plan" variable references
     html += '<script>\n';
     html += '    (function() {\n';
     html += '        var ORG_ID = "' + orgId + '";\n';
