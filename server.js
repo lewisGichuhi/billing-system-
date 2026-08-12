@@ -389,813 +389,423 @@ function isClient(req) {
 }
 
 // ============================================================
-// GENERATE CLIENT SKELETON HTML
+// GENERATE COMPLETE BILLING HTML
 // ============================================================
 
-function generateClientSkeletonHtml(organization) {
+function generateFullBillingHtml(organization) {
     var escapeHtml = function(str) {
         if (!str) return '';
         return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
             .replace(/"/g, '&quot;').replace(/'/g, '&#039;');
     };
 
-    var orgId = escapeHtml(organization.id);
-    var businessName = escapeHtml(organization.businessName || organization.name || 'WiFi Service');
+    var bizName = escapeHtml(organization.businessName || organization.name || 'WiFi Business');
     var tagline = escapeHtml(organization.businessTagline || 'Fast • Secure • Reliable');
     var primaryColor = escapeHtml(organization.primaryColor || '#00c853');
     var secondaryColor = escapeHtml(organization.secondaryColor || '#00e676');
     var accentColor = escapeHtml(organization.accentColor || '#0f2027');
-    var textColor = escapeHtml(organization.textColor || '#ffffff');
-    var headerTextColor = escapeHtml(organization.headerTextColor || '#ffffff');
-    var buttonTextColor = escapeHtml(organization.buttonTextColor || '#000000');
-    var bgGradient = escapeHtml(organization.bgGradient || 'linear-gradient(135deg, #0f2027, #203a43, #2c5364)');
     var supportPhone = escapeHtml(organization.supportPhone || '0796587763');
     var supportEmail = escapeHtml(organization.supportEmail || 'support@example.com');
+    var mpesaTill = escapeHtml(organization.mpesaTill || '174379');
     var logo = escapeHtml(organization.logo || '');
+    var businessAddress = escapeHtml(organization.businessAddress || '');
+    var website = escapeHtml(organization.website || '');
     var plans = organization.plans || [];
+    var orgId = escapeHtml(organization.id);
 
+    // Build plans HTML
     var plansHtml = '';
-    if (plans.length > 0) {
-        var planCards = [];
-        for (var i = 0; i < plans.length; i++) {
-            var p = plans[i];
-            var duration = p.duration_seconds || 3600;
-            var hours = Math.floor(duration / 3600);
-            var days = Math.floor(duration / 86400);
-            var durationStr = '';
-            if (days > 0) {
-                durationStr = days + ' day' + (days > 1 ? 's' : '');
-            } else {
-                durationStr = hours + ' hour' + (hours > 1 ? 's' : '');
-            }
-            var isPopular = p.id === '1_Week_1_Device' || p.id === '24_Hours';
-            planCards.push(
-                '<div class="plan-card" data-plan-id="' + escapeHtml(p.id) + '" onclick="openPaymentModal(\'' + escapeHtml(p.id) + '\')">' +
-                (isPopular ? '<div class="badge">🔥 Popular</div>' : '') +
-                '<div class="plan-name">' + escapeHtml(p.name) + '</div>' +
-                '<div class="plan-price">KES ' + p.price + ' <span>/ ' + durationStr + '</span></div>' +
-                '<ul class="plan-features">' +
-                '<li>' + (p.devices || 1) + ' device' + ((p.devices || 1) > 1 ? 's' : '') + '</li>' +
-                '<li>' + (p.shared_users || 1) + ' user' + ((p.shared_users || 1) > 1 ? 's' : '') + '</li>' +
-                '<li>Valid for ' + durationStr + '</li>' +
-                '</ul></div>'
-            );
-        }
-        plansHtml = planCards.join('');
-    } else {
-        plansHtml = '<div style="text-align:center;padding:40px;color:#666;">No plans available</div>';
+    for (var i = 0; i < plans.length; i++) {
+        var p = plans[i];
+        var duration = p.duration_seconds || 3600;
+        var hours = Math.floor(duration / 3600);
+        var days = Math.floor(duration / 86400);
+        var durStr = days > 0 ? days + 'd' : hours + 'h';
+        var isPopular = p.id === '1_Week_1_Device' || p.id === '24_Hours';
+        plansHtml += '<div class="plan-card' + (i === 0 ? ' selected' : '') + '" data-id="' + escapeHtml(p.id) + '" onclick="selectPlan(this, \'' + escapeHtml(p.id) + '\')">\n';
+        plansHtml += '    <div class="name">' + escapeHtml(p.name) + (isPopular ? ' 🔥' : '') + '</div>\n';
+        plansHtml += '    <div class="price">KES ' + p.price + ' <span>/ ' + durStr + '</span></div>\n';
+        plansHtml += '    <div class="features">\n';
+        plansHtml += '        <span>📱 ' + (p.devices || 1) + ' device' + (p.devices > 1 ? 's' : '') + '</span>\n';
+        plansHtml += '        <span>⏱ ' + durStr + '</span>\n';
+        plansHtml += '    </div>\n';
+        plansHtml += '</div>\n';
     }
 
+    if (!plansHtml) {
+        plansHtml = '<div style="text-align:center;padding:20px;color:#666;grid-column:1/-1;">No plans available. Please check back later.</div>';
+    }
+
+    // Build complete HTML
     var html = '<!DOCTYPE html>\n';
     html += '<html lang="en">\n';
     html += '<head>\n';
-    html += '<meta charset="UTF-8">\n';
-    html += '<meta name="viewport" content="width=device-width, initial-scale=1.0">\n';
-    html += '<title>' + businessName + ' - WiFi Services</title>\n';
-    html += '<style>\n';
-    html += ':root {\n';
-    html += '--primary-color: ' + primaryColor + ';\n';
-    html += '--secondary-color: ' + secondaryColor + ';\n';
-    html += '--accent-color: ' + accentColor + ';\n';
-    html += '--text-color: ' + textColor + ';\n';
-    html += '--header-text-color: ' + headerTextColor + ';\n';
-    html += '--button-text-color: ' + buttonTextColor + ';\n';
-    html += '--bg-gradient: ' + bgGradient + ';\n';
-    html += '}\n';
-    html += '* { margin: 0; padding: 0; box-sizing: border-box; }\n';
-    html += 'body {\n';
-    html += 'font-family: \'Segoe UI\', Tahoma, Geneva, Verdana, sans-serif;\n';
-    html += 'background: var(--accent-color);\n';
-    html += 'color: var(--text-color);\n';
-    html += 'min-height: 100vh;\n';
-    html += '}\n';
-    html += '.header {\n';
-    html += 'background: var(--bg-gradient);\n';
-    html += 'padding: 30px 20px;\n';
-    html += 'text-align: center;\n';
-    html += 'border-bottom: 3px solid var(--primary-color);\n';
-    html += '}\n';
-    html += '.header .logo {\n';
-    html += 'max-width: 150px;\n';
-    html += 'max-height: 80px;\n';
-    html += 'margin-bottom: 10px;\n';
-    html += (logo ? '' : 'display: none;') + '\n';
-    html += '}\n';
-    html += '.header h1 { font-size: 32px; color: var(--primary-color); }\n';
-    html += '.header p { color: var(--header-text-color); font-size: 16px; margin-top: 4px; opacity: 0.8; }\n';
-    html += '.container { max-width: 1200px; margin: 0 auto; padding: 20px; }\n';
-    html += '.plans-grid {\n';
-    html += 'display: grid;\n';
-    html += 'grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));\n';
-    html += 'gap: 20px;\n';
-    html += 'margin-top: 20px;\n';
-    html += '}\n';
-    html += '.plan-card {\n';
-    html += 'background: rgba(255,255,255,0.05);\n';
-    html += 'backdrop-filter: blur(10px);\n';
-    html += 'border-radius: 16px;\n';
-    html += 'padding: 24px;\n';
-    html += 'border: 1px solid rgba(255,255,255,0.08);\n';
-    html += 'transition: 0.3s;\n';
-    html += 'cursor: pointer;\n';
-    html += 'position: relative;\n';
-    html += '}\n';
-    html += '.plan-card:hover {\n';
-    html += 'transform: translateY(-4px);\n';
-    html += 'border-color: var(--primary-color);\n';
-    html += 'box-shadow: 0 8px 30px rgba(0,0,0,0.3);\n';
-    html += '}\n';
-    html += '.plan-card.selected {\n';
-    html += 'border-color: var(--primary-color);\n';
-    html += 'box-shadow: 0 0 0 2px var(--primary-color);\n';
-    html += '}\n';
-    html += '.plan-card .plan-name { font-size: 20px; font-weight: bold; color: var(--text-color); }\n';
-    html += '.plan-card .plan-price { font-size: 28px; font-weight: bold; color: var(--primary-color); margin: 8px 0; }\n';
-    html += '.plan-card .plan-price span { font-size: 14px; color: #888; font-weight: normal; }\n';
-    html += '.plan-card .plan-features { color: #aaa; font-size: 14px; margin: 12px 0; list-style: none; }\n';
-    html += '.plan-card .plan-features li { padding: 4px 0; }\n';
-    html += '.plan-card .plan-features li::before { content: "✓ "; color: var(--primary-color); }\n';
-    html += '.plan-card .badge {\n';
-    html += 'position: absolute; top: 12px; right: 12px;\n';
-    html += 'background: rgba(0,200,83,0.2); color: var(--primary-color);\n';
-    html += 'padding: 2px 12px; border-radius: 20px; font-size: 12px; font-weight: 600;\n';
-    html += '}\n';
-    html += '.voucher-section {\n';
-    html += 'background: rgba(255,255,255,0.05);\n';
-    html += 'backdrop-filter: blur(10px);\n';
-    html += 'border-radius: 16px;\n';
-    html += 'padding: 24px;\n';
-    html += 'margin-top: 20px;\n';
-    html += 'border: 2px dashed var(--primary-color);\n';
-    html += '}\n';
-    html += '.voucher-section h3 {\n';
-    html += 'color: var(--primary-color);\n';
-    html += 'margin-bottom: 12px;\n';
-    html += 'font-size: 20px;\n';
-    html += 'font-weight: 700;\n';
-    html += '}\n';
-    html += '.voucher-section .form-row {\n';
-    html += 'display: flex;\n';
-    html += 'gap: 12px;\n';
-    html += 'flex-wrap: wrap;\n';
-    html += '}\n';
-    html += '.voucher-section .form-row input {\n';
-    html += 'flex: 1;\n';
-    html += 'min-width: 180px;\n';
-    html += 'padding: 14px 18px;\n';
-    html += 'background: rgba(0,0,0,0.4);\n';
-    html += 'border: 2px solid rgba(255,255,255,0.1);\n';
-    html += 'border-radius: 10px;\n';
-    html += 'color: #fff;\n';
-    html += 'font-size: 16px;\n';
-    html += 'outline: none;\n';
-    html += 'transition: 0.3s;\n';
-    html += '}\n';
-    html += '.voucher-section .form-row input:focus {\n';
-    html += 'border-color: var(--primary-color);\n';
-    html += 'box-shadow: 0 0 0 3px rgba(0,200,83,0.1);\n';
-    html += '}\n';
-    html += '.voucher-section .form-row input::placeholder {\n';
-    html += 'color: #666;\n';
-    html += '}\n';
-    html += '.voucher-section .form-row .btn {\n';
-    html += 'padding: 14px 32px;\n';
-    html += 'background: var(--primary-color);\n';
-    html += 'color: var(--button-text-color);\n';
-    html += 'border: none;\n';
-    html += 'border-radius: 10px;\n';
-    html += 'font-size: 16px;\n';
-    html += 'font-weight: bold;\n';
-    html += 'cursor: pointer;\n';
-    html += 'transition: 0.3s;\n';
-    html += 'font-family: inherit;\n';
-    html += 'white-space: nowrap;\n';
-    html += '}\n';
-    html += '.voucher-section .form-row .btn:hover {\n';
-    html += 'opacity: 0.85;\n';
-    html += 'transform: scale(1.02);\n';
-    html += '}\n';
-    html += '.voucher-section .form-row .btn:disabled {\n';
-    html += 'opacity: 0.5;\n';
-    html += 'cursor: not-allowed;\n';
-    html += 'transform: none;\n';
-    html += '}\n';
-    html += '.voucher-section .voucher-result {\n';
-    html += 'margin-top: 12px;\n';
-    html += 'font-size: 14px;\n';
-    html += 'color: #888;\n';
-    html += 'padding: 8px 12px;\n';
-    html += 'border-radius: 8px;\n';
-    html += '}\n';
-    html += '.voucher-section .voucher-result.success {\n';
-    html += 'color: var(--primary-color);\n';
-    html += 'background: rgba(0,200,83,0.08);\n';
-    html += '}\n';
-    html += '.voucher-section .voucher-result.error {\n';
-    html += 'color: #ff4444;\n';
-    html += 'background: rgba(255,68,68,0.08);\n';
-    html += '}\n';
-    html += '.check-section {\n';
-    html += 'margin-top: 20px;\n';
-    html += 'text-align: center;\n';
-    html += '}\n';
-    html += '.check-section .btn {\n';
-    html += 'padding: 14px 32px;\n';
-    html += 'background: var(--primary-color);\n';
-    html += 'color: var(--button-text-color);\n';
-    html += 'border: none;\n';
-    html += 'border-radius: 10px;\n';
-    html += 'font-size: 16px;\n';
-    html += 'font-weight: bold;\n';
-    html += 'cursor: pointer;\n';
-    html += 'transition: 0.3s;\n';
-    html += 'font-family: inherit;\n';
-    html += 'width: 100%;\n';
-    html += 'max-width: 400px;\n';
-    html += '}\n';
-    html += '.check-section .btn:hover {\n';
-    html += 'opacity: 0.85;\n';
-    html += 'transform: scale(1.02);\n';
-    html += '}\n';
-    html += '.check-section .result {\n';
-    html += 'margin-top: 12px;\n';
-    html += 'font-size: 14px;\n';
-    html += 'color: #888;\n';
-    html += 'padding: 8px 12px;\n';
-    html += 'border-radius: 8px;\n';
-    html += '}\n';
-    html += '.check-section .result.success {\n';
-    html += 'color: var(--primary-color);\n';
-    html += 'background: rgba(0,200,83,0.08);\n';
-    html += '}\n';
-    html += '.check-section .result.error {\n';
-    html += 'color: #ff4444;\n';
-    html += 'background: rgba(255,68,68,0.08);\n';
-    html += '}\n';
-    html += '.payment-modal-overlay {\n';
-    html += 'position: fixed; top: 0; left: 0; right: 0; bottom: 0;\n';
-    html += 'background: rgba(0,0,0,0.85); backdrop-filter: blur(8px);\n';
-    html += 'display: none; align-items: center; justify-content: center;\n';
-    html += 'z-index: 999; padding: 20px;\n';
-    html += '}\n';
-    html += '.payment-modal-overlay.active { display: flex; }\n';
-    html += '.payment-modal {\n';
-    html += 'background: #1a1a2e; border-radius: 20px; padding: 32px;\n';
-    html += 'max-width: 440px; width: 100%;\n';
-    html += 'border: 1px solid rgba(255,255,255,0.06);\n';
-    html += 'box-shadow: 0 40px 100px rgba(0,0,0,0.6);\n';
-    html += 'animation: modalSlideUp 0.35s ease; position: relative;\n';
-    html += '}\n';
-    html += '@keyframes modalSlideUp {\n';
-    html += 'from { opacity: 0; transform: translateY(30px) scale(0.95); }\n';
-    html += 'to { opacity: 1; transform: translateY(0) scale(1); }\n';
-    html += '}\n';
-    html += '.payment-modal .modal-close {\n';
-    html += 'position: absolute; top: 14px; right: 18px;\n';
-    html += 'background: none; border: none; color: #666;\n';
-    html += 'font-size: 24px; cursor: pointer; transition: 0.2s;\n';
-    html += '}\n';
-    html += '.payment-modal .modal-close:hover { color: #fff; }\n';
-    html += '.payment-modal .plan-detail { text-align: center; margin: 10px 0 20px 0; }\n';
-    html += '.payment-modal .plan-detail .name { font-size: 22px; font-weight: bold; color: #fff; }\n';
-    html += '.payment-modal .plan-detail .price { font-size: 32px; font-weight: bold; color: var(--primary-color); margin-top: 4px; }\n';
-    html += '.payment-modal .plan-detail .duration { color: #888; font-size: 14px; }\n';
-    html += '.payment-modal .form-group { margin-bottom: 16px; }\n';
-    html += '.payment-modal .form-group label { display: block; color: #aaa; font-size: 13px; margin-bottom: 6px; font-weight: 600; }\n';
-    html += '.payment-modal .form-group input {\n';
-    html += 'width: 100%; padding: 12px 16px;\n';
-    html += 'background: #0a0a1a; border: 2px solid rgba(255,255,255,0.06);\n';
-    html += 'border-radius: 10px; color: #fff; font-size: 16px;\n';
-    html += 'outline: none; transition: 0.25s;\n';
-    html += '}\n';
-    html += '.payment-modal .form-group input:focus { border-color: var(--primary-color); }\n';
-    html += '.payment-modal .btn {\n';
-    html += 'width: 100%; padding: 14px;\n';
-    html += 'background: var(--primary-color); color: var(--button-text-color);\n';
-    html += 'border: none; border-radius: 10px;\n';
-    html += 'font-size: 16px; font-weight: bold; cursor: pointer; transition: 0.2s;\n';
-    html += '}\n';
-    html += '.payment-modal .btn:hover { opacity: 0.85; transform: scale(1.01); }\n';
-    html += '.payment-modal .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }\n';
-    html += '.payment-modal .error-msg { color: #ff4444; font-size: 13px; margin-top: 8px; display: none; text-align: center; }\n';
-    html += '.payment-modal .error-msg.show { display: block; }\n';
-    html += '.payment-modal .test-hint { text-align: center; color: #555; font-size: 11px; margin-top: 12px; border-top: 1px solid rgba(255,255,255,0.04); padding-top: 12px; }\n';
-    html += '.success-overlay {\n';
-    html += 'position: fixed; top: 0; left: 0; right: 0; bottom: 0;\n';
-    html += 'background: var(--bg-gradient);\n';
-    html += 'display: none; flex-direction: column; align-items: center; justify-content: center;\n';
-    html += 'z-index: 1000; padding: 40px 20px;\n';
-    html += 'animation: fadeIn 0.6s ease;\n';
-    html += '}\n';
-    html += '.success-overlay.active { display: flex; }\n';
-    html += '@keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }\n';
-    html += '.success-overlay .logo { max-width: 120px; max-height: 70px; margin-bottom: 12px; ' + (logo ? '' : 'display: none;') + ' }\n';
-    html += '.success-overlay .icon { font-size: 72px; margin-bottom: 12px; }\n';
-    html += '.success-overlay .title { font-size: 36px; font-weight: 700; color: var(--primary-color); text-align: center; }\n';
-    html += '.success-overlay .subtitle { font-size: 18px; color: #aaa; text-align: center; margin-top: 4px; }\n';
-    html += '.success-overlay .business-name { font-size: 22px; color: #fff; margin-top: 8px; text-align: center; }\n';
-    html += '.success-overlay .timer-container { margin: 25px 0 10px 0; text-align: center; padding: 25px 40px; background: rgba(0,0,0,0.3); border-radius: 16px; border: 1px solid rgba(255,255,255,0.05); }\n';
-    html += '.success-overlay .timer-label { color: #888; font-size: 14px; text-transform: uppercase; letter-spacing: 2px; }\n';
-    html += '.success-overlay .timer { font-size: 56px; font-weight: 700; color: var(--primary-color); font-family: \'Courier New\', monospace; letter-spacing: 4px; margin-top: 4px; }\n';
-    html += '.success-overlay .timer.expired { color: #ff4444; }\n';
-    html += '.success-overlay .enjoy-text { color: var(--primary-color); font-size: 18px; margin-top: 16px; opacity: 0.9; text-align: center; }\n';
-    html += '.success-overlay .credentials { background: rgba(0,0,0,0.3); border-radius: 12px; padding: 16px 24px; margin-top: 16px; border: 1px solid rgba(255,255,255,0.05); width: 100%; max-width: 400px; }\n';
-    html += '.success-overlay .credentials .row { display: flex; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.03); }\n';
-    html += '.success-overlay .credentials .row:last-child { border-bottom: none; }\n';
-    html += '.success-overlay .credentials .label { color: #888; font-size: 13px; }\n';
-    html += '.success-overlay .credentials .value { color: #fff; font-family: monospace; font-size: 13px; }\n';
-    html += '.success-overlay .auto-close { color: #555; font-size: 12px; margin-top: 20px; animation: pulse 2s infinite; }\n';
-    html += '@keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.4; } }\n';
-    html += '.success-overlay .powered-by { color: #444; font-size: 12px; margin-top: 30px; }\n';
-    html += '.success-overlay .powered-by .brand { color: var(--primary-color); font-weight: bold; }\n';
-    html += '.toast {\n';
-    html += 'position: fixed; bottom: 30px; right: 30px;\n';
-    html += 'padding: 14px 22px; border-radius: 12px;\n';
-    html += 'background: #1a1a2e; border: 1px solid rgba(255,255,255,0.05);\n';
-    html += 'color: #fff; font-size: 14px; z-index: 999;\n';
-    html += 'transform: translateY(100px); opacity: 0;\n';
-    html += 'transition: 0.35s ease; max-width: 400px;\n';
-    html += 'box-shadow: 0 20px 60px rgba(0,0,0,0.4);\n';
-    html += '}\n';
-    html += '.toast.show { transform: translateY(0); opacity: 1; }\n';
-    html += '.toast.success { border-color: var(--primary-color); }\n';
-    html += '.toast.error { border-color: #ff4444; }\n';
-    html += '.toast.info { border-color: #2196f3; }\n';
-    html += '.loading {\n';
-    html += 'display: inline-block;\n';
-    html += 'width: 20px;\n';
-    html += 'height: 20px;\n';
-    html += 'border: 3px solid rgba(255,255,255,0.1);\n';
-    html += 'border-top-color: var(--primary-color);\n';
-    html += 'border-radius: 50%;\n';
-    html += 'animation: spin 0.8s linear infinite;\n';
-    html += 'vertical-align: middle;\n';
-    html += 'margin-right: 8px;\n';
-    html += '}\n';
-    html += '@keyframes spin { to { transform: rotate(360deg); } }\n';
-    html += '@media (max-width: 600px) {\n';
-    html += '.header h1 { font-size: 24px; }\n';
-    html += '.plans-grid { grid-template-columns: 1fr 1fr; gap: 12px; }\n';
-    html += '.plan-card { padding: 16px; }\n';
-    html += '.plan-card .plan-name { font-size: 16px; }\n';
-    html += '.plan-card .plan-price { font-size: 22px; }\n';
-    html += '.payment-modal { padding: 24px 20px; }\n';
-    html += '.success-overlay .timer { font-size: 38px; }\n';
-    html += '.success-overlay .title { font-size: 28px; }\n';
-    html += '.success-overlay .timer-container { padding: 20px; min-width: 200px; }\n';
-    html += '.voucher-section .form-row { flex-direction: column; }\n';
-    html += '.voucher-section .form-row .btn { width: 100%; }\n';
-    html += '}\n';
-    html += '@media (max-width: 400px) { .plans-grid { grid-template-columns: 1fr; } }\n';
-    html += '::-webkit-scrollbar { width: 6px; }\n';
-    html += '::-webkit-scrollbar-track { background: var(--accent-color); }\n';
-    html += '::-webkit-scrollbar-thumb { background: #2a2a4a; border-radius: 3px; }\n';
-    html += '</style>\n';
+    html += '    <meta charset="UTF-8">\n';
+    html += '    <meta name="viewport" content="width=device-width, initial-scale=1.0">\n';
+    html += '    <title>' + bizName + ' - WiFi Services</title>\n';
+    html += '    <style>\n';
+    html += '        * { margin: 0; padding: 0; box-sizing: border-box; }\n';
+    html += '        body {\n';
+    html += '            font-family: \'Segoe UI\', Roboto, system-ui, sans-serif;\n';
+    html += '            background: ' + accentColor + ';\n';
+    html += '            color: #ffffff;\n';
+    html += '            min-height: 100vh;\n';
+    html += '            display: flex;\n';
+    html += '            align-items: center;\n';
+    html += '            justify-content: center;\n';
+    html += '            padding: 20px;\n';
+    html += '        }\n';
+    html += '        .container {\n';
+    html += '            max-width: 560px;\n';
+    html += '            width: 100%;\n';
+    html += '            background: rgba(18, 18, 31, 0.95);\n';
+    html += '            border-radius: 24px;\n';
+    html += '            padding: 32px 28px;\n';
+    html += '            border: 1px solid rgba(255,255,255,0.04);\n';
+    html += '            box-shadow: 0 20px 60px rgba(0,0,0,0.6);\n';
+    html += '        }\n';
+    html += '        .brand { text-align: center; margin-bottom: 24px; }\n';
+    html += '        .brand .logo { font-size: 42px; margin-bottom: 4px; }\n';
+    html += '        .brand h1 { font-size: 26px; font-weight: 700; color: ' + primaryColor + '; }\n';
+    html += '        .brand .tagline { color: #888; font-size: 14px; margin-top: 2px; }\n';
+    html += '        .brand .badge { display: inline-block; background: rgba(0,200,83,0.12); color: ' + primaryColor + '; padding: 2px 16px; border-radius: 20px; font-size: 11px; font-weight: 600; margin-top: 4px; }\n';
+    html += '        .section-title { font-size: 18px; font-weight: 600; margin: 22px 0 12px 0; color: #fff; display: flex; align-items: center; gap: 8px; }\n';
+    html += '        .plan-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }\n';
+    html += '        .plan-card { background: rgba(255,255,255,0.03); border-radius: 14px; padding: 16px 14px; border: 1px solid rgba(255,255,255,0.05); cursor: pointer; transition: 0.25s; text-align: center; }\n';
+    html += '        .plan-card:hover { background: rgba(255,255,255,0.06); border-color: ' + primaryColor + '40; transform: translateY(-2px); }\n';
+    html += '        .plan-card.selected { border-color: ' + primaryColor + '; background: ' + primaryColor + '10; box-shadow: 0 0 0 1px ' + primaryColor + '; }\n';
+    html += '        .plan-card .name { font-weight: 600; font-size: 15px; color: #fff; }\n';
+    html += '        .plan-card .price { font-size: 22px; font-weight: 700; color: ' + primaryColor + '; margin: 4px 0; }\n';
+    html += '        .plan-card .price span { font-size: 13px; font-weight: 400; color: #666; }\n';
+    html += '        .plan-card .features { font-size: 12px; color: #888; margin-top: 4px; }\n';
+    html += '        .plan-card .features span { display: inline-block; background: rgba(255,255,255,0.04); padding: 1px 10px; border-radius: 12px; margin: 2px 2px; }\n';
+    html += '        .input-group { margin: 12px 0 16px 0; }\n';
+    html += '        .input-group label { display: block; color: #aaa; font-size: 13px; font-weight: 500; margin-bottom: 4px; }\n';
+    html += '        .input-group input { width: 100%; padding: 13px 16px; background: #0a0a1a; border: 2px solid rgba(255,255,255,0.06); border-radius: 12px; color: #fff; font-size: 16px; outline: none; transition: 0.25s; }\n';
+    html += '        .input-group input:focus { border-color: ' + primaryColor + '; box-shadow: 0 0 0 3px ' + primaryColor + '10; }\n';
+    html += '        .input-group input::placeholder { color: #444; }\n';
+    html += '        .btn { width: 100%; padding: 14px; background: ' + primaryColor + '; border: none; border-radius: 12px; font-size: 16px; font-weight: 700; color: #000; cursor: pointer; transition: 0.25s; font-family: inherit; }\n';
+    html += '        .btn:hover { background: ' + secondaryColor + '; transform: scale(1.01); }\n';
+    html += '        .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }\n';
+    html += '        .btn-secondary { background: #2a2a4a; color: #fff; }\n';
+    html += '        .btn-secondary:hover { background: #3a3a5a; }\n';
+    html += '        .divider { display: flex; align-items: center; gap: 16px; margin: 18px 0; color: #444; font-size: 13px; }\n';
+    html += '        .divider::before, .divider::after { content: \'\'; flex: 1; height: 1px; background: rgba(255,255,255,0.04); }\n';
+    html += '        .voucher-row { display: flex; gap: 10px; }\n';
+    html += '        .voucher-row input { flex: 1; padding: 12px 14px; background: #0a0a1a; border: 2px solid rgba(255,255,255,0.06); border-radius: 10px; color: #fff; font-size: 14px; outline: none; }\n';
+    html += '        .voucher-row input:focus { border-color: ' + primaryColor + '; }\n';
+    html += '        .voucher-row .btn { flex: 0 0 auto; width: auto; padding: 12px 20px; font-size: 13px; }\n';
+    html += '        .result-box { margin-top: 10px; padding: 10px 14px; border-radius: 10px; font-size: 13px; display: none; }\n';
+    html += '        .result-box.success { display: block; background: ' + primaryColor + '15; color: ' + primaryColor + '; border: 1px solid ' + primaryColor + '20; }\n';
+    html += '        .result-box.error { display: block; background: rgba(255,68,68,0.08); color: #ff4444; border: 1px solid rgba(255,68,68,0.1); }\n';
+    html += '        .result-box.info { display: block; background: rgba(33,150,243,0.08); color: #2196f3; border: 1px solid rgba(33,150,243,0.1); }\n';
+    html += '        .footer { text-align: center; color: #444; font-size: 12px; margin-top: 24px; border-top: 1px solid rgba(255,255,255,0.03); padding-top: 16px; }\n';
+    html += '        .footer .brand { color: ' + primaryColor + '; font-weight: 600; }\n';
+    html += '        .toast { position: fixed; bottom: 30px; left: 50%; transform: translateX(-50%); background: #1a1a2e; padding: 14px 28px; border-radius: 12px; border: 1px solid rgba(255,255,255,0.06); color: #fff; font-size: 14px; z-index: 999; max-width: 90%; text-align: center; animation: toastIn 0.35s ease; box-shadow: 0 20px 60px rgba(0,0,0,0.5); }\n';
+    html += '        @keyframes toastIn { from { opacity: 0; transform: translateX(-50%) translateY(30px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }\n';
+    html += '        .toast.success { border-color: ' + primaryColor + '; }\n';
+    html += '        .toast.error { border-color: #ff4444; }\n';
+    html += '        .toast.info { border-color: #2196f3; }\n';
+    html += '        .connected-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: ' + accentColor + '; display: none; flex-direction: column; align-items: center; justify-content: center; z-index: 9999; padding: 30px; }\n';
+    html += '        .connected-overlay.active { display: flex; }\n';
+    html += '        .connected-overlay .icon { font-size: 72px; margin-bottom: 12px; }\n';
+    html += '        .connected-overlay .title { font-size: 32px; font-weight: 700; color: ' + primaryColor + '; }\n';
+    html += '        .connected-overlay .sub { color: #888; font-size: 16px; margin-top: 4px; }\n';
+    html += '        .connected-overlay .timer-box { background: rgba(255,255,255,0.03); padding: 20px 40px; border-radius: 16px; border: 1px solid rgba(255,255,255,0.04); margin: 16px 0; text-align: center; }\n';
+    html += '        .connected-overlay .timer-box .label { color: #666; font-size: 12px; text-transform: uppercase; letter-spacing: 2px; }\n';
+    html += '        .connected-overlay .timer-box .time { font-size: 48px; font-weight: 700; color: ' + primaryColor + '; font-family: \'Courier New\', monospace; letter-spacing: 4px; }\n';
+    html += '        .connected-overlay .timer-box .time.expired { color: #ff4444; }\n';
+    html += '        .connected-overlay .creds { background: rgba(255,255,255,0.03); border-radius: 12px; padding: 14px 24px; border: 1px solid rgba(255,255,255,0.04); width: 100%; max-width: 360px; margin: 8px 0; }\n';
+    html += '        .connected-overlay .creds .row { display: flex; justify-content: space-between; padding: 4px 0; border-bottom: 1px solid rgba(255,255,255,0.03); font-size: 13px; }\n';
+    html += '        .connected-overlay .creds .row:last-child { border-bottom: none; }\n';
+    html += '        .connected-overlay .creds .label { color: #666; }\n';
+    html += '        .connected-overlay .creds .value { color: #fff; font-family: monospace; }\n';
+    html += '        .connected-overlay .enjoy { color: ' + primaryColor + '; font-size: 18px; margin-top: 12px; opacity: 0.9; }\n';
+    html += '        .connected-overlay .powered { color: #444; font-size: 12px; margin-top: 24px; }\n';
+    html += '        .connected-overlay .powered .brand { color: ' + primaryColor + '; font-weight: 600; }\n';
+    html += '        .connected-overlay .address { color: #555; font-size: 11px; margin-top: 8px; }\n';
+    html += '        @media (max-width: 480px) { .container { padding: 20px 16px; } .plan-grid { grid-template-columns: 1fr 1fr; gap: 8px; } .plan-card { padding: 12px 10px; } .plan-card .price { font-size: 18px; } .connected-overlay .timer-box .time { font-size: 34px; } .voucher-row { flex-direction: column; } .voucher-row .btn { width: 100%; } }\n';
+    html += '    </style>\n';
     html += '</head>\n';
     html += '<body>\n';
 
-    // HEADER
-    html += '<div class="header" id="pageHeader">\n';
-    if (logo) {
-        html += '<img id="logoImage" src="' + logo + '" alt="' + businessName + '" class="logo">\n';
-    } else {
-        html += '<img id="logoImage" src="" alt="Logo" class="logo" style="display:none;">\n';
+    // Main container
+    html += '<div class="container" id="app">\n';
+    html += '    <div class="brand">\n';
+    html += '        <div class="logo">🌐</div>\n';
+    html += '        <h1>' + bizName + '</h1>\n';
+    html += '        <p class="tagline">' + tagline + '</p>\n';
+    if (mpesaTill) {
+        html += '        <span class="badge">🔐 Paybill: ' + mpesaTill + '</span>\n';
     }
-    html += '<h1 id="businessName">🌐 ' + businessName + '</h1>\n';
-    html += '<p id="tagline">' + tagline + '</p>\n';
-    html += '</div>\n';
-
-    // CONTAINER
-    html += '<div class="container" id="mainContainer">\n';
-    html += '<h2 style="color:var(--primary-color); margin-bottom:8px;">📶 Choose Your Plan</h2>\n';
-    html += '<p style="color:#888; margin-bottom:16px;">Select a package that fits your needs</p>\n';
-    html += '<div class="plans-grid" id="plansGrid">\n';
-    html += '<div style="text-align:center;padding:40px;color:#888;grid-column:1/-1;">\n';
-    html += '<span class="loading"></span> Loading plans...\n';
-    html += '</div>\n';
-    html += '</div>\n';
-
-    // VOUCHER SECTION
-    html += '<div class="voucher-section" id="voucherSection">\n';
-    html += '<h3>🎟️ Have a Voucher?</h3>\n';
-    html += '<div class="form-row">\n';
-    html += '<input type="text" id="voucherInput" placeholder="Enter voucher code (e.g., ABC123XYZ)" autocomplete="off">\n';
-    html += '<input type="tel" id="voucherPhoneInput" placeholder="📱 Your phone number" autocomplete="off">\n';
-    html += '<button class="btn" id="voucherRedeemBtn" onclick="redeemVoucher()">🎟️ Redeem</button>\n';
-    html += '</div>\n';
-    html += '<div class="voucher-result" id="voucherResult"></div>\n';
-    html += '</div>\n';
-
-    // CHECK & CONNECT
-    html += '<div class="check-section">\n';
-    html += '<button class="btn" onclick="checkAndConnect()">🔌 Check & Connect</button>\n';
-    html += '<div class="result" id="checkResult"></div>\n';
-    html += '</div>\n';
-    html += '</div>\n';
-
-    // PAYMENT MODAL
-    html += '<div class="payment-modal-overlay" id="paymentModal">\n';
-    html += '<div class="payment-modal">\n';
-    html += '<button class="modal-close" onclick="closePaymentModal()">✕</button>\n';
-    html += '<div class="plan-detail">\n';
-    html += '<div class="name" id="modalPlanName">2 Hours</div>\n';
-    html += '<div class="price" id="modalPlanPrice">KES 10</div>\n';
-    html += '<div class="duration" id="modalPlanDuration">Valid for 2 hours</div>\n';
-    html += '</div>\n';
-    html += '<div class="form-group">\n';
-    html += '<label>📱 Phone Number</label>\n';
-    html += '<input type="tel" id="modalPhone" placeholder="0712345678" autofocus>\n';
-    html += '</div>\n';
-    html += '<button class="btn" id="modalPayBtn" onclick="modalPay()">💳 Pay Now</button>\n';
-    html += '<div class="error-msg" id="modalError">Please enter a valid phone number</div>\n';
-    html += '<div class="test-hint">🔑 Test PIN: 12345</div>\n';
-    html += '</div>\n';
-    html += '</div>\n';
-
-    // SUCCESS OVERLAY
-    html += '<div class="success-overlay" id="successOverlay">\n';
-    if (logo) {
-        html += '<img id="successLogo" src="' + logo + '" alt="' + businessName + '" class="logo">\n';
-    } else {
-        html += '<img id="successLogo" src="" alt="Logo" class="logo" style="display:none;">\n';
+    if (businessAddress) {
+        html += '        <p style="color:#555;font-size:11px;margin-top:6px;">📍 ' + businessAddress + '</p>\n';
     }
-    html += '<div class="icon">🎉</div>\n';
-    html += '<div class="title">You\'re Connected!</div>\n';
-    html += '<div class="subtitle">Enjoy your high-speed internet</div>\n';
-    html += '<div class="business-name" id="successBusinessName">' + businessName + '</div>\n';
-    html += '<div class="timer-container">\n';
-    html += '<div class="timer-label">⏱ Time Remaining</div>\n';
-    html += '<div class="timer" id="successTimer">--:--:--</div>\n';
-    html += '</div>\n';
-    html += '<div class="credentials" id="successCredentials">\n';
-    html += '<div class="row"><span class="label">Username</span><span class="value" id="credUsername">-</span></div>\n';
-    html += '<div class="row"><span class="label">Password</span><span class="value" id="credPassword">-</span></div>\n';
-    html += '<div class="row"><span class="label">Plan</span><span class="value" id="credPlan">-</span></div>\n';
-    html += '</div>\n';
-    html += '<div class="enjoy-text" id="enjoyText">🌐 Enjoy your browsing!</div>\n';
-    html += '<div class="auto-close">⏳ This page will close automatically when your plan expires</div>\n';
-    html += '<div class="powered-by">Powered by <span class="brand" id="brandName">' + businessName + '</span></div>\n';
+    html += '    </div>\n';
+
+    // Plans
+    html += '    <div class="section-title">📦 Choose Your Plan</div>\n';
+    html += '    <div class="plan-grid" id="planGrid">\n';
+    html += plansHtml;
+    html += '    </div>\n';
+
+    // M-Pesa input
+    html += '    <div class="input-group">\n';
+    html += '        <label>📱 M-Pesa Phone Number</label>\n';
+    html += '        <input type="tel" id="phoneInput" placeholder="0712345678" />\n';
+    html += '    </div>\n';
+    html += '    <button class="btn" id="payBtn" onclick="initiatePayment()">💳 Pay Now</button>\n';
+    html += '    <div id="paymentResult" class="result-box" style="margin-top:12px;"></div>\n';
+
+    // Voucher
+    html += '    <div class="divider">or use a voucher</div>\n';
+    html += '    <div class="voucher-row">\n';
+    html += '        <input type="text" id="voucherInput" placeholder="🎟️ Enter voucher code" />\n';
+    html += '        <button class="btn btn-secondary" onclick="redeemVoucher()">Redeem</button>\n';
+    html += '    </div>\n';
+    html += '    <div id="voucherResult" class="result-box"></div>\n';
+
+    // Check existing
+    html += '    <div style="margin-top:16px; display:flex; gap:10px;">\n';
+    html += '        <input type="tel" id="checkPhoneInput" placeholder="🔍 Check your plan" style="flex:1; padding:12px 14px; background:#0a0a1a; border:2px solid rgba(255,255,255,0.06); border-radius:10px; color:#fff; font-size:14px; outline:none;" />\n';
+    html += '        <button class="btn btn-secondary" onclick="checkPlan()" style="width:auto; padding:12px 20px; font-size:13px;">Check</button>\n';
+    html += '    </div>\n';
+    html += '    <div id="checkResult" class="result-box"></div>\n';
+
+    // Footer
+    html += '    <div class="footer">\n';
+    html += '        Powered by <span class="brand">GICH WiFi</span> · Secure · Fast · Reliable\n';
+    html += '        <br><span style="color:#555; font-size:11px;">📞 ' + supportPhone + ' · ✉️ ' + supportEmail + '</span>\n';
+    if (website) {
+        html += '        <br><span style="color:#555; font-size:11px;">🌐 ' + website + '</span>\n';
+    }
+    html += '    </div>\n';
     html += '</div>\n';
 
-    // TOAST
-    html += '<div class="toast" id="toast">\n';
-    html += '<span id="toastIcon">✅</span>\n';
-    html += '<span id="toastMessage">Success!</span>\n';
+    // Connected overlay
+    html += '<div class="connected-overlay" id="connectedOverlay">\n';
+    html += '    <div class="icon">🎉</div>\n';
+    html += '    <div class="title">You\'re Connected!</div>\n';
+    html += '    <div class="sub">Enjoy your high-speed internet</div>\n';
+    html += '    <div class="timer-box">\n';
+    html += '        <div class="label">⏱ Time Remaining</div>\n';
+    html += '        <div class="time" id="connTimer">--:--:--</div>\n';
+    html += '    </div>\n';
+    html += '    <div class="creds">\n';
+    html += '        <div class="row"><span class="label">Username</span><span class="value" id="connUser">-</span></div>\n';
+    html += '        <div class="row"><span class="label">Password</span><span class="value" id="connPass">-</span></div>\n';
+    html += '        <div class="row"><span class="label">Plan</span><span class="value" id="connPlan">-</span></div>\n';
+    html += '    </div>\n';
+    html += '    <div class="enjoy" id="connEnjoy">🌐 Enjoy your browsing!</div>\n';
+    html += '    <div class="powered">Powered by <span class="brand">GICH WiFi</span></div>\n';
+    if (businessAddress) {
+        html += '    <div class="address">📍 ' + businessAddress + '</div>\n';
+    }
     html += '</div>\n';
 
-    // JAVASCRIPT
+    // JavaScript
     html += '<script>\n';
-    html += 'var RENDER_URL = "' + (process.env.RENDER_URL || 'https://billing-system-fm9a.onrender.com') + '";\n';
-    html += 'var currentHost = window.location.hostname;\n';
-    html += 'var isLocal = currentHost === "localhost" || currentHost === "127.0.0.1" || currentHost === "" || currentHost === "192.168.88.1" || currentHost === "192.168.1.1" || window.location.protocol === "file:";\n';
-    html += 'var API_URL = isLocal ? RENDER_URL + "/api" : window.location.origin + "/api";\n';
-    html += 'console.log("📡 API URL:", API_URL);\n';
+    html += '    const API_URL = "' + (process.env.RENDER_URL || 'https://billing-system-fm9a.onrender.com') + '/api";\n';
+    html += '    const ORG_ID = "' + orgId + '";\n';
+    html += '    let selectedPlanId = "' + (plans.length > 0 ? plans[0].id : '') + '";\n';
+    html += '    let credentials = null;\n';
+    html += '    let countdownInterval = null;\n';
 
-    html += 'var ORG_ID = "' + orgId + '";\n';
-    html += 'if (!ORG_ID || ORG_ID === "") {\n';
-    html += 'var pathParts = window.location.pathname.split("/");\n';
-    html += 'for (var i = 0; i < pathParts.length; i++) {\n';
-    html += 'if (pathParts[i].startsWith("CLIENT_")) { ORG_ID = pathParts[i]; break; }\n';
-    html += '}\n';
-    html += '}\n';
-    html += 'if (!ORG_ID || ORG_ID === "") {\n';
-    html += 'var urlParams = new URLSearchParams(window.location.search);\n';
-    html += 'ORG_ID = urlParams.get("org") || urlParams.get("client") || "";\n';
-    html += '}\n';
-    html += 'console.log("🏢 Organization ID:", ORG_ID);\n';
+    // Plan selection
+    html += '    function selectPlan(el, id) {\n';
+    html += '        document.querySelectorAll(".plan-card").forEach(c => c.classList.remove("selected"));\n';
+    html += '        el.classList.add("selected");\n';
+    html += '        selectedPlanId = id;\n';
+    html += '        document.getElementById("payBtn").disabled = false;\n';
+    html += '        const price = el.querySelector(".price").textContent.replace(/[^0-9]/g, "");\n';
+    html += '        document.getElementById("payBtn").textContent = "💳 Pay KSh " + price;\n';
+    html += '    }\n';
 
-    html += 'var plans = [];\n';
-    html += 'var selectedPlan = null;\n';
-    html += 'var pollingInterval = null;\n';
-    html += 'var currentTransactionId = null;\n';
-    html += 'var countdownInterval = null;\n';
-    html += 'var credentials = null;\n';
-    html += 'var pollingActive = false;\n';
-    html += 'var plansGrid = document.getElementById("plansGrid");\n';
+    // Payment
+    html += '    async function initiatePayment() {\n';
+    html += '        const phone = document.getElementById("phoneInput").value.trim();\n';
+    html += '        if (!phone || phone.length < 10) { showToast("📱 Please enter a valid phone number", "error"); return; }\n';
+    html += '        if (!selectedPlanId) { showToast("Please select a plan", "error"); return; }\n';
+    html += '        const btn = document.getElementById("payBtn");\n';
+    html += '        btn.disabled = true;\n';
+    html += '        btn.textContent = "⏳ Processing...";\n';
+    html += '        const resultEl = document.getElementById("paymentResult");\n';
+    html += '        resultEl.className = "result-box info";\n';
+    html += '        resultEl.textContent = "⏳ Sending M-Pesa request...";\n';
+    html += '        try {\n';
+    html += '            const res = await fetch(API_URL + "/payment/initiate", {\n';
+    html += '                method: "POST",\n';
+    html += '                headers: { "Content-Type": "application/json" },\n';
+    html += '                body: JSON.stringify({ phoneNumber: phone, amount: 10, planId: selectedPlanId })\n';
+    html += '            });\n';
+    html += '            const data = await res.json();\n';
+    html += '            if (data.success) {\n';
+    html += '                resultEl.className = "result-box success";\n';
+    html += '                resultEl.textContent = "✅ M-Pesa prompt sent! Check your phone.";\n';
+    html += '                showToast("📱 M-Pesa prompt sent!", "success");\n';
+    html += '                await pollTransaction(data.transactionId);\n';
+    html += '            } else {\n';
+    html += '                resultEl.className = "result-box error";\n';
+    html += '                resultEl.textContent = "❌ " + (data.message || "Payment failed");\n';
+    html += '                showToast("❌ Payment failed", "error");\n';
+    html += '                btn.disabled = false;\n';
+    html += '                btn.textContent = "💳 Pay Now";\n';
+    html += '            }\n';
+    html += '        } catch (e) {\n';
+    html += '            resultEl.className = "result-box error";\n';
+    html += '            resultEl.textContent = "❌ Network error";\n';
+    html += '            showToast("❌ Network error", "error");\n';
+    html += '            btn.disabled = false;\n';
+    html += '            btn.textContent = "💳 Pay Now";\n';
+    html += '        }\n';
+    html += '    }\n';
 
-    html += 'document.addEventListener("DOMContentLoaded", function() {\n';
-    html += 'if (ORG_ID && ORG_ID !== "") {\n';
-    html += 'loadOrganizationData();\n';
-    html += '} else {\n';
-    html += 'plansGrid.innerHTML = "<div style=\\"text-align:center;padding:40px;color:#ff4444;grid-column:1/-1;\\">❌ Organization ID not found</div>";\n';
-    html += '}\n';
-    html += '});\n';
+    // Polling
+    html += '    async function pollTransaction(txnId) {\n';
+    html += '        let attempts = 0;\n';
+    html += '        const maxAttempts = 30;\n';
+    html += '        while (attempts < maxAttempts) {\n';
+    html += '            try {\n';
+    html += '                const res = await fetch(API_URL + "/transaction/" + txnId);\n';
+    html += '                const data = await res.json();\n';
+    html += '                if (data.success) {\n';
+    html += '                    const tx = data.data;\n';
+    html += '                    if (tx.status === "completed") {\n';
+    html += '                        credentials = { username: tx.mikrotikUsername || "user_" + txnId, password: tx.mikrotikPassword || "pass_" + Date.now(), planName: tx.planName || "Plan", expiresAt: tx.expiresAt || new Date(Date.now() + 7200000).toISOString() };\n';
+    html += '                        showConnectedPage(credentials);\n';
+    html += '                        return;\n';
+    html += '                    } else if (tx.status === "failed" || tx.status === "cancelled") {\n';
+    html += '                        const resultEl = document.getElementById("paymentResult");\n';
+    html += '                        resultEl.className = "result-box error";\n';
+    html += '                        resultEl.textContent = "❌ Payment " + tx.status;\n';
+    html += '                        showToast("❌ Payment " + tx.status, "error");\n';
+    html += '                        document.getElementById("payBtn").disabled = false;\n';
+    html += '                        document.getElementById("payBtn").textContent = "💳 Pay Now";\n';
+    html += '                        return;\n';
+    html += '                    }\n';
+    html += '                }\n';
+    html += '                await sleep(2000);\n';
+    html += '                attempts++;\n';
+    html += '            } catch (e) { await sleep(2000); attempts++; }\n';
+    html += '        }\n';
+    html += '        const resultEl = document.getElementById("paymentResult");\n';
+    html += '        resultEl.className = "result-box info";\n';
+    html += '        resultEl.textContent = "⏳ Still processing... Please check M-Pesa.";\n';
+    html += '        document.getElementById("payBtn").disabled = false;\n';
+    html += '        document.getElementById("payBtn").textContent = "💳 Pay Now";\n';
+    html += '    }\n';
 
-    html += 'function loadOrganizationData() {\n';
-    html += 'fetch(API_URL + "/organization/" + ORG_ID)\n';
-    html += '.then(function(r) { return r.json(); })\n';
-    html += '.then(function(data) {\n';
-    html += 'if (data.success) {\n';
-    html += 'var org = data.data;\n';
-    html += 'plans = org.plans || [];\n';
-    html += 'if (org.primaryColor) {\n';
-    html += 'document.documentElement.style.setProperty("--primary-color", org.primaryColor);\n';
-    html += '}\n';
-    html += 'if (org.businessName) {\n';
-    html += 'document.getElementById("businessName").textContent = "🌐 " + org.businessName;\n';
-    html += 'document.getElementById("successBusinessName").textContent = org.businessName;\n';
-    html += 'document.getElementById("brandName").textContent = org.businessName;\n';
-    html += 'document.title = org.businessName + " - WiFi Services";\n';
-    html += '}\n';
-    html += 'if (org.businessTagline) {\n';
-    html += 'document.getElementById("tagline").textContent = org.businessTagline;\n';
-    html += '}\n';
-    html += 'if (org.logo) {\n';
-    html += 'var logoImg = document.getElementById("logoImage");\n';
-    html += 'logoImg.src = org.logo;\n';
-    html += 'logoImg.style.display = "block";\n';
-    html += 'var successLogo = document.getElementById("successLogo");\n';
-    html += 'successLogo.src = org.logo;\n';
-    html += 'successLogo.style.display = "block";\n';
-    html += '}\n';
-    html += 'renderPlans();\n';
-    html += '} else {\n';
-    html += 'plansGrid.innerHTML = "<div style=\\"text-align:center;padding:40px;color:#ff4444;grid-column:1/-1;\\">❌ " + (data.message || "Failed to load plans") + "</div>";\n';
-    html += '}\n';
-    html += '})\n';
-    html += '.catch(function(err) {\n';
-    html += 'plansGrid.innerHTML = "<div style=\\"text-align:center;padding:40px;color:#ff4444;grid-column:1/-1;\\">❌ Network error loading plans<br><button onclick=\\"loadOrganizationData()\\" style=\\"padding:8px 20px;background:var(--primary-color);color:#000;border:none;border-radius:6px;cursor:pointer;\\">🔄 Retry</button></div>";\n';
-    html += '});\n';
-    html += '}\n';
+    // Connected page
+    html += '    function showConnectedPage(cred) {\n';
+    html += '        document.getElementById("app").style.display = "none";\n';
+    html += '        const overlay = document.getElementById("connectedOverlay");\n';
+    html += '        overlay.classList.add("active");\n';
+    html += '        document.getElementById("connUser").textContent = cred.username || "N/A";\n';
+    html += '        document.getElementById("connPass").textContent = cred.password || "N/A";\n';
+    html += '        document.getElementById("connPlan").textContent = cred.planName || "N/A";\n';
+    html += '        startCountdown(cred.expiresAt);\n';
+    html += '    }\n';
 
-    html += 'function renderPlans() {\n';
-    html += 'if (!plans || plans.length === 0) {\n';
-    html += 'plansGrid.innerHTML = "<div style=\\"text-align:center;padding:40px;color:#666;grid-column:1/-1;\\">No plans available</div>";\n';
-    html += 'return;\n';
-    html += '}\n';
-    html += 'var html = "";\n';
-    html += 'for (var i = 0; i < plans.length; i++) {\n';
-    html += 'var p = plans[i];\n';
-    html += 'var duration = p.duration_seconds || 3600;\n';
-    html += 'var hours = Math.floor(duration / 3600);\n';
-    html += 'var days = Math.floor(duration / 86400);\n';
-    html += 'var durationStr = "";\n';
-    html += 'if (days > 0) { durationStr = days + " day" + (days > 1 ? "s" : ""); } else { durationStr = hours + " hour" + (hours > 1 ? "s" : ""); }\n';
-    html += 'var isPopular = p.id === "1_Week_1_Device" || p.id === "24_Hours";\n';
-    html += 'html += "<div class=\\"plan-card\\" onclick=\\"openPaymentModal(\'" + p.id + "\')\\" data-plan-id=\\"" + p.id + "\\">";\n';
-    html += 'if (isPopular) { html += "<div class=\\"badge\\">🔥 Popular</div>"; }\n';
-    html += 'html += "<div class=\\"plan-name\\">" + p.name + "</div>";\n';
-    html += 'html += "<div class=\\"plan-price\\">KES " + p.price + " <span>/ " + durationStr + "</span></div>";\n';
-    html += 'html += "<ul class=\\"plan-features\\">";\n';
-    html += 'html += "<li>" + (p.devices || 1) + " device" + ((p.devices || 1) > 1 ? "s" : "") + "</li>";\n';
-    html += 'html += "<li>" + (p.shared_users || 1) + " user" + ((p.shared_users || 1) > 1 ? "s" : "") + "</li>";\n';
-    html += 'html += "<li>Valid for " + durationStr + "</li>";\n';
-    html += 'html += "</ul></div>";\n';
-    html += '}\n';
-    html += 'plansGrid.innerHTML = html;\n';
-    html += '}\n';
+    // Countdown
+    html += '    function startCountdown(expiresAt) {\n';
+    html += '        if (countdownInterval) clearInterval(countdownInterval);\n';
+    html += '        const timer = document.getElementById("connTimer");\n';
+    html += '        function update() {\n';
+    html += '            const now = Date.now();\n';
+    html += '            const expiry = new Date(expiresAt).getTime();\n';
+    html += '            const diff = Math.max(0, expiry - now);\n';
+    html += '            if (diff <= 0) {\n';
+    html += '                timer.textContent = "00:00:00";\n';
+    html += '                timer.classList.add("expired");\n';
+    html += '                document.getElementById("connEnjoy").textContent = "⏰ Your plan has expired.";\n';
+    html += '                clearInterval(countdownInterval);\n';
+    html += '                return;\n';
+    html += '            }\n';
+    html += '            timer.classList.remove("expired");\n';
+    html += '            const hours = Math.floor(diff / 3600000);\n';
+    html += '            const mins = Math.floor((diff % 3600000) / 60000);\n';
+    html += '            const secs = Math.floor((diff % 60000) / 1000);\n';
+    html += '            timer.textContent = String(hours).padStart(2, "0") + ":" + String(mins).padStart(2, "0") + ":" + String(secs).padStart(2, "0");\n';
+    html += '        }\n';
+    html += '        update();\n';
+    html += '        countdownInterval = setInterval(update, 1000);\n';
+    html += '    }\n';
 
-    html += 'function redeemVoucher() {\n';
-    html += 'var code = document.getElementById("voucherInput").value.trim().toUpperCase();\n';
-    html += 'var phone = document.getElementById("voucherPhoneInput").value.trim();\n';
-    html += 'var resultEl = document.getElementById("voucherResult");\n';
-    html += 'var btn = document.getElementById("voucherRedeemBtn");\n';
-    html += 'if (!code) { resultEl.textContent = "❌ Please enter a voucher code"; resultEl.className = "voucher-result error"; return; }\n';
-    html += 'if (!phone || phone.length < 10) { resultEl.textContent = "❌ Please enter a valid phone number"; resultEl.className = "voucher-result error"; return; }\n';
-    html += 'btn.disabled = true;\n';
-    html += 'btn.innerHTML = "<span class=\\"loading\\"></span> Processing...";\n';
-    html += 'resultEl.innerHTML = "<span class=\\"loading\\"></span> Redeeming...";\n';
-    html += 'resultEl.className = "voucher-result";\n';
-    html += 'fetch(API_URL + "/voucher/redeem", {\n';
-    html += 'method: "POST",\n';
-    html += 'headers: { "Content-Type": "application/json" },\n';
-    html += 'body: JSON.stringify({ code: code, phoneNumber: phone })\n';
-    html += '})\n';
-    html += '.then(function(r) { return r.json(); })\n';
-    html += '.then(function(data) {\n';
-    html += 'btn.disabled = false;\n';
-    html += 'btn.innerHTML = "🎟️ Redeem";\n';
-    html += 'if (data.success) {\n';
-    html += 'resultEl.textContent = "✅ Voucher redeemed successfully! Connecting...";\n';
-    html += 'resultEl.className = "voucher-result success";\n';
-    html += 'showToast("🎟️ Voucher redeemed!", "success");\n';
-    html += 'credentials = { username: data.data.username || "voucher_user", password: data.data.password || "pass_" + Date.now(), plan: data.data.planName || "Voucher Plan", expiresAt: data.data.expiresAt || new Date(Date.now() + 3600000).toISOString() };\n';
-    html += 'showSuccessScreen(credentials);\n';
-    html += '} else {\n';
-    html += 'resultEl.textContent = "❌ " + (data.message || "Invalid voucher");\n';
-    html += 'resultEl.className = "voucher-result error";\n';
-    html += 'showToast("❌ " + data.message, "error");\n';
-    html += '}\n';
-    html += '})\n';
-    html += '.catch(function(err) {\n';
-    html += 'btn.disabled = false;\n';
-    html += 'btn.innerHTML = "🎟️ Redeem";\n';
-    html += 'resultEl.textContent = "❌ Network error";\n';
-    html += 'resultEl.className = "voucher-result error";\n';
-    html += '});\n';
-    html += '}\n';
+    // Voucher
+    html += '    async function redeemVoucher() {\n';
+    html += '        const code = document.getElementById("voucherInput").value.trim().toUpperCase();\n';
+    html += '        if (!code) { showToast("Please enter a voucher code", "error"); return; }\n';
+    html += '        const resultEl = document.getElementById("voucherResult");\n';
+    html += '        resultEl.className = "result-box info";\n';
+    html += '        resultEl.textContent = "⏳ Redeeming...";\n';
+    html += '        try {\n';
+    html += '            const res = await fetch(API_URL + "/voucher/redeem", {\n';
+    html += '                method: "POST",\n';
+    html += '                headers: { "Content-Type": "application/json" },\n';
+    html += '                body: JSON.stringify({ code: code, phoneNumber: "voucher_user" })\n';
+    html += '            });\n';
+    html += '            const data = await res.json();\n';
+    html += '            if (data.success) {\n';
+    html += '                resultEl.className = "result-box success";\n';
+    html += '                resultEl.textContent = "✅ Voucher redeemed! Connecting...";\n';
+    html += '                credentials = { username: data.data.username || "voucher_user", password: data.data.password || "pass_" + Date.now(), planName: data.data.planName || "Voucher", expiresAt: data.data.expiresAt || new Date(Date.now() + 3600000).toISOString() };\n';
+    html += '                showConnectedPage(credentials);\n';
+    html += '            } else {\n';
+    html += '                resultEl.className = "result-box error";\n';
+    html += '                resultEl.textContent = "❌ " + (data.message || "Invalid voucher");\n';
+    html += '            }\n';
+    html += '        } catch (e) { resultEl.className = "result-box error"; resultEl.textContent = "❌ Network error"; }\n';
+    html += '    }\n';
 
-    html += 'function checkAndConnect() {\n';
-    html += 'var phone = prompt("📱 Enter your phone number to check for active plan:");\n';
-    html += 'if (!phone || phone.length < 10) { showToast("Please enter a valid phone number", "error"); return; }\n';
-    html += 'var resultEl = document.getElementById("checkResult");\n';
-    html += 'resultEl.innerHTML = "<span class=\\"loading\\"></span> Checking...";\n';
-    html += 'resultEl.className = "result";\n';
-    html += 'fetch(API_URL + "/check-active?phone=" + encodeURIComponent(phone))\n';
-    html += '.then(function(r) { return r.json(); })\n';
-    html += '.then(function(data) {\n';
-    html += 'if (data.success && data.active) {\n';
-    html += 'resultEl.innerHTML = "✅ Active Plan Found! Connecting...";\n';
-    html += 'resultEl.className = "result success";\n';
-    html += 'credentials = { username: data.data.username, password: data.data.password, plan: data.data.planName, expiresAt: data.data.expiresAt };\n';
-    html += 'showSuccessScreen(credentials);\n';
-    html += '} else {\n';
-    html += 'resultEl.innerHTML = "❌ No active plan found. Please purchase a plan below.";\n';
-    html += 'resultEl.className = "result error";\n';
-    html += 'showToast("No active plan found. Please purchase a plan.", "error");\n';
-    html += '}\n';
-    html += '})\n';
-    html += '.catch(function(err) {\n';
-    html += 'resultEl.innerHTML = "❌ Network error checking status";\n';
-    html += 'resultEl.className = "result error";\n';
-    html += '});\n';
-    html += '}\n';
+    // Check plan
+    html += '    async function checkPlan() {\n';
+    html += '        const phone = document.getElementById("checkPhoneInput").value.trim();\n';
+    html += '        if (!phone || phone.length < 10) { showToast("Please enter a valid phone number", "error"); return; }\n';
+    html += '        const resultEl = document.getElementById("checkResult");\n';
+    html += '        resultEl.className = "result-box info";\n';
+    html += '        resultEl.textContent = "⏳ Checking...";\n';
+    html += '        try {\n';
+    html += '            const res = await fetch(API_URL + "/check-active?phone=" + encodeURIComponent(phone));\n';
+    html += '            const data = await res.json();\n';
+    html += '            if (data.success && data.active) {\n';
+    html += '                resultEl.className = "result-box success";\n';
+    html += '                resultEl.textContent = "✅ Active plan found! Connecting...";\n';
+    html += '                credentials = { username: data.data.username, password: data.data.password, planName: data.data.planName, expiresAt: data.data.expiresAt };\n';
+    html += '                showConnectedPage(credentials);\n';
+    html += '            } else {\n';
+    html += '                resultEl.className = "result-box error";\n';
+    html += '                resultEl.textContent = "❌ No active plan found.";\n';
+    html += '            }\n';
+    html += '        } catch (e) { resultEl.className = "result-box error"; resultEl.textContent = "❌ Network error"; }\n';
+    html += '    }\n';
 
-    html += 'function openPaymentModal(planId) {\n';
-    html += 'var plan = null;\n';
-    html += 'for (var i = 0; i < plans.length; i++) { if (plans[i].id === planId) { plan = plans[i]; break; } }\n';
-    html += 'if (!plan) { showToast("Plan not found", "error"); return; }\n';
-    html += 'selectedPlan = plan;\n';
-    html += 'var duration = plan.duration_seconds || 3600;\n';
-    html += 'var hours = Math.floor(duration / 3600);\n';
-    html += 'var days = Math.floor(duration / 86400);\n';
-    html += 'var durationStr = "";\n';
-    html += 'if (days > 0) { durationStr = days + " day" + (days > 1 ? "s" : ""); } else { durationStr = hours + " hour" + (hours > 1 ? "s" : ""); }\n';
-    html += 'document.getElementById("modalPlanName").textContent = plan.name;\n';
-    html += 'document.getElementById("modalPlanPrice").textContent = "KES " + plan.price;\n';
-    html += 'document.getElementById("modalPlanDuration").textContent = "Valid for " + durationStr;\n';
-    html += 'document.getElementById("modalPhone").value = "";\n';
-    html += 'document.getElementById("modalError").classList.remove("show");\n';
-    html += 'document.getElementById("paymentModal").classList.add("active");\n';
-    html += 'setTimeout(function() { document.getElementById("modalPhone").focus(); }, 300);\n';
-    html += '}\n';
+    // Helpers
+    html += '    function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }\n';
+    html += '    function showToast(msg, type) {\n';
+    html += '        type = type || "info";\n';
+    html += '        const existing = document.querySelector(".toast");\n';
+    html += '        if (existing) existing.remove();\n';
+    html += '        const toast = document.createElement("div");\n';
+    html += '        toast.className = "toast " + type;\n';
+    html += '        toast.textContent = msg;\n';
+    html += '        document.body.appendChild(toast);\n';
+    html += '        setTimeout(() => { toast.style.opacity = "0"; toast.style.transition = "opacity 0.5s"; }, 3000);\n';
+    html += '        setTimeout(() => toast.remove(), 4000);\n';
+    html += '    }\n';
 
-    html += 'function closePaymentModal() {\n';
-    html += 'document.getElementById("paymentModal").classList.remove("active");\n';
-    html += 'document.getElementById("modalError").classList.remove("show");\n';
-    html += '}\n';
+    // Enter key handlers
+    html += '    document.getElementById("phoneInput").addEventListener("keydown", e => { if (e.key === "Enter") initiatePayment(); });\n';
+    html += '    document.getElementById("voucherInput").addEventListener("keydown", e => { if (e.key === "Enter") redeemVoucher(); });\n';
+    html += '    document.getElementById("checkPhoneInput").addEventListener("keydown", e => { if (e.key === "Enter") checkPlan(); });\n';
 
-    html += 'document.getElementById("paymentModal").addEventListener("click", function(e) {\n';
-    html += 'if (e.target === this) closePaymentModal();\n';
-    html += '});\n';
-
-    html += 'document.getElementById("modalPhone").addEventListener("keydown", function(e) {\n';
-    html += 'if (e.key === "Enter") modalPay();\n';
-    html += '});\n';
-
-    html += 'function modalPay() {\n';
-    html += 'var phone = document.getElementById("modalPhone").value.trim();\n';
-    html += 'var errorEl = document.getElementById("modalError");\n';
-    html += 'if (!phone || phone.length < 10) {\n';
-    html += 'errorEl.textContent = "📱 Please enter a valid phone number";\n';
-    html += 'errorEl.classList.add("show");\n';
-    html += 'return;\n';
-    html += '}\n';
-    html += 'errorEl.classList.remove("show");\n';
-    html += 'var btn = document.getElementById("modalPayBtn");\n';
-    html += 'btn.disabled = true;\n';
-    html += 'btn.innerHTML = "<span class=\\"loading\\"></span> Processing...";\n';
-    html += 'fetch(API_URL + "/payment/initiate", {\n';
-    html += 'method: "POST",\n';
-    html += 'headers: { "Content-Type": "application/json" },\n';
-    html += 'body: JSON.stringify({ phoneNumber: phone, amount: selectedPlan.price, planId: selectedPlan.id })\n';
-    html += '})\n';
-    html += '.then(function(r) { return r.json(); })\n';
-    html += '.then(function(data) {\n';
-    html += 'btn.disabled = false;\n';
-    html += 'btn.innerHTML = "💳 Pay Now";\n';
-    html += 'if (data.success) {\n';
-    html += 'if (data.isFree) {\n';
-    html += 'closePaymentModal();\n';
-    html += 'showToast("🎉 Free plan activated!", "success");\n';
-    html += 'fetchCredentials(data.transactionId);\n';
-    html += 'return;\n';
-    html += '}\n';
-    html += 'currentTransactionId = data.transactionId;\n';
-    html += 'closePaymentModal();\n';
-    html += 'showToast("📱 STK Push sent! Check your phone.", "info");\n';
-    html += 'startPolling(data.transactionId);\n';
-    html += '} else {\n';
-    html += 'errorEl.textContent = "❌ " + (data.message || "Payment failed");\n';
-    html += 'errorEl.classList.add("show");\n';
-    html += 'showToast("❌ Payment failed", "error");\n';
-    html += '}\n';
-    html += '})\n';
-    html += '.catch(function(err) {\n';
-    html += 'btn.disabled = false;\n';
-    html += 'btn.innerHTML = "💳 Pay Now";\n';
-    html += 'errorEl.textContent = "❌ Network error";\n';
-    html += 'errorEl.classList.add("show");\n';
-    html += '});\n';
-    html += '}\n';
-
-    html += 'function startPolling(transactionId) {\n';
-    html += 'if (pollingInterval) { clearInterval(pollingInterval); pollingInterval = null; }\n';
-    html += 'if (pollingActive) return;\n';
-    html += 'pollingActive = true;\n';
-    html += 'var attempts = 0;\n';
-    html += 'var maxAttempts = 40;\n';
-    html += 'showToast("⏳ Waiting for payment confirmation...", "info");\n';
-    html += 'pollingInterval = setInterval(function() {\n';
-    html += 'attempts++;\n';
-    html += 'if (attempts > maxAttempts) {\n';
-    html += 'clearInterval(pollingInterval); pollingInterval = null; pollingActive = false;\n';
-    html += 'showToast("⏱️ Payment timed out.", "error");\n';
-    html += 'return;\n';
-    html += '}\n';
-    html += 'fetch(API_URL + "/transaction/" + transactionId)\n';
-    html += '.then(function(r) { return r.json(); })\n';
-    html += '.then(function(data) {\n';
-    html += 'if (data.success) {\n';
-    html += 'var tx = data.data;\n';
-    html += 'if (tx.status === "completed") {\n';
-    html += 'clearInterval(pollingInterval); pollingInterval = null; pollingActive = false;\n';
-    html += 'showToast("🎉 Payment successful!", "success");\n';
-    html += 'fetchCredentials(transactionId);\n';
-    html += '} else if (tx.status === "cancelled") {\n';
-    html += 'clearInterval(pollingInterval); pollingInterval = null; pollingActive = false;\n';
-    html += 'showToast("❌ Payment cancelled by user", "error");\n';
-    html += '} else if (tx.status === "failed") {\n';
-    html += 'clearInterval(pollingInterval); pollingInterval = null; pollingActive = false;\n';
-    html += 'showToast("❌ " + (tx.errorDescription || "Payment failed"), "error");\n';
-    html += '}\n';
-    html += '}\n';
-    html += '})\n';
-    html += '.catch(function(err) { console.error("Polling error:", err); });\n';
-    html += '}, 3000);\n';
-    html += '}\n';
-
-    html += 'function fetchCredentials(transactionId) {\n';
-    html += 'fetch(API_URL + "/get-credentials/" + transactionId)\n';
-    html += '.then(function(r) { return r.json(); })\n';
-    html += '.then(function(data) {\n';
-    html += 'if (data.success) {\n';
-    html += 'credentials = { username: data.username || "N/A", password: data.password || "N/A", plan: data.plan || "N/A", expiresAt: data.expiresAt };\n';
-    html += 'showSuccessScreen(credentials);\n';
-    html += '}\n';
-    html += '})\n';
-    html += '.catch(function(err) { console.error(err); });\n';
-    html += '}\n';
-
-    html += 'function showSuccessScreen(cred) {\n';
-    html += 'document.getElementById("mainContainer").style.display = "none";\n';
-    html += 'document.querySelector(".header").style.display = "none";\n';
-    html += 'document.getElementById("credUsername").textContent = cred.username;\n';
-    html += 'document.getElementById("credPassword").textContent = cred.password;\n';
-    html += 'document.getElementById("credPlan").textContent = cred.plan;\n';
-    html += 'document.getElementById("successOverlay").classList.add("active");\n';
-    html += 'if (cred.expiresAt) { startCountdown(cred.expiresAt); }\n';
-    html += '}\n';
-
-    html += 'function startCountdown(expiresAt) {\n';
-    html += 'if (countdownInterval) clearInterval(countdownInterval);\n';
-    html += 'var timerEl = document.getElementById("successTimer");\n';
-    html += 'function update() {\n';
-    html += 'var now = Date.now();\n';
-    html += 'var expiry = new Date(expiresAt).getTime();\n';
-    html += 'var diff = Math.max(0, expiry - now);\n';
-    html += 'if (diff <= 0) {\n';
-    html += 'timerEl.textContent = "00:00:00";\n';
-    html += 'timerEl.classList.add("expired");\n';
-    html += 'clearInterval(countdownInterval);\n';
-    html += 'setTimeout(function() {\n';
-    html += 'try { window.close(); } catch (e) {\n';
-    html += 'document.getElementById("enjoyText").textContent = "⏰ Your plan has expired. Please reconnect.";\n';
-    html += 'document.querySelector(".auto-close").textContent = "🔄 Refresh to purchase a new plan";\n';
-    html += '}\n';
-    html += '}, 3000);\n';
-    html += 'return;\n';
-    html += '}\n';
-    html += 'timerEl.classList.remove("expired");\n';
-    html += 'var hours = Math.floor(diff / 3600000);\n';
-    html += 'var mins = Math.floor((diff % 3600000) / 60000);\n';
-    html += 'var secs = Math.floor((diff % 60000) / 1000);\n';
-    html += 'timerEl.textContent = String(hours).padStart(2, "0") + ":" + String(mins).padStart(2, "0") + ":" + String(secs).padStart(2, "0");\n';
-    html += '}\n';
-    html += 'update();\n';
-    html += 'countdownInterval = setInterval(update, 1000);\n';
-    html += '}\n';
-
-    html += 'function showToast(message, type) {\n';
-    html += 'type = type || "success";\n';
-    html += 'var icons = { success: "✅", error: "❌", info: "ℹ️" };\n';
-    html += 'var toast = document.getElementById("toast");\n';
-    html += 'toast.className = "toast " + type;\n';
-    html += 'document.getElementById("toastIcon").textContent = icons[type] || "✅";\n';
-    html += 'document.getElementById("toastMessage").textContent = message;\n';
-    html += 'toast.classList.add("show");\n';
-    html += 'clearTimeout(toast._timeout);\n';
-    html += 'toast._timeout = setTimeout(function() { toast.classList.remove("show"); }, 4000);\n';
-    html += '}\n';
-
-    html += 'document.getElementById("voucherInput").addEventListener("keydown", function(e) {\n';
-    html += 'if (e.key === "Enter") { document.getElementById("voucherPhoneInput").focus(); }\n';
-    html += '});\n';
-    html += 'document.getElementById("voucherPhoneInput").addEventListener("keydown", function(e) {\n';
-    html += 'if (e.key === "Enter") { redeemVoucher(); }\n';
-    html += '});\n';
-
-    html += '</script>\n';
+    // Initial plan selection
+    html += '    if (document.querySelector(".plan-card")) {\n';
+    html += '        const first = document.querySelector(".plan-card");\n';
+    html += '        const price = first.querySelector(".price").textContent.replace(/[^0-9]/g, "");\n';
+    html += '        document.getElementById("payBtn").textContent = "💳 Pay KSh " + price;\n';
+    html += '        document.getElementById("payBtn").disabled = false;\n';
+    html += '    }\n';
+    html += '<\/script>\n';
     html += '</body>\n';
     html += '</html>';
 
@@ -1384,6 +994,8 @@ var server = http.createServer(async function(req, res) {
                     supportEmail: org.supportEmail,
                     website: org.website,
                     businessTagline: org.businessTagline,
+                    mpesaTill: org.mpesaTill || '',
+                    businessAddress: org.businessAddress || '',
                     plans: org.plans || [],
                     status: org.status
                 }
@@ -1441,7 +1053,8 @@ var server = http.createServer(async function(req, res) {
                 supportEmail: body.supportEmail || email,
                 website: body.website || '',
                 businessTagline: body.businessTagline || 'Full Access Mode',
-                mpesaTill: '',
+                mpesaTill: body.mpesaTill || '',
+                businessAddress: body.businessAddress || '',
                 mpesaShortcode: SHORTCODE,
                 status: 'active',
                 createdAt: new Date().toISOString(),
@@ -1993,6 +1606,7 @@ var server = http.createServer(async function(req, res) {
                 website: body.website || '',
                 businessTagline: body.businessTagline || 'Fast • Secure • Reliable',
                 mpesaTill: body.mpesaTill || '',
+                businessAddress: body.businessAddress || '',
                 mpesaShortcode: SHORTCODE,
                 status: 'active',
                 createdAt: new Date().toISOString(),
@@ -2043,13 +1657,15 @@ var server = http.createServer(async function(req, res) {
                     supportEmail: organization.supportEmail,
                     website: organization.website,
                     businessTagline: organization.businessTagline,
+                    mpesaTill: organization.mpesaTill || '',
+                    businessAddress: organization.businessAddress || '',
                     plans: organization.plans || [],
                     status: organization.status
                 }
             });
         }
 
-        // Update Organization (Master)
+        // Update Organization (Master) - FIXED: Properly merges all fields
         if (req.method === 'PUT' && url.pathname.startsWith('/api/master/organizations/')) {
             if (!isMasterAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
             var orgId = url.pathname.split('/').pop();
@@ -2058,39 +1674,41 @@ var server = http.createServer(async function(req, res) {
             for (var i = 0; i < organizations.length; i++) { if (organizations[i].id === orgId) { index = i; break; } }
             if (index === -1) return sendJson(res, 404, { success: false, message: 'Organization not found' });
             
-            // Merge the updated fields
+            // Merge ALL fields from the request body
             organizations[index] = {
                 ...organizations[index],
-                name: body.name || organizations[index].name,
-                businessName: body.businessName || organizations[index].businessName,
-                email: body.email || organizations[index].email,
-                phone: body.phone || organizations[index].phone,
-                logo: body.logo || organizations[index].logo,
-                primaryColor: body.primaryColor || organizations[index].primaryColor,
-                secondaryColor: body.secondaryColor || organizations[index].secondaryColor,
-                accentColor: body.accentColor || organizations[index].accentColor,
-                supportPhone: body.supportPhone || organizations[index].supportPhone,
-                supportEmail: body.supportEmail || organizations[index].supportEmail,
-                website: body.website || organizations[index].website,
-                businessTagline: body.businessTagline || organizations[index].businessTagline,
-                mpesaTill: body.mpesaTill || organizations[index].mpesaTill,
-                status: body.status || organizations[index].status,
-                plans: body.plans || organizations[index].plans,
+                name: body.name !== undefined ? body.name : organizations[index].name,
+                businessName: body.businessName !== undefined ? body.businessName : organizations[index].businessName,
+                email: body.email !== undefined ? body.email : organizations[index].email,
+                phone: body.phone !== undefined ? body.phone : organizations[index].phone,
+                logo: body.logo !== undefined ? body.logo : organizations[index].logo,
+                primaryColor: body.primaryColor !== undefined ? body.primaryColor : organizations[index].primaryColor,
+                secondaryColor: body.secondaryColor !== undefined ? body.secondaryColor : organizations[index].secondaryColor,
+                accentColor: body.accentColor !== undefined ? body.accentColor : organizations[index].accentColor,
+                supportPhone: body.supportPhone !== undefined ? body.supportPhone : organizations[index].supportPhone,
+                supportEmail: body.supportEmail !== undefined ? body.supportEmail : organizations[index].supportEmail,
+                website: body.website !== undefined ? body.website : organizations[index].website,
+                businessTagline: body.businessTagline !== undefined ? body.businessTagline : organizations[index].businessTagline,
+                mpesaTill: body.mpesaTill !== undefined ? body.mpesaTill : organizations[index].mpesaTill,
+                businessAddress: body.businessAddress !== undefined ? body.businessAddress : organizations[index].businessAddress,
+                status: body.status !== undefined ? body.status : organizations[index].status,
+                plans: body.plans !== undefined ? body.plans : organizations[index].plans,
                 updatedAt: new Date().toISOString()
             };
             saveOrganizations();
 
+            // Update clients as well
             var clientIndex = -1;
             for (var i = 0; i < clients.length; i++) { if (clients[i].id === orgId) { clientIndex = i; break; } }
             if (clientIndex !== -1) {
                 clients[clientIndex] = {
                     ...clients[clientIndex],
-                    name: body.name || clients[clientIndex].name,
-                    phone: body.phone || clients[clientIndex].phone,
-                    email: body.email || clients[clientIndex].email,
-                    businessName: body.businessName || clients[clientIndex].businessName,
-                    mpesaTill: body.mpesaTill || clients[clientIndex].mpesaTill,
-                    status: body.status || clients[clientIndex].status,
+                    name: body.name !== undefined ? body.name : clients[clientIndex].name,
+                    phone: body.phone !== undefined ? body.phone : clients[clientIndex].phone,
+                    email: body.email !== undefined ? body.email : clients[clientIndex].email,
+                    businessName: body.businessName !== undefined ? body.businessName : clients[clientIndex].businessName,
+                    mpesaTill: body.mpesaTill !== undefined ? body.mpesaTill : clients[clientIndex].mpesaTill,
+                    status: body.status !== undefined ? body.status : clients[clientIndex].status,
                     updatedAt: new Date().toISOString()
                 };
                 saveClients();
@@ -2139,28 +1757,43 @@ var server = http.createServer(async function(req, res) {
             return sendJson(res, 200, { success: true, message: 'Master settings updated', data: masterSettings });
         }
 
-        // Generate Client HTML
+        // Generate Full HTML Client Page - NEW ENDPOINT
+        if (req.method === 'GET' && url.pathname.startsWith('/api/master/generate-full-html/')) {
+            if (!isMasterAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
+            var orgId = url.pathname.split('/').pop();
+            var organization = getOrganizationByClientId(orgId);
+            if (!organization) return sendJson(res, 404, { success: false, message: 'Organization not found' });
+            var html = generateFullBillingHtml(organization);
+            return sendJson(res, 200, {
+                success: true,
+                html: html,
+                filename: orgId + '_billing.html',
+                message: 'Full billing page generated successfully!'
+            });
+        }
+
+        // Generate Client Skeleton (legacy)
         if (req.method === 'GET' && url.pathname.startsWith('/api/master/generate-client-page/')) {
             if (!isMasterAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
             var orgId = url.pathname.split('/').pop();
             var organization = getOrganizationByClientId(orgId);
             if (!organization) return sendJson(res, 404, { success: false, message: 'Organization not found' });
-            var html = generateClientSkeletonHtml(organization);
+            var html = generateFullBillingHtml(organization);
             return sendJson(res, 200, {
                 success: true,
                 html: html,
-                filename: orgId + '_client_page.html',
-                instructions: 'Copy this HTML and give it to your client. Works on local WiFi (MikroTik), local PC, and online!'
+                filename: orgId + '_billing.html',
+                instructions: 'Full working billing system with M-Pesa integration!'
             });
         }
 
-        // Serve Client Page
-        if (req.method === 'GET' && url.pathname.match(/^\/CLIENT_[A-Z0-9]+\/client-page\.html$/)) {
+        // Serve Client Page - Direct access to billing page
+        if (req.method === 'GET' && url.pathname.match(/^\/CLIENT_[A-Z0-9]+\/billing\.html$/)) {
             var pathParts = url.pathname.split('/');
             var orgId = pathParts[1];
             var organization = getOrganizationByClientId(orgId);
             if (!organization) { return sendHtml(res, 404, '<h1>❌ Organization Not Found</h1><p>ID: ' + orgId + '</p>'); }
-            var html = generateClientSkeletonHtml(organization);
+            var html = generateFullBillingHtml(organization);
             return sendHtml(res, 200, html);
         }
 
@@ -2168,15 +1801,15 @@ var server = http.createServer(async function(req, res) {
             var orgId = url.pathname.replace('/', '');
             var organization = getOrganizationByClientId(orgId);
             if (!organization) { return sendHtml(res, 404, '<h1>❌ Organization Not Found</h1><p>ID: ' + orgId + '</p>'); }
-            var html = generateClientSkeletonHtml(organization);
+            var html = generateFullBillingHtml(organization);
             return sendHtml(res, 200, html);
         }
 
-        if (req.method === 'GET' && url.pathname === '/client-page.html' && url.searchParams.has('org')) {
+        if (req.method === 'GET' && url.pathname === '/billing.html' && url.searchParams.has('org')) {
             var orgId = url.searchParams.get('org');
             var organization = getOrganizationByClientId(orgId);
             if (!organization) { return sendHtml(res, 404, '<h1>❌ Organization Not Found</h1><p>ID: ' + orgId + '</p>'); }
-            var html = generateClientSkeletonHtml(organization);
+            var html = generateFullBillingHtml(organization);
             return sendHtml(res, 200, html);
         }
 
