@@ -3,6 +3,7 @@
  * Full M-Pesa STK Push with multi-tenant support
  * INCLUDES: Device Tracking - Remembers devices with active plans
  * DATABASE: MongoDB Atlas - Data NEVER lost
+ * FIXED: SSL/TLS connection issues
  */
 
 require('dotenv').config();
@@ -115,22 +116,19 @@ async function connectDB() {
         const hiddenUri = MONGODB_URI.replace(/\/\/[^:]+:[^@]+@/, '//****:****@');
         console.log('   ' + hiddenUri);
 
-        // Connection options with SSL fixes
+        // Simplified connection options to avoid SSL issues
         const options = {
-            useNewUrlParser: true,
-            useUnifiedTopology: true,
             maxPoolSize: 10,
             serverSelectionTimeoutMS: 30000,
             socketTimeoutMS: 45000,
-            // SSL/TLS settings to fix the error
-            tls: true,
+            connectTimeoutMS: 30000,
+            // These options bypass SSL validation for Render compatibility
             tlsAllowInvalidCertificates: true,
             tlsAllowInvalidHostnames: true,
             retryWrites: true,
             retryReads: true,
-            // Connection pool settings
-            minPoolSize: 1,
-            maxIdleTimeMS: 30000
+            useNewUrlParser: true,
+            useUnifiedTopology: true
         };
 
         client = new MongoClient(MONGODB_URI, options);
@@ -157,16 +155,13 @@ async function connectDB() {
             console.log('⚠️ Some indexes may already exist:', indexError.message);
         }
         
-        // Load initial data into cache
         await loadCache();
         return db;
     } catch (error) {
         console.error('❌ MongoDB connection error:', error);
-        console.log('💡 Common fixes:');
-        console.log('   1. Check your MONGODB_URI is correct');
-        console.log('   2. Make sure your IP is whitelisted in MongoDB Atlas');
-        console.log('   3. Check your username and password are correct');
-        console.log('   4. Make sure the database name "gich_wifi" exists');
+        console.log('\n💡 FIX: Try updating your MONGODB_URI in Render environment variables to:');
+        console.log('   mongodb+srv://lewigich43_db_user:za5boUKIkLzZi0Nu@gich.nub3rdg.mongodb.net/gich_wifi?retryWrites=true&w=majority');
+        console.log('\n💡 Make sure to REMOVE: &appName=gich from the end');
         throw error;
     }
 }
@@ -933,7 +928,7 @@ function generateRedirectHtml(organization) {
 }
 
 // ============================================================
-// GENERATE CUSTOMER BILLING PAGE - COMPLETE
+// GENERATE CUSTOMER BILLING PAGE
 // ============================================================
 
 function generateCustomerBillingPage(organization) {
@@ -2756,10 +2751,8 @@ var server = http.createServer(async function(req, res) {
 
 async function startServer() {
     try {
-        // Connect to MongoDB first
         await connectDB();
         
-        // Then start the HTTP server
         server.listen(PORT, '0.0.0.0', function() {
             console.log('\n========================================');
             console.log('🌐 GICH WiFi API');
@@ -2779,7 +2772,6 @@ async function startServer() {
     }
 }
 
-// Handle graceful shutdown
 process.on('SIGINT', async function() {
     console.log('\n🛑 Shutting down...');
     if (client) {
@@ -2797,5 +2789,4 @@ process.on('unhandledRejection', function(reason) {
     console.error('❌ Unhandled Rejection:', reason); 
 });
 
-// Start the server
 startServer();
