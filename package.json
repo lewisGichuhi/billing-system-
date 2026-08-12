@@ -1,7 +1,7 @@
 {
   "name": "billing-system",
-  "version": "1.0.0",
-  "description": "GICH WiFi Billing System",
+  "version": "2.0.0",
+  "description": "GICH WiFi Billing System with MongoDB - Data Never Lost",
   "main": "server.js",
   "scripts": {
     "start": "node server.js"
@@ -10,6 +10,7 @@
     "node": ">=20.0.0 <22.0.0"
   },
   "dependencies": {
-    "dotenv": "^16.4.5"
+    "dotenv": "^16.4.5",
+    "mongodb": "^5.9.0"
   }
 }
