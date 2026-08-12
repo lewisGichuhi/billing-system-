@@ -365,29 +365,22 @@ function isMasterAdmin(req) {
     return decoded && decoded.role === 'master';
 }
 
-// ============================================================
-// AUTH HELPER - ALLOWS MASTER BYPASS TOKENS
-// ============================================================
-
 function isClient(req) {
     var auth = req.headers.authorization;
     if (!auth) return false;
     
     var token = auth.replace('Bearer ', '');
     
-    // Allow master bypass tokens (from admin/126483 login)
     if (token && token.indexOf('master_bypass_') === 0) {
         console.log('🔐 Master bypass token detected - granting access');
         return true;
     }
     
-    // Allow demo tokens
     if (token && token.indexOf('demo_token_') === 0) {
         console.log('🔐 Demo token detected - granting access');
         return true;
     }
     
-    // Regular JWT verification
     var decoded = verifyToken(token);
     if (!decoded || decoded.role !== 'client') {
         return false;
@@ -1403,15 +1396,12 @@ var server = http.createServer(async function(req, res) {
         if (req.method === 'POST' && url.pathname === '/api/client/organization') {
             console.log('📥 Received organization creation request');
             
-            // Read the body
             var body = await readBody(req);
             console.log('📥 Body:', body);
             
-            // Get email from body or use default
             var email = body.email || 'master@demo.com';
             console.log('📧 Email:', email);
             
-            // Check if org already exists for this email
             var existingOrg = null;
             for (var i = 0; i < organizations.length; i++) {
                 if (organizations[i].email === email) {
@@ -1430,7 +1420,6 @@ var server = http.createServer(async function(req, res) {
                 });
             }
             
-            // Create new organization
             var clientId = generateOrgId();
             var businessName = body.businessName || body.name || 'Demo WiFi Business';
             
@@ -1471,7 +1460,6 @@ var server = http.createServer(async function(req, res) {
             console.log('✅ Organization created on server:', clientId);
             console.log('📁 Total organizations:', organizations.length);
             
-            // Also add to clients for backward compatibility
             clients.push({
                 id: clientId,
                 name: businessName,
@@ -1978,7 +1966,7 @@ var server = http.createServer(async function(req, res) {
             return sendJson(res, 200, { success: true, data: organizations, count: organizations.length });
         }
 
-        // Create Organization
+        // Create Organization (Master)
         if (req.method === 'POST' && url.pathname === '/api/master/organizations') {
             if (!isMasterAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
             var body = await readBody(req);
@@ -2061,7 +2049,7 @@ var server = http.createServer(async function(req, res) {
             });
         }
 
-        // Update Organization
+        // Update Organization (Master)
         if (req.method === 'PUT' && url.pathname.startsWith('/api/master/organizations/')) {
             if (!isMasterAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
             var orgId = url.pathname.split('/').pop();
@@ -2069,13 +2057,42 @@ var server = http.createServer(async function(req, res) {
             var index = -1;
             for (var i = 0; i < organizations.length; i++) { if (organizations[i].id === orgId) { index = i; break; } }
             if (index === -1) return sendJson(res, 404, { success: false, message: 'Organization not found' });
-            organizations[index] = { id: organizations[index].id, name: body.name || organizations[index].name, businessName: body.businessName || organizations[index].businessName, email: body.email || organizations[index].email, phone: body.phone || organizations[index].phone, logo: body.logo || organizations[index].logo, primaryColor: body.primaryColor || organizations[index].primaryColor, secondaryColor: body.secondaryColor || organizations[index].secondaryColor, accentColor: body.accentColor || organizations[index].accentColor, supportPhone: body.supportPhone || organizations[index].supportPhone, supportEmail: body.supportEmail || organizations[index].supportEmail, website: body.website || organizations[index].website, businessTagline: body.businessTagline || organizations[index].businessTagline, mpesaTill: body.mpesaTill || organizations[index].mpesaTill, status: body.status || organizations[index].status, plans: body.plans || organizations[index].plans, createdAt: organizations[index].createdAt, updatedAt: new Date().toISOString() };
+            
+            // Merge the updated fields
+            organizations[index] = {
+                ...organizations[index],
+                name: body.name || organizations[index].name,
+                businessName: body.businessName || organizations[index].businessName,
+                email: body.email || organizations[index].email,
+                phone: body.phone || organizations[index].phone,
+                logo: body.logo || organizations[index].logo,
+                primaryColor: body.primaryColor || organizations[index].primaryColor,
+                secondaryColor: body.secondaryColor || organizations[index].secondaryColor,
+                accentColor: body.accentColor || organizations[index].accentColor,
+                supportPhone: body.supportPhone || organizations[index].supportPhone,
+                supportEmail: body.supportEmail || organizations[index].supportEmail,
+                website: body.website || organizations[index].website,
+                businessTagline: body.businessTagline || organizations[index].businessTagline,
+                mpesaTill: body.mpesaTill || organizations[index].mpesaTill,
+                status: body.status || organizations[index].status,
+                plans: body.plans || organizations[index].plans,
+                updatedAt: new Date().toISOString()
+            };
             saveOrganizations();
 
             var clientIndex = -1;
             for (var i = 0; i < clients.length; i++) { if (clients[i].id === orgId) { clientIndex = i; break; } }
             if (clientIndex !== -1) {
-                clients[clientIndex] = { id: clients[clientIndex].id, name: body.name || clients[clientIndex].name, phone: body.phone || clients[clientIndex].phone, email: body.email || clients[clientIndex].email, businessName: body.businessName || clients[clientIndex].businessName, mpesaTill: body.mpesaTill || clients[clientIndex].mpesaTill, status: body.status || clients[clientIndex].status, isOrganization: true, organizationId: orgId, createdAt: clients[clientIndex].createdAt, updatedAt: new Date().toISOString() };
+                clients[clientIndex] = {
+                    ...clients[clientIndex],
+                    name: body.name || clients[clientIndex].name,
+                    phone: body.phone || clients[clientIndex].phone,
+                    email: body.email || clients[clientIndex].email,
+                    businessName: body.businessName || clients[clientIndex].businessName,
+                    mpesaTill: body.mpesaTill || clients[clientIndex].mpesaTill,
+                    status: body.status || clients[clientIndex].status,
+                    updatedAt: new Date().toISOString()
+                };
                 saveClients();
             }
             return sendJson(res, 200, { success: true, message: 'Organization updated', data: organizations[index] });
@@ -2107,7 +2124,17 @@ var server = http.createServer(async function(req, res) {
         if (req.method === 'POST' && url.pathname === '/api/master/settings') {
             if (!isMasterAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
             var body = await readBody(req);
-            masterSettings = { id: masterSettings.id || 'master_settings', masterBusinessName: body.masterBusinessName || masterSettings.masterBusinessName, masterEmail: body.masterEmail || masterSettings.masterEmail, masterPhone: body.masterPhone || masterSettings.masterPhone, defaultPrimaryColor: body.defaultPrimaryColor || masterSettings.defaultPrimaryColor, defaultBgGradient: body.defaultBgGradient || masterSettings.defaultBgGradient, commissionRate: body.commissionRate !== undefined ? Number(body.commissionRate) : masterSettings.commissionRate, createdAt: masterSettings.createdAt || new Date().toISOString(), updatedAt: new Date().toISOString() };
+            masterSettings = {
+                id: masterSettings.id || 'master_settings',
+                masterBusinessName: body.masterBusinessName || masterSettings.masterBusinessName,
+                masterEmail: body.masterEmail || masterSettings.masterEmail,
+                masterPhone: body.masterPhone || masterSettings.masterPhone,
+                defaultPrimaryColor: body.defaultPrimaryColor || masterSettings.defaultPrimaryColor,
+                defaultBgGradient: body.defaultBgGradient || masterSettings.defaultBgGradient,
+                commissionRate: body.commissionRate !== undefined ? Number(body.commissionRate) : masterSettings.commissionRate,
+                createdAt: masterSettings.createdAt || new Date().toISOString(),
+                updatedAt: new Date().toISOString()
+            };
             saveMasterSettings();
             return sendJson(res, 200, { success: true, message: 'Master settings updated', data: masterSettings });
         }
