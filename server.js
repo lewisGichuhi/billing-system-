@@ -436,7 +436,7 @@ function generateFullBillingHtml(organization) {
         plansHtml = '<div style="text-align:center;padding:20px;color:#666;grid-column:1/-1;">No plans available. Please check back later.</div>';
     }
 
-    // Build complete HTML
+    // Build complete HTML - same as before, keeping it concise
     var html = '<!DOCTYPE html>\n';
     html += '<html lang="en">\n';
     html += '<head>\n';
@@ -445,25 +445,8 @@ function generateFullBillingHtml(organization) {
     html += '    <title>' + bizName + ' - WiFi Services</title>\n';
     html += '    <style>\n';
     html += '        * { margin: 0; padding: 0; box-sizing: border-box; }\n';
-    html += '        body {\n';
-    html += '            font-family: \'Segoe UI\', Roboto, system-ui, sans-serif;\n';
-    html += '            background: ' + accentColor + ';\n';
-    html += '            color: #ffffff;\n';
-    html += '            min-height: 100vh;\n';
-    html += '            display: flex;\n';
-    html += '            align-items: center;\n';
-    html += '            justify-content: center;\n';
-    html += '            padding: 20px;\n';
-    html += '        }\n';
-    html += '        .container {\n';
-    html += '            max-width: 560px;\n';
-    html += '            width: 100%;\n';
-    html += '            background: rgba(18, 18, 31, 0.95);\n';
-    html += '            border-radius: 24px;\n';
-    html += '            padding: 32px 28px;\n';
-    html += '            border: 1px solid rgba(255,255,255,0.04);\n';
-    html += '            box-shadow: 0 20px 60px rgba(0,0,0,0.6);\n';
-    html += '        }\n';
+    html += '        body { font-family: \'Segoe UI\', Roboto, system-ui, sans-serif; background: ' + accentColor + '; color: #ffffff; min-height: 100vh; display: flex; align-items: center; justify-content: center; padding: 20px; }\n';
+    html += '        .container { max-width: 560px; width: 100%; background: rgba(18, 18, 31, 0.95); border-radius: 24px; padding: 32px 28px; border: 1px solid rgba(255,255,255,0.04); box-shadow: 0 20px 60px rgba(0,0,0,0.6); }\n';
     html += '        .brand { text-align: center; margin-bottom: 24px; }\n';
     html += '        .brand .logo { font-size: 42px; margin-bottom: 4px; }\n';
     html += '        .brand h1 { font-size: 26px; font-weight: 700; color: ' + primaryColor + '; }\n';
@@ -529,7 +512,7 @@ function generateFullBillingHtml(organization) {
     html += '</head>\n';
     html += '<body>\n';
 
-    // Main container
+    // Main container (simplified)
     html += '<div class="container" id="app">\n';
     html += '    <div class="brand">\n';
     html += '        <div class="logo">🌐</div>\n';
@@ -543,13 +526,11 @@ function generateFullBillingHtml(organization) {
     }
     html += '    </div>\n';
 
-    // Plans
     html += '    <div class="section-title">📦 Choose Your Plan</div>\n';
     html += '    <div class="plan-grid" id="planGrid">\n';
     html += plansHtml;
     html += '    </div>\n';
 
-    // M-Pesa input
     html += '    <div class="input-group">\n';
     html += '        <label>📱 M-Pesa Phone Number</label>\n';
     html += '        <input type="tel" id="phoneInput" placeholder="0712345678" />\n';
@@ -557,7 +538,6 @@ function generateFullBillingHtml(organization) {
     html += '    <button class="btn" id="payBtn" onclick="initiatePayment()">💳 Pay Now</button>\n';
     html += '    <div id="paymentResult" class="result-box" style="margin-top:12px;"></div>\n';
 
-    // Voucher
     html += '    <div class="divider">or use a voucher</div>\n';
     html += '    <div class="voucher-row">\n';
     html += '        <input type="text" id="voucherInput" placeholder="🎟️ Enter voucher code" />\n';
@@ -565,14 +545,12 @@ function generateFullBillingHtml(organization) {
     html += '    </div>\n';
     html += '    <div id="voucherResult" class="result-box"></div>\n';
 
-    // Check existing
     html += '    <div style="margin-top:16px; display:flex; gap:10px;">\n';
     html += '        <input type="tel" id="checkPhoneInput" placeholder="🔍 Check your plan" style="flex:1; padding:12px 14px; background:#0a0a1a; border:2px solid rgba(255,255,255,0.06); border-radius:10px; color:#fff; font-size:14px; outline:none;" />\n';
     html += '        <button class="btn btn-secondary" onclick="checkPlan()" style="width:auto; padding:12px 20px; font-size:13px;">Check</button>\n';
     html += '    </div>\n';
     html += '    <div id="checkResult" class="result-box"></div>\n';
 
-    // Footer
     html += '    <div class="footer">\n';
     html += '        Powered by <span class="brand">GICH WiFi</span> · Secure · Fast · Reliable\n';
     html += '        <br><span style="color:#555; font-size:11px;">📞 ' + supportPhone + ' · ✉️ ' + supportEmail + '</span>\n';
@@ -611,7 +589,6 @@ function generateFullBillingHtml(organization) {
     html += '    let credentials = null;\n';
     html += '    let countdownInterval = null;\n';
 
-    // Plan selection
     html += '    function selectPlan(el, id) {\n';
     html += '        document.querySelectorAll(".plan-card").forEach(c => c.classList.remove("selected"));\n';
     html += '        el.classList.add("selected");\n';
@@ -621,7 +598,6 @@ function generateFullBillingHtml(organization) {
     html += '        document.getElementById("payBtn").textContent = "💳 Pay KSh " + price;\n';
     html += '    }\n';
 
-    // Payment
     html += '    async function initiatePayment() {\n';
     html += '        const phone = document.getElementById("phoneInput").value.trim();\n';
     html += '        if (!phone || phone.length < 10) { showToast("📱 Please enter a valid phone number", "error"); return; }\n';
@@ -660,7 +636,6 @@ function generateFullBillingHtml(organization) {
     html += '        }\n';
     html += '    }\n';
 
-    // Polling
     html += '    async function pollTransaction(txnId) {\n';
     html += '        let attempts = 0;\n';
     html += '        const maxAttempts = 30;\n';
@@ -695,7 +670,6 @@ function generateFullBillingHtml(organization) {
     html += '        document.getElementById("payBtn").textContent = "💳 Pay Now";\n';
     html += '    }\n';
 
-    // Connected page
     html += '    function showConnectedPage(cred) {\n';
     html += '        document.getElementById("app").style.display = "none";\n';
     html += '        const overlay = document.getElementById("connectedOverlay");\n';
@@ -706,7 +680,6 @@ function generateFullBillingHtml(organization) {
     html += '        startCountdown(cred.expiresAt);\n';
     html += '    }\n';
 
-    // Countdown
     html += '    function startCountdown(expiresAt) {\n';
     html += '        if (countdownInterval) clearInterval(countdownInterval);\n';
     html += '        const timer = document.getElementById("connTimer");\n';
@@ -731,7 +704,6 @@ function generateFullBillingHtml(organization) {
     html += '        countdownInterval = setInterval(update, 1000);\n';
     html += '    }\n';
 
-    // Voucher
     html += '    async function redeemVoucher() {\n';
     html += '        const code = document.getElementById("voucherInput").value.trim().toUpperCase();\n';
     html += '        if (!code) { showToast("Please enter a voucher code", "error"); return; }\n';
@@ -757,7 +729,6 @@ function generateFullBillingHtml(organization) {
     html += '        } catch (e) { resultEl.className = "result-box error"; resultEl.textContent = "❌ Network error"; }\n';
     html += '    }\n';
 
-    // Check plan
     html += '    async function checkPlan() {\n';
     html += '        const phone = document.getElementById("checkPhoneInput").value.trim();\n';
     html += '        if (!phone || phone.length < 10) { showToast("Please enter a valid phone number", "error"); return; }\n';
@@ -779,7 +750,6 @@ function generateFullBillingHtml(organization) {
     html += '        } catch (e) { resultEl.className = "result-box error"; resultEl.textContent = "❌ Network error"; }\n';
     html += '    }\n';
 
-    // Helpers
     html += '    function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }\n';
     html += '    function showToast(msg, type) {\n';
     html += '        type = type || "info";\n';
@@ -793,12 +763,10 @@ function generateFullBillingHtml(organization) {
     html += '        setTimeout(() => toast.remove(), 4000);\n';
     html += '    }\n';
 
-    // Enter key handlers
     html += '    document.getElementById("phoneInput").addEventListener("keydown", e => { if (e.key === "Enter") initiatePayment(); });\n';
     html += '    document.getElementById("voucherInput").addEventListener("keydown", e => { if (e.key === "Enter") redeemVoucher(); });\n';
     html += '    document.getElementById("checkPhoneInput").addEventListener("keydown", e => { if (e.key === "Enter") checkPlan(); });\n';
 
-    // Initial plan selection
     html += '    if (document.querySelector(".plan-card")) {\n';
     html += '        const first = document.querySelector(".plan-card");\n';
     html += '        const price = first.querySelector(".price").textContent.replace(/[^0-9]/g, "");\n';
@@ -1003,7 +971,7 @@ var server = http.createServer(async function(req, res) {
         }
 
         // ============================================================
-        // CLIENT CREATE/UPDATE ORGANIZATION
+        // CLIENT CREATE/UPDATE ORGANIZATION - FIXED
         // ============================================================
         if (req.method === 'POST' && url.pathname === '/api/client/organization') {
             console.log('📥 Received organization creation request');
@@ -1042,17 +1010,17 @@ var server = http.createServer(async function(req, res) {
                 email: email,
                 phone: body.phone || '0712345678',
                 logo: body.logo || '',
-                primaryColor: body.primaryColor || '#ff6b35',
-                secondaryColor: body.secondaryColor || '#ff9a56',
-                accentColor: body.accentColor || '#1a0a00',
+                primaryColor: body.primaryColor || '#00c853',
+                secondaryColor: body.secondaryColor || '#00e676',
+                accentColor: body.accentColor || '#0f2027',
                 textColor: '#ffffff',
                 headerTextColor: '#ffffff',
                 buttonTextColor: '#000000',
-                bgGradient: 'linear-gradient(135deg, #1a0a00, #ff6b35, #ff9a56)',
+                bgGradient: 'linear-gradient(135deg, #0f2027, #203a43, #2c5364)',
                 supportPhone: body.supportPhone || '0712345678',
                 supportEmail: body.supportEmail || email,
                 website: body.website || '',
-                businessTagline: body.businessTagline || 'Full Access Mode',
+                businessTagline: body.businessTagline || 'Fast • Secure • Reliable',
                 mpesaTill: body.mpesaTill || '',
                 businessAddress: body.businessAddress || '',
                 mpesaShortcode: SHORTCODE,
@@ -1073,6 +1041,7 @@ var server = http.createServer(async function(req, res) {
             console.log('✅ Organization created on server:', clientId);
             console.log('📁 Total organizations:', organizations.length);
             
+            // Also add to clients for backward compatibility
             clients.push({
                 id: clientId,
                 name: businessName,
@@ -1665,7 +1634,9 @@ var server = http.createServer(async function(req, res) {
             });
         }
 
-        // Update Organization (Master) - FIXED: Properly merges all fields
+        // ============================================================
+        // UPDATE ORGANIZATION - FIXED: Properly merges all fields
+        // ============================================================
         if (req.method === 'PUT' && url.pathname.startsWith('/api/master/organizations/')) {
             if (!isMasterAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
             var orgId = url.pathname.split('/').pop();
@@ -1674,7 +1645,7 @@ var server = http.createServer(async function(req, res) {
             for (var i = 0; i < organizations.length; i++) { if (organizations[i].id === orgId) { index = i; break; } }
             if (index === -1) return sendJson(res, 404, { success: false, message: 'Organization not found' });
             
-            // Merge ALL fields from the request body
+            // Merge ALL fields from the request body, preserving existing values
             organizations[index] = {
                 ...organizations[index],
                 name: body.name !== undefined ? body.name : organizations[index].name,
@@ -1685,6 +1656,10 @@ var server = http.createServer(async function(req, res) {
                 primaryColor: body.primaryColor !== undefined ? body.primaryColor : organizations[index].primaryColor,
                 secondaryColor: body.secondaryColor !== undefined ? body.secondaryColor : organizations[index].secondaryColor,
                 accentColor: body.accentColor !== undefined ? body.accentColor : organizations[index].accentColor,
+                textColor: body.textColor !== undefined ? body.textColor : organizations[index].textColor,
+                headerTextColor: body.headerTextColor !== undefined ? body.headerTextColor : organizations[index].headerTextColor,
+                buttonTextColor: body.buttonTextColor !== undefined ? body.buttonTextColor : organizations[index].buttonTextColor,
+                bgGradient: body.bgGradient !== undefined ? body.bgGradient : organizations[index].bgGradient,
                 supportPhone: body.supportPhone !== undefined ? body.supportPhone : organizations[index].supportPhone,
                 supportEmail: body.supportEmail !== undefined ? body.supportEmail : organizations[index].supportEmail,
                 website: body.website !== undefined ? body.website : organizations[index].website,
@@ -1757,7 +1732,7 @@ var server = http.createServer(async function(req, res) {
             return sendJson(res, 200, { success: true, message: 'Master settings updated', data: masterSettings });
         }
 
-        // Generate Full HTML Client Page - NEW ENDPOINT
+        // Generate Full HTML Client Page
         if (req.method === 'GET' && url.pathname.startsWith('/api/master/generate-full-html/')) {
             if (!isMasterAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
             var orgId = url.pathname.split('/').pop();
