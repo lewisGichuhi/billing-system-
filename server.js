@@ -46,12 +46,13 @@ function saveActiveDevices() {
 
 function checkDeviceAlreadyConnected(deviceId, phoneNumber) {
     var now = new Date();
-    // Clean up expired connections (older than 1 hour)
+    // Clean up expired connections - keep for 7 days instead of 1 hour
     activeDevices = activeDevices.filter(function(d) {
         var connectedAt = new Date(d.connectedAt);
-        var diffMinutes = (now - connectedAt) / (1000 * 60);
-        return diffMinutes < 60; // Remove after 1 hour of inactivity
+        var diffHours = (now - connectedAt) / (1000 * 60 * 60);
+        return diffHours < 168; // 7 days
     });
+    saveActiveDevices();
     
     // Check if this device is already connected with an active plan
     var existing = activeDevices.find(function(d) {
@@ -96,32 +97,26 @@ function removeDeviceConnection(deviceId) {
     saveActiveDevices();
 }
 
-// Auto-cleanup expired devices every 5 minutes
+// Auto-cleanup expired devices every hour - keep for 7 days
 setInterval(function() {
     var now = new Date();
     var removed = 0;
     activeDevices = activeDevices.filter(function(d) {
         var connectedAt = new Date(d.connectedAt);
-        var diffMinutes = (now - connectedAt) / (1000 * 60);
-        if (diffMinutes > 60) {
+        var diffHours = (now - connectedAt) / (1000 * 60 * 60);
+        if (diffHours > 168) { // 7 days
             removed++;
             return false;
         }
-        // Also check if subscription expired
-        if (d.expiresAt) {
-            var expiry = new Date(d.expiresAt);
-            if (now > expiry) {
-                removed++;
-                return false;
-            }
-        }
+        // Also check if subscription expired - but keep the device record even if expired
+        // so the user knows they had a connection
         return true;
     });
     if (removed > 0) {
         saveActiveDevices();
-        console.log('🧹 Cleaned up ' + removed + ' expired device connections');
+        console.log('🧹 Cleaned up ' + removed + ' old device connections (older than 7 days)');
     }
-}, 5 * 60 * 1000);
+}, 60 * 60 * 1000); // Run every hour
 
 // ============================================================
 // CONFIGURATION
@@ -172,7 +167,7 @@ console.log('   Port: ' + PORT);
 console.log('   Admin PIN: ' + (ADMIN_PASSWORD ? '✅ Configured' : '⚠️ NOT SET'));
 console.log('   Master PIN: ' + (MASTER_PASSWORD ? '✅ Configured' : '⚠️ NOT SET'));
 console.log('   M-Pesa Shortcode: ' + SHORTCODE);
-console.log('📱 Device Tracking: ✅ ENABLED');
+console.log('📱 Device Tracking: ✅ ENABLED (7 day retention)');
 console.log('========================================\n');
 
 // ============================================================
@@ -258,41 +253,175 @@ var DEFAULT_PLANS = [
 ];
 
 // ============================================================
-// LOAD DATA
+// LOAD DATA - WITH BETTER ERROR HANDLING
 // ============================================================
 
 function loadAllData() {
+    // Load transactions
     if (fs.existsSync(TRANSACTIONS_FILE)) {
-        try { transactions = JSON.parse(fs.readFileSync(TRANSACTIONS_FILE, 'utf8')); console.log('📂 Loaded ' + transactions.length + ' transactions'); } catch (e) { console.error('Error loading transactions:', e); }
+        try { 
+            var txData = fs.readFileSync(TRANSACTIONS_FILE, 'utf8');
+            transactions = JSON.parse(txData); 
+            console.log('📂 Loaded ' + transactions.length + ' transactions');
+        } catch (e) { 
+            console.error('Error loading transactions:', e);
+            transactions = [];
+        }
+    } else {
+        transactions = [];
+        saveTransactions();
     }
+    
+    // Load vouchers
     if (fs.existsSync(VOUCHERS_FILE)) {
-        try { vouchers = JSON.parse(fs.readFileSync(VOUCHERS_FILE, 'utf8')); console.log('🎟️ Loaded ' + vouchers.length + ' vouchers'); } catch (e) { console.error('Error loading vouchers:', e); }
+        try { 
+            var vData = fs.readFileSync(VOUCHERS_FILE, 'utf8');
+            vouchers = JSON.parse(vData); 
+            console.log('🎟️ Loaded ' + vouchers.length + ' vouchers');
+        } catch (e) { 
+            console.error('Error loading vouchers:', e);
+            vouchers = [];
+        }
+    } else {
+        vouchers = [];
+        saveVouchers();
     }
+    
+    // Load plans
     if (fs.existsSync(PLANS_FILE)) {
-        try { plans = JSON.parse(fs.readFileSync(PLANS_FILE, 'utf8')); console.log('📦 Loaded ' + plans.length + ' plans'); } catch (e) { console.error('Error loading plans:', e); plans = DEFAULT_PLANS; }
-    } else { plans = DEFAULT_PLANS; savePlans(); }
+        try { 
+            var pData = fs.readFileSync(PLANS_FILE, 'utf8');
+            plans = JSON.parse(pData); 
+            console.log('📦 Loaded ' + plans.length + ' plans');
+        } catch (e) { 
+            console.error('Error loading plans:', e);
+            plans = DEFAULT_PLANS;
+            savePlans();
+        }
+    } else { 
+        plans = DEFAULT_PLANS; 
+        savePlans(); 
+    }
+    
+    // Load settings
     if (fs.existsSync(SETTINGS_FILE)) {
-        try { settings = JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8')); console.log('⚙️ Loaded settings'); } catch (e) { console.error('Error loading settings:', e); settings = DEFAULT_SETTINGS; }
-    } else { settings = DEFAULT_SETTINGS; saveSettings(); }
+        try { 
+            var sData = fs.readFileSync(SETTINGS_FILE, 'utf8');
+            settings = JSON.parse(sData); 
+            console.log('⚙️ Loaded settings');
+        } catch (e) { 
+            console.error('Error loading settings:', e);
+            settings = DEFAULT_SETTINGS;
+            saveSettings();
+        }
+    } else { 
+        settings = DEFAULT_SETTINGS; 
+        saveSettings(); 
+    }
+    
+    // Load clients
     if (fs.existsSync(CLIENTS_FILE)) {
-        try { clients = JSON.parse(fs.readFileSync(CLIENTS_FILE, 'utf8')); console.log('👤 Loaded ' + clients.length + ' clients'); } catch (e) { console.error('Error loading clients:', e); clients = []; }
-    } else { clients = []; saveClients(); }
+        try { 
+            var cData = fs.readFileSync(CLIENTS_FILE, 'utf8');
+            clients = JSON.parse(cData); 
+            console.log('👤 Loaded ' + clients.length + ' clients');
+        } catch (e) { 
+            console.error('Error loading clients:', e);
+            clients = [];
+        }
+    } else { 
+        clients = []; 
+        saveClients(); 
+    }
+    
+    // Load organizations
     if (fs.existsSync(ORGANIZATIONS_FILE)) {
-        try { organizations = JSON.parse(fs.readFileSync(ORGANIZATIONS_FILE, 'utf8')); console.log('🏢 Loaded ' + organizations.length + ' organizations'); } catch (e) { console.error('Error loading organizations:', e); organizations = []; }
-    } else { organizations = []; saveOrganizations(); }
+        try { 
+            var oData = fs.readFileSync(ORGANIZATIONS_FILE, 'utf8');
+            organizations = JSON.parse(oData); 
+            console.log('🏢 Loaded ' + organizations.length + ' organizations');
+        } catch (e) { 
+            console.error('Error loading organizations:', e);
+            organizations = [];
+        }
+    } else { 
+        organizations = []; 
+        saveOrganizations(); 
+    }
+    
+    // Load subscriptions
     if (fs.existsSync(SUBSCRIPTIONS_FILE)) {
-        try { subscriptions = JSON.parse(fs.readFileSync(SUBSCRIPTIONS_FILE, 'utf8')); console.log('📋 Loaded ' + subscriptions.length + ' subscriptions'); } catch (e) { console.error('Error loading subscriptions:', e); subscriptions = []; }
-    } else { subscriptions = []; saveSubscriptions(); }
+        try { 
+            var subData = fs.readFileSync(SUBSCRIPTIONS_FILE, 'utf8');
+            subscriptions = JSON.parse(subData); 
+            console.log('📋 Loaded ' + subscriptions.length + ' subscriptions');
+        } catch (e) { 
+            console.error('Error loading subscriptions:', e);
+            subscriptions = [];
+        }
+    } else { 
+        subscriptions = []; 
+        saveSubscriptions(); 
+    }
+    
     loadActiveDevices();
 }
 
-function saveTransactions() { try { fs.writeFileSync(TRANSACTIONS_FILE, JSON.stringify(transactions, null, 2)); } catch (e) { console.error('⚠️ Could not save transactions:', e.message); } }
-function saveVouchers() { try { fs.writeFileSync(VOUCHERS_FILE, JSON.stringify(vouchers, null, 2)); } catch (e) { console.error('⚠️ Could not save vouchers:', e.message); } }
-function savePlans() { try { fs.writeFileSync(PLANS_FILE, JSON.stringify(plans, null, 2)); } catch (e) { console.error('⚠️ Could not save plans:', e.message); } }
-function saveSettings() { try { fs.writeFileSync(SETTINGS_FILE, JSON.stringify(settings, null, 2)); } catch (e) { console.error('⚠️ Could not save settings:', e.message); } }
-function saveClients() { try { fs.writeFileSync(CLIENTS_FILE, JSON.stringify(clients, null, 2)); } catch (e) { console.error('⚠️ Could not save clients:', e.message); } }
-function saveOrganizations() { try { fs.writeFileSync(ORGANIZATIONS_FILE, JSON.stringify(organizations, null, 2)); } catch (e) { console.error('⚠️ Could not save organizations:', e.message); } }
-function saveSubscriptions() { try { fs.writeFileSync(SUBSCRIPTIONS_FILE, JSON.stringify(subscriptions, null, 2)); } catch (e) { console.error('⚠️ Could not save subscriptions:', e.message); } }
+function saveTransactions() { 
+    try { 
+        fs.writeFileSync(TRANSACTIONS_FILE, JSON.stringify(transactions, null, 2)); 
+    } catch (e) { 
+        console.error('⚠️ Could not save transactions:', e.message); 
+    } 
+}
+
+function saveVouchers() { 
+    try { 
+        fs.writeFileSync(VOUCHERS_FILE, JSON.stringify(vouchers, null, 2)); 
+    } catch (e) { 
+        console.error('⚠️ Could not save vouchers:', e.message); 
+    } 
+}
+
+function savePlans() { 
+    try { 
+        fs.writeFileSync(PLANS_FILE, JSON.stringify(plans, null, 2)); 
+    } catch (e) { 
+        console.error('⚠️ Could not save plans:', e.message); 
+    } 
+}
+
+function saveSettings() { 
+    try { 
+        fs.writeFileSync(SETTINGS_FILE, JSON.stringify(settings, null, 2)); 
+    } catch (e) { 
+        console.error('⚠️ Could not save settings:', e.message); 
+    } 
+}
+
+function saveClients() { 
+    try { 
+        fs.writeFileSync(CLIENTS_FILE, JSON.stringify(clients, null, 2)); 
+    } catch (e) { 
+        console.error('⚠️ Could not save clients:', e.message); 
+    } 
+}
+
+function saveOrganizations() { 
+    try { 
+        fs.writeFileSync(ORGANIZATIONS_FILE, JSON.stringify(organizations, null, 2)); 
+    } catch (e) { 
+        console.error('⚠️ Could not save organizations:', e.message); 
+    } 
+}
+
+function saveSubscriptions() { 
+    try { 
+        fs.writeFileSync(SUBSCRIPTIONS_FILE, JSON.stringify(subscriptions, null, 2)); 
+    } catch (e) { 
+        console.error('⚠️ Could not save subscriptions:', e.message); 
+    } 
+}
 
 // ============================================================
 // HELPERS
@@ -1026,6 +1155,7 @@ function generateCustomerBillingPage(organization) {
     html += '    // Check if device is already connected\n';
     html += '    function checkDeviceConnection(phoneNumber) {\n';
     html += '        if (!phoneNumber) return;\n';
+    html += '        console.log("🔍 Checking device connection for:", phoneNumber);\n';
     html += '        fetch(API_URL + "/device/check", {\n';
     html += '            method: "POST",\n';
     html += '            headers: { "Content-Type": "application/json" },\n';
@@ -1036,6 +1166,7 @@ function generateCustomerBillingPage(organization) {
     html += '        })\n';
     html += '        .then(function(r) { return r.json(); })\n';
     html += '        .then(function(data) {\n';
+    html += '            console.log("Device check response:", data);\n';
     html += '            if (data.success && data.alreadyConnected) {\n';
     html += '                // Show already connected overlay\n';
     html += '                showAlreadyConnected(data.session);\n';
@@ -1183,6 +1314,14 @@ function generateCustomerBillingPage(organization) {
     html += '                } else {\n';
     html += '                    startPolling(data.transactionId);\n';
     html += '                }\n';
+    html += '            } else if (data.alreadyConnected) {\n';
+    html += '                resultEl.className = "result-box show error";\n';
+    html += '                resultEl.textContent = "🔌 You are already connected on this device!";\n';
+    html += '                showToast("🔌 Already connected!", "error");\n';
+    html += '                btn.disabled = false;\n';
+    html += '                btn.innerHTML = "💳 Pay KSh " + selectedPlanPrice;\n';
+    html += '                showAlreadyConnected(data.session);\n';
+    html += '                setTimeout(function() { window.close(); }, 5000);\n';
     html += '            } else {\n';
     html += '                resultEl.className = "result-box show error";\n';
     html += '                resultEl.textContent = "❌ " + (data.message || "Payment failed");\n';
@@ -1341,7 +1480,11 @@ function generateCustomerBillingPage(organization) {
     html += '        fetch(API_URL + "/voucher/redeem", {\n';
     html += '            method: "POST",\n';
     html += '            headers: { "Content-Type": "application/json" },\n';
-    html += '            body: JSON.stringify({ code: code, phoneNumber: phone })\n';
+    html += '            body: JSON.stringify({ \n';
+    html += '                code: code, \n';
+    html += '                phoneNumber: phone,\n';
+    html += '                deviceId: deviceId\n';
+    html += '            })\n';
     html += '        })\n';
     html += '        .then(function(r) { return r.json(); })\n';
     html += '        .then(function(data) {\n';
@@ -1445,6 +1588,12 @@ function generateCustomerBillingPage(organization) {
     html += '                resultEl.style.color = "#00c853";\n';
     html += '                showToast("📱 M-Pesa prompt sent!", "success");\n';
     html += '                pollSubscriptionPayment(data.transactionId, planType);\n';
+    html += '            } else if (data.alreadyConnected) {\n';
+    html += '                resultEl.textContent = "🔌 You are already connected on this device!";\n';
+    html += '                resultEl.style.color = "#ff4444";\n';
+    html += '                showToast("🔌 Already connected!", "error");\n';
+    html += '                showAlreadyConnected(data.session);\n';
+    html += '                setTimeout(function() { window.close(); }, 5000);\n';
     html += '            } else {\n';
     html += '                resultEl.textContent = "❌ " + (data.message || "Payment failed");\n';
     html += '                resultEl.style.color = "#ff4444";\n';
@@ -1560,6 +1709,7 @@ function generateCustomerBillingPage(organization) {
     html += '        var savedPhone = localStorage.getItem("gich_last_phone");\n';
     html += '        if (savedPhone) {\n';
     html += '            getEl("phoneInput").value = savedPhone;\n';
+    html += '            // Check if this device is already connected\n';
     html += '            checkDeviceConnection(savedPhone);\n';
     html += '        }\n';
     html += '        \n';
@@ -2285,6 +2435,7 @@ var server = http.createServer(async function(req, res) {
             var body = await readBody(req);
             var code = body.code;
             var phoneNumber = body.phoneNumber;
+            var deviceId = body.deviceId;
             
             if (!code) {
                 return sendJson(res, 400, { success: false, message: 'Voucher code required' });
@@ -2314,15 +2465,15 @@ var server = http.createServer(async function(req, res) {
                 expiresAt: new Date(Date.now() + duration * 1000).toISOString(),
                 username: 'vuser_' + transactionId.substring(0, 8),
                 password: 'vpass_' + Date.now().toString(36),
-                deviceId: body.deviceId || null
+                deviceId: deviceId || null
             };
             transactions.push(tx);
             saveTransactions();
             
             // Register device for voucher
-            if (body.deviceId) {
+            if (deviceId) {
                 registerDeviceConnection(
-                    body.deviceId,
+                    deviceId,
                     phoneNumber || 'voucher_user',
                     tx.username,
                     voucher.planName,
