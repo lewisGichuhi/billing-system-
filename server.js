@@ -1,5 +1,637 @@
+/**
+ * GICH WiFi - Complete Backend with Daraja Integration & Subscription System
+ * Full M-Pesa STK Push with multi-tenant support
+ */
+
+require('dotenv').config();
+
+const http = require('http');
+const https = require('https');
+const { URL } = require('url');
+const fs = require('fs');
+const path = require('path');
+const crypto = require('crypto');
+
 // ============================================================
-// GENERATE CUSTOMER BILLING PAGE - FIXED using string concatenation
+// CONFIGURATION
+// ============================================================
+
+const SHORTCODE = process.env.SHORTCODE || '174379';
+const PASSKEY = process.env.PASSKEY || 'bfb279f9aa9bdbcf158e97dd71a467cd2e0c893059b10f78e6b72ada1ed2c919';
+const CONSUMER_KEY = process.env.CONSUMER_KEY || '';
+const CONSUMER_SECRET = process.env.CONSUMER_SECRET || '';
+const CALLBACK_URL = process.env.CALLBACK_URL || 'https://billing-system-fm9a.onrender.com/api/mpesa-callback';
+const PORT = process.env.PORT || 10000;
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '126483';
+const MASTER_PASSWORD = process.env.MASTER_PASSWORD || 'master126483';
+const JWT_SECRET = process.env.JWT_SECRET || crypto.randomBytes(32).toString('hex');
+
+// Subscription Plans
+const SUBSCRIPTION_PLANS = {
+    'starter': {
+        name: 'Starter',
+        price: 500,
+        maxOrganizations: 1,
+        maxPlans: 5,
+        maxTransactions: 200,
+        features: ['1 Organization', '5 Plans', '200 Transactions/month']
+    },
+    'pro': {
+        name: 'Pro',
+        price: 1000,
+        maxOrganizations: 3,
+        maxPlans: 10,
+        maxTransactions: 500,
+        features: ['3 Organizations', '10 Plans', '500 Transactions/month', 'Vouchers']
+    },
+    'business': {
+        name: 'Business',
+        price: 2000,
+        maxOrganizations: 10,
+        maxPlans: 999,
+        maxTransactions: 2000,
+        features: ['10 Organizations', 'Unlimited Plans', '2000 Transactions/month', 'Vouchers', 'Analytics']
+    }
+};
+
+console.log('\n========================================');
+console.log('🌐 GICH WiFi API');
+console.log('========================================');
+console.log('   Port: ' + PORT);
+console.log('   Admin PIN: ' + (ADMIN_PASSWORD ? '✅ Configured' : '⚠️ NOT SET'));
+console.log('   Master PIN: ' + (MASTER_PASSWORD ? '✅ Configured' : '⚠️ NOT SET'));
+console.log('   M-Pesa Shortcode: ' + SHORTCODE);
+console.log('========================================\n');
+
+// ============================================================
+// JWT HELPER
+// ============================================================
+
+function generateToken(payload) {
+    var header = Buffer.from(JSON.stringify({ alg: 'HS256', typ: 'JWT' })).toString('base64url');
+    var body = Buffer.from(JSON.stringify(payload)).toString('base64url');
+    var signature = crypto.createHmac('sha256', JWT_SECRET)
+        .update(header + '.' + body)
+        .digest('base64url');
+    return header + '.' + body + '.' + signature;
+}
+
+function verifyToken(token) {
+    try {
+        var parts = token.split('.');
+        var header = parts[0];
+        var body = parts[1];
+        var signature = parts[2];
+        var expectedSignature = crypto.createHmac('sha256', JWT_SECRET)
+            .update(header + '.' + body)
+            .digest('base64url');
+        if (signature !== expectedSignature) return null;
+        return JSON.parse(Buffer.from(body, 'base64url').toString());
+    } catch (error) {
+        return null;
+    }
+}
+
+// ============================================================
+// HTTPS AGENT
+// ============================================================
+
+var agent = new https.Agent({
+    rejectUnauthorized: false,
+    keepAlive: true,
+    timeout: 60000
+});
+
+// ============================================================
+// DATA STORAGE
+// ============================================================
+
+var TRANSACTIONS_FILE = path.join(__dirname, 'transactions.json');
+var VOUCHERS_FILE = path.join(__dirname, 'vouchers.json');
+var PLANS_FILE = path.join(__dirname, 'plans.json');
+var SETTINGS_FILE = path.join(__dirname, 'settings.json');
+var CLIENTS_FILE = path.join(__dirname, 'clients.json');
+var ORGANIZATIONS_FILE = path.join(__dirname, 'organizations.json');
+var SUBSCRIPTIONS_FILE = path.join(__dirname, 'subscriptions.json');
+
+var transactions = [];
+var vouchers = [];
+var plans = [];
+var settings = {};
+var clients = [];
+var organizations = [];
+var subscriptions = [];
+
+// ============================================================
+// DEFAULT SETTINGS
+// ============================================================
+
+var DEFAULT_SETTINGS = {
+    businessName: 'GICH WIFI',
+    businessTagline: 'Fast • Secure • Reliable',
+    supportPhone: '0796587763',
+    supportEmail: 'support@gichwifi.co.ke',
+    primaryColor: '#00c853',
+    secondaryColor: '#00e676',
+    accentColor: '#0f2027',
+    logo: ''
+};
+
+var DEFAULT_PLANS = [
+    { id: '2_Hours', name: '2 Hours', price: 10, devices: 1, duration_seconds: 7200 },
+    { id: '5_Hours', name: '5 Hours', price: 20, devices: 1, duration_seconds: 18000 },
+    { id: '8_Hours', name: '8 Hours', price: 30, devices: 1, duration_seconds: 28800 },
+    { id: '12_Hours', name: '12 Hours', price: 50, devices: 1, duration_seconds: 43200 },
+    { id: '24_Hours', name: '24 Hours', price: 80, devices: 1, duration_seconds: 86400 }
+];
+
+// ============================================================
+// LOAD DATA
+// ============================================================
+
+function loadAllData() {
+    if (fs.existsSync(TRANSACTIONS_FILE)) {
+        try { transactions = JSON.parse(fs.readFileSync(TRANSACTIONS_FILE, 'utf8')); console.log('📂 Loaded ' + transactions.length + ' transactions'); } catch (e) { console.error('Error loading transactions:', e); }
+    }
+    if (fs.existsSync(VOUCHERS_FILE)) {
+        try { vouchers = JSON.parse(fs.readFileSync(VOUCHERS_FILE, 'utf8')); console.log('🎟️ Loaded ' + vouchers.length + ' vouchers'); } catch (e) { console.error('Error loading vouchers:', e); }
+    }
+    if (fs.existsSync(PLANS_FILE)) {
+        try { plans = JSON.parse(fs.readFileSync(PLANS_FILE, 'utf8')); console.log('📦 Loaded ' + plans.length + ' plans'); } catch (e) { console.error('Error loading plans:', e); plans = DEFAULT_PLANS; }
+    } else { plans = DEFAULT_PLANS; savePlans(); }
+    if (fs.existsSync(SETTINGS_FILE)) {
+        try { settings = JSON.parse(fs.readFileSync(SETTINGS_FILE, 'utf8')); console.log('⚙️ Loaded settings'); } catch (e) { console.error('Error loading settings:', e); settings = DEFAULT_SETTINGS; }
+    } else { settings = DEFAULT_SETTINGS; saveSettings(); }
+    if (fs.existsSync(CLIENTS_FILE)) {
+        try { clients = JSON.parse(fs.readFileSync(CLIENTS_FILE, 'utf8')); console.log('👤 Loaded ' + clients.length + ' clients'); } catch (e) { console.error('Error loading clients:', e); clients = []; }
+    } else { clients = []; saveClients(); }
+    if (fs.existsSync(ORGANIZATIONS_FILE)) {
+        try { organizations = JSON.parse(fs.readFileSync(ORGANIZATIONS_FILE, 'utf8')); console.log('🏢 Loaded ' + organizations.length + ' organizations'); } catch (e) { console.error('Error loading organizations:', e); organizations = []; }
+    } else { organizations = []; saveOrganizations(); }
+    if (fs.existsSync(SUBSCRIPTIONS_FILE)) {
+        try { subscriptions = JSON.parse(fs.readFileSync(SUBSCRIPTIONS_FILE, 'utf8')); console.log('📋 Loaded ' + subscriptions.length + ' subscriptions'); } catch (e) { console.error('Error loading subscriptions:', e); subscriptions = []; }
+    } else { subscriptions = []; saveSubscriptions(); }
+}
+
+function saveTransactions() { try { fs.writeFileSync(TRANSACTIONS_FILE, JSON.stringify(transactions, null, 2)); } catch (e) { console.error('⚠️ Could not save transactions:', e.message); } }
+function saveVouchers() { try { fs.writeFileSync(VOUCHERS_FILE, JSON.stringify(vouchers, null, 2)); } catch (e) { console.error('⚠️ Could not save vouchers:', e.message); } }
+function savePlans() { try { fs.writeFileSync(PLANS_FILE, JSON.stringify(plans, null, 2)); } catch (e) { console.error('⚠️ Could not save plans:', e.message); } }
+function saveSettings() { try { fs.writeFileSync(SETTINGS_FILE, JSON.stringify(settings, null, 2)); } catch (e) { console.error('⚠️ Could not save settings:', e.message); } }
+function saveClients() { try { fs.writeFileSync(CLIENTS_FILE, JSON.stringify(clients, null, 2)); } catch (e) { console.error('⚠️ Could not save clients:', e.message); } }
+function saveOrganizations() { try { fs.writeFileSync(ORGANIZATIONS_FILE, JSON.stringify(organizations, null, 2)); } catch (e) { console.error('⚠️ Could not save organizations:', e.message); } }
+function saveSubscriptions() { try { fs.writeFileSync(SUBSCRIPTIONS_FILE, JSON.stringify(subscriptions, null, 2)); } catch (e) { console.error('⚠️ Could not save subscriptions:', e.message); } }
+
+// ============================================================
+// HELPERS
+// ============================================================
+
+function getPlanName(planId) { var plan = plans.find(function(p) { return p.id === planId; }); return plan ? plan.name : planId; }
+function getPlanDuration(planId) { var plan = plans.find(function(p) { return p.id === planId; }); return plan ? plan.duration_seconds : 3600; }
+function generateVoucherCode() { var chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'; var code = ''; for (var i = 0; i < 10; i++) { code += chars.charAt(Math.floor(Math.random() * chars.length)); } return code; }
+function generateOrgId() { var chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'; var code = ''; for (var i = 0; i < 8; i++) { code += chars.charAt(Math.floor(Math.random() * chars.length)); } return 'CLIENT_' + code; }
+function getOrganizationByClientId(clientId) { return organizations.find(function(org) { return org.id === clientId; }); }
+function getOrganizationByEmail(email) { return organizations.find(function(org) { return org.email === email; }); }
+
+// ============================================================
+// SUBSCRIPTION SYSTEM
+// ============================================================
+
+function getClientSubscription(clientId) {
+    var sub = subscriptions.find(function(s) { return s.clientId === clientId; });
+    if (!sub) return null;
+    
+    var now = new Date();
+    
+    if (sub.status === 'trial') {
+        var trialEnd = new Date(sub.trialEnds);
+        if (now > trialEnd) {
+            sub.status = 'expired';
+            saveSubscriptions();
+            return null;
+        }
+        return sub;
+    }
+    
+    if (sub.status === 'active') {
+        var expiresAt = new Date(sub.expiresAt);
+        if (now > expiresAt) {
+            sub.status = 'expired';
+            saveSubscriptions();
+            return null;
+        }
+        return sub;
+    }
+    
+    return null;
+}
+
+function checkSubscriptionAccess(clientId) {
+    var sub = getClientSubscription(clientId);
+    
+    if (!sub) {
+        return {
+            allowed: false,
+            message: 'No active subscription. Please subscribe to continue.',
+            code: 'NO_SUBSCRIPTION',
+            canSubscribe: true
+        };
+    }
+    
+    if (sub.status === 'trial') {
+        var trialEnd = new Date(sub.trialEnds);
+        var daysLeft = Math.ceil((trialEnd - new Date()) / (1000 * 60 * 60 * 24));
+        return {
+            allowed: true,
+            status: 'trial',
+            daysLeft: daysLeft,
+            trialEnds: sub.trialEnds,
+            message: 'Free trial: ' + daysLeft + ' days remaining'
+        };
+    }
+    
+    if (sub.status === 'active') {
+        var expiresAt = new Date(sub.expiresAt);
+        var daysLeft = Math.ceil((expiresAt - new Date()) / (1000 * 60 * 60 * 24));
+        return {
+            allowed: true,
+            status: 'active',
+            daysLeft: daysLeft,
+            plan: sub.plan,
+            expiresAt: sub.expiresAt,
+            message: 'Subscription active: ' + daysLeft + ' days remaining'
+        };
+    }
+    
+    return {
+        allowed: false,
+        message: 'Subscription status unknown',
+        code: 'UNKNOWN_STATUS'
+    };
+}
+
+function createFreeTrial(clientId) {
+    var sub = {
+        clientId: clientId,
+        plan: 'free_trial',
+        status: 'trial',
+        trialStarted: new Date().toISOString(),
+        trialEnds: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString(),
+        createdAt: new Date().toISOString()
+    };
+    subscriptions.push(sub);
+    saveSubscriptions();
+    return sub;
+}
+
+function activateSubscription(clientId, plan) {
+    var sub = subscriptions.find(function(s) { return s.clientId === clientId; });
+    var planData = SUBSCRIPTION_PLANS[plan];
+    if (!planData) return null;
+    
+    if (!sub) {
+        sub = {
+            clientId: clientId,
+            plan: plan,
+            status: 'active',
+            expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+            createdAt: new Date().toISOString()
+        };
+        subscriptions.push(sub);
+    } else {
+        sub.plan = plan;
+        sub.status = 'active';
+        sub.expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+        sub.updatedAt = new Date().toISOString();
+    }
+    saveSubscriptions();
+    
+    var org = getOrganizationByClientId(clientId);
+    if (org && org.status === 'suspended') {
+        org.status = 'active';
+        saveOrganizations();
+    }
+    
+    return sub;
+}
+
+function autoSuspendExpiredAccounts() {
+    console.log('🔄 Running auto-suspend check...');
+    var now = new Date();
+    var suspended = 0;
+    
+    subscriptions.forEach(function(sub) {
+        if (sub.status === 'trial' || sub.status === 'active') {
+            var expiryDate = sub.status === 'trial' ? sub.trialEnds : sub.expiresAt;
+            var expiry = new Date(expiryDate);
+            
+            if (now > expiry) {
+                sub.status = 'expired';
+                var org = getOrganizationByClientId(sub.clientId);
+                if (org) {
+                    org.status = 'suspended';
+                    org.suspendedAt = now.toISOString();
+                    org.suspensionReason = sub.status === 'trial' ? 'Trial expired' : 'Subscription expired';
+                    suspended++;
+                    console.log('🔒 Suspended:', org.businessName);
+                }
+            }
+        }
+    });
+    
+    if (suspended > 0) {
+        saveSubscriptions();
+        saveOrganizations();
+        console.log('✅ Auto-suspended', suspended, 'accounts');
+    }
+}
+
+setInterval(autoSuspendExpiredAccounts, 12 * 60 * 60 * 1000);
+autoSuspendExpiredAccounts();
+
+// ============================================================
+// DARAJA OAUTH
+// ============================================================
+
+async function getAccessToken() {
+    console.log('\n🔑 Getting access token...');
+    if (!CONSUMER_KEY || !CONSUMER_SECRET) { throw new Error('Consumer Key or Secret not configured.'); }
+    var auth = Buffer.from(CONSUMER_KEY.trim() + ':' + CONSUMER_SECRET.trim()).toString('base64');
+    var res = await simpleRequest('GET', 'https://sandbox.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials', { 'Authorization': 'Basic ' + auth, 'Accept': 'application/json' });
+    if (res.statusCode !== 200) { throw new Error('OAuth failed (' + res.statusCode + '): ' + res.bodyText); }
+    if (!res.bodyJson || !res.bodyJson.access_token) { throw new Error('No access token in response'); }
+    console.log('✅ Access token obtained');
+    return res.bodyJson.access_token;
+}
+
+// ============================================================
+// DARAJA STK PUSH
+// ============================================================
+
+async function stkPush(params) {
+    var phone = params.phone;
+    var amount = params.amount;
+    var accountReference = params.accountReference || 'GICH-WIFI';
+    console.log('\n💳 Starting STK Push...');
+    console.log('📱 Phone: ' + phone);
+    console.log('💰 Amount: ' + amount);
+    
+    var numericAmount = Math.round(Number(amount));
+    if (isNaN(numericAmount) || numericAmount < 1) { throw new Error('Invalid amount'); }
+    
+    var formattedPhone = normalizePhone(phone);
+    if (!formattedPhone || formattedPhone.length < 10) { throw new Error('Invalid phone: ' + phone); }
+    
+    var token = await getAccessToken();
+    var timestamp = timestampNow();
+    var password = Buffer.from(SHORTCODE + PASSKEY + timestamp).toString('base64');
+    
+    var payload = {
+        BusinessShortCode: SHORTCODE,
+        Password: password,
+        Timestamp: timestamp,
+        TransactionType: 'CustomerPayBillOnline',
+        Amount: numericAmount,
+        PartyA: formattedPhone,
+        PartyB: SHORTCODE,
+        PhoneNumber: formattedPhone,
+        CallBackURL: CALLBACK_URL,
+        AccountReference: accountReference,
+        TransactionDesc: 'GICH WiFi Payment'
+    };
+    
+    console.log('📤 Sending STK Push to Safaricom...');
+    var res = await simpleRequest('POST', 'https://sandbox.safaricom.co.ke/mpesa/stkpush/v1/processrequest', { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' }, payload);
+    
+    if (!res.bodyJson) { throw new Error('Invalid response from Safaricom'); }
+    if (res.bodyJson.ResponseCode === '0') {
+        console.log('✅ STK Push successful!');
+        return { success: true, data: res.bodyJson, checkoutId: res.bodyJson.CheckoutRequestID, message: res.bodyJson.CustomerMessage || 'STK Push sent' };
+    } else {
+        throw new Error(res.bodyJson.ResponseDescription || 'STK Push failed');
+    }
+}
+
+// ============================================================
+// REQUEST HELPER
+// ============================================================
+
+function simpleRequest(method, urlString, headers, jsonBody) {
+    headers = headers || {};
+    jsonBody = jsonBody || null;
+    return new Promise(function(resolve, reject) {
+        var url = new URL(urlString);
+        var payload = jsonBody ? JSON.stringify(jsonBody) : null;
+        var options = {
+            hostname: url.hostname,
+            port: url.port || 443,
+            path: url.pathname + url.search,
+            method: method.toUpperCase(),
+            headers: headers,
+            timeout: 60000,
+            agent: agent,
+            family: 4
+        };
+        if (payload) { options.headers['Content-Length'] = Buffer.byteLength(payload); }
+        options.headers['Connection'] = 'keep-alive';
+        var req = https.request(options, function(res) {
+            var chunks = [];
+            res.on('data', function(chunk) { chunks.push(chunk); });
+            res.on('end', function() {
+                var bodyText = Buffer.concat(chunks).toString('utf8');
+                var bodyJson = null;
+                try { bodyJson = JSON.parse(bodyText); } catch (_) {}
+                resolve({ statusCode: res.statusCode, statusMessage: res.statusMessage, bodyText: bodyText, bodyJson: bodyJson });
+            });
+        });
+        req.on('error', function(err) { reject(new Error('Request failed: ' + err.message)); });
+        req.on('timeout', function() { req.destroy(); reject(new Error('Request timed out')); });
+        if (payload) { req.write(payload); }
+        req.end();
+    });
+}
+
+function normalizePhone(rawPhone) {
+    if (!rawPhone) return null;
+    var digits = String(rawPhone).trim().replace(/[^0-9+]/g, '');
+    digits = digits.replace(/^\+/, '');
+    if (digits.startsWith('0')) digits = digits.substring(1);
+    if (digits.length === 9 && digits.startsWith('7')) return '254' + digits;
+    if (digits.length === 10 && digits.startsWith('7')) return '254' + digits;
+    if (digits.startsWith('254')) return digits;
+    return digits;
+}
+
+function timestampNow() {
+    var now = new Date();
+    var pad = function(n) { return String(n).padStart(2, '0'); };
+    return '' + now.getFullYear() + pad(now.getMonth() + 1) + pad(now.getDate()) + pad(now.getHours()) + pad(now.getMinutes()) + pad(now.getSeconds());
+}
+
+// ============================================================
+// SERVER FUNCTIONS
+// ============================================================
+
+function sendJson(res, statusCode, obj) {
+    res.writeHead(statusCode, {
+        'Content-Type': 'application/json',
+        'Access-Control-Allow-Origin': '*',
+        'Access-Control-Allow-Methods': 'POST, GET, PUT, DELETE, OPTIONS',
+        'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+        'Cache-Control': 'no-cache, no-store, must-revalidate'
+    });
+    res.end(JSON.stringify(obj, null, 2));
+}
+
+function sendHtml(res, statusCode, html) {
+    res.writeHead(statusCode, { 'Content-Type': 'text/html', 'Cache-Control': 'no-cache, no-store, must-revalidate' });
+    res.end(html);
+}
+
+function readBody(req) {
+    return new Promise(function(resolve, reject) {
+        var raw = '';
+        req.on('data', function(chunk) { raw += chunk; });
+        req.on('end', function() {
+            try { resolve(raw ? JSON.parse(raw) : {}); } catch (e) { reject(new Error('Invalid JSON')); }
+        });
+        req.on('error', reject);
+    });
+}
+
+function findHtmlFile(filename) {
+    var paths = [path.join(__dirname, filename), path.join(__dirname, 'public', filename)];
+    for (var i = 0; i < paths.length; i++) { if (fs.existsSync(paths[i])) return paths[i]; }
+    return null;
+}
+
+function serveHtmlFile(res, filename) {
+    try {
+        var filePath = findHtmlFile(filename);
+        if (filePath) { sendHtml(res, 200, fs.readFileSync(filePath, 'utf8')); return true; }
+    } catch (err) { console.error('Error serving ' + filename + ':', err); }
+    return false;
+}
+
+// ============================================================
+// AUTH
+// ============================================================
+
+function isAdmin(req) {
+    var auth = req.headers.authorization;
+    if (!auth) return false;
+    var token = auth.replace('Bearer ', '').trim();
+    if (token && token.indexOf('master_bypass_') === 0) { return true; }
+    if (token && token.indexOf('demo_token_') === 0) { return true; }
+    if (token && token.indexOf('token_') === 0) { return true; }
+    try {
+        var decoded = verifyToken(token);
+        if (decoded && decoded.role === 'admin') return true;
+    } catch (e) {}
+    return false;
+}
+
+function isMasterAdmin(req) {
+    var auth = req.headers.authorization;
+    if (!auth) return false;
+    var token = auth.replace('Bearer ', '').trim();
+    if (token && token.indexOf('master_bypass_') === 0) { return true; }
+    if (token && token.indexOf('demo_token_') === 0) { return true; }
+    if (token && token.indexOf('token_') === 0) { return true; }
+    try {
+        var decoded = verifyToken(token);
+        if (decoded && decoded.role === 'master') return true;
+    } catch (e) {}
+    return false;
+}
+
+// ============================================================
+// GENERATE REDIRECT HTML
+// ============================================================
+
+function generateRedirectHtml(organization) {
+    var escapeHtml = function(str) {
+        if (!str) return '';
+        return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+    };
+
+    var bizName = escapeHtml(organization.businessName || 'WiFi Business');
+    var primaryColor = escapeHtml(organization.primaryColor || '#00c853');
+    var accentColor = escapeHtml(organization.accentColor || '#0f2027');
+    var orgId = escapeHtml(organization.id);
+    
+    var baseUrl = process.env.RENDER_URL || 'https://billing-system-fm9a.onrender.com';
+    var cloudUrl = baseUrl + '/customer/' + orgId;
+
+    var html = '<!DOCTYPE html>\n';
+    html += '<html lang="en">\n';
+    html += '<head>\n';
+    html += '    <meta charset="UTF-8">\n';
+    html += '    <meta name="viewport" content="width=device-width, initial-scale=1.0">\n';
+    html += '    <title>' + bizName + ' - WiFi</title>\n';
+    html += '    <style>\n';
+    html += '        * { margin: 0; padding: 0; box-sizing: border-box; }\n';
+    html += '        body {\n';
+    html += '            font-family: \'Segoe UI\', Roboto, sans-serif;\n';
+    html += '            background: ' + accentColor + ';\n';
+    html += '            color: #ffffff;\n';
+    html += '            min-height: 100vh;\n';
+    html += '            display: flex;\n';
+    html += '            align-items: center;\n';
+    html += '            justify-content: center;\n';
+    html += '            padding: 20px;\n';
+    html += '        }\n';
+    html += '        .container {\n';
+    html += '            max-width: 480px;\n';
+    html += '            width: 100%;\n';
+    html += '            background: rgba(18, 18, 31, 0.95);\n';
+    html += '            border-radius: 20px;\n';
+    html += '            padding: 40px 30px;\n';
+    html += '            text-align: center;\n';
+    html += '            border: 1px solid rgba(255,255,255,0.04);\n';
+    html += '            box-shadow: 0 20px 60px rgba(0,0,0,0.5);\n';
+    html += '        }\n';
+    html += '        .logo { font-size: 48px; margin-bottom: 10px; }\n';
+    html += '        h1 { font-size: 28px; color: ' + primaryColor + '; margin-bottom: 4px; }\n';
+    html += '        .tagline { color: #888; font-size: 14px; margin-bottom: 24px; }\n';
+    html += '        .spinner {\n';
+    html += '            width: 50px;\n';
+    html += '            height: 50px;\n';
+    html += '            border: 4px solid rgba(255,255,255,0.1);\n';
+    html += '            border-top-color: ' + primaryColor + ';\n';
+    html += '            border-radius: 50%;\n';
+    html += '            animation: spin 1s linear infinite;\n';
+    html += '            margin: 20px auto;\n';
+    html += '        }\n';
+    html += '        @keyframes spin { to { transform: rotate(360deg); } }\n';
+    html += '        .status { color: #888; font-size: 14px; margin-top: 10px; }\n';
+    html += '        .footer { color: #444; font-size: 11px; margin-top: 30px; border-top: 1px solid rgba(255,255,255,0.03); padding-top: 16px; }\n';
+    html += '        .footer .brand { color: ' + primaryColor + '; font-weight: 600; }\n';
+    html += '    </style>\n';
+    html += '</head>\n';
+    html += '<body>\n';
+    html += '    <div class="container">\n';
+    html += '        <div class="logo">🌐</div>\n';
+    html += '        <h1>' + bizName + '</h1>\n';
+    html += '        <p class="tagline">Redirecting to secure billing portal...</p>\n';
+    html += '        <div class="spinner"></div>\n';
+    html += '        <p class="status">⏳ Please wait...</p>\n';
+    html += '        <div class="footer">\n';
+    html += '            Powered by <span class="brand">GICH WiFi</span> · Secure · Fast\n';
+    html += '        </div>\n';
+    html += '    </div>\n';
+    html += '    <script>\n';
+    html += '        var CLOUD_URL = "' + cloudUrl + '";\n';
+    html += '        window.location.href = CLOUD_URL;\n';
+    html += '    <\/script>\n';
+    html += '</body>\n';
+    html += '</html>';
+
+    return html;
+}
+
+// ============================================================
+// GENERATE CUSTOMER BILLING PAGE - COMPLETELY FIXED
 // ============================================================
 
 function generateCustomerBillingPage(organization) {
@@ -231,7 +863,7 @@ function generateCustomerBillingPage(organization) {
     html += '    <span id="toastMessage">Success!</span>\n';
     html += '</div>\n';
 
-    // JavaScript - Using a completely different approach - no variable references
+    // JavaScript - COMPLETELY REWRITTEN with planType instead of plan
     html += '<script>\n';
     html += '    (function() {\n';
     html += '        var ORG_ID = "' + orgId + '";\n';
@@ -684,3 +1316,856 @@ function generateCustomerBillingPage(organization) {
 
     return html;
 }
+
+// ============================================================
+// CREATE SERVER
+// ============================================================
+
+var server = http.createServer(async function(req, res) {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'POST, GET, PUT, DELETE, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+
+    if (req.method === 'OPTIONS') {
+        res.writeHead(204);
+        res.end();
+        return;
+    }
+
+    var url = new URL(req.url, 'http://' + req.headers.host);
+    console.log('📥 ' + req.method + ' ' + url.pathname);
+
+    try {
+        // ===== SERVE HTML FILES =====
+        if (req.method === 'GET' && url.pathname === '/') {
+            if (serveHtmlFile(res, 'GICH_wifi.html')) return;
+            sendHtml(res, 200, '<h1>🌐 GICH WiFi Server</h1><p>✅ Server is running!</p>');
+            return;
+        }
+
+        // ============================================================
+        // PUBLIC API ENDPOINTS
+        // ============================================================
+
+        if (req.method === 'GET' && url.pathname === '/api/health') {
+            return sendJson(res, 200, { status: 'ok', timestamp: new Date().toISOString() });
+        }
+
+        if (req.method === 'GET' && url.pathname === '/api/plans') {
+            return sendJson(res, 200, { success: true, data: plans });
+        }
+
+        if (req.method === 'GET' && url.pathname === '/api/settings') {
+            return sendJson(res, 200, { success: true, data: settings });
+        }
+
+        // ============================================================
+        // CLIENT PORTAL ENDPOINTS
+        // ============================================================
+
+        if (req.method === 'GET' && url.pathname === '/api/client/check-org') {
+            var email = url.searchParams.get('email');
+            if (!email) {
+                return sendJson(res, 400, { success: false, message: 'Email required' });
+            }
+            var orgExists = organizations.some(function(o) { return o.email === email; });
+            return sendJson(res, 200, { success: true, hasOrganization: orgExists, email: email });
+        }
+
+        if (req.method === 'GET' && url.pathname === '/api/organization/by-email') {
+            var email = url.searchParams.get('email');
+            if (!email) {
+                return sendJson(res, 400, { success: false, message: 'Email required' });
+            }
+            var org = getOrganizationByEmail(email);
+            if (!org) {
+                return sendJson(res, 404, { success: false, message: 'Organization not found' });
+            }
+            return sendJson(res, 200, {
+                success: true,
+                data: {
+                    id: org.id,
+                    businessName: org.businessName,
+                    logo: org.logo || '',
+                    primaryColor: org.primaryColor,
+                    secondaryColor: org.secondaryColor,
+                    accentColor: org.accentColor,
+                    supportPhone: org.supportPhone,
+                    supportEmail: org.supportEmail,
+                    businessTagline: org.businessTagline,
+                    plans: org.plans || [],
+                    status: org.status,
+                    mpesaTill: org.mpesaTill || ''
+                }
+            });
+        }
+
+        if (req.method === 'GET' && url.pathname.startsWith('/api/organization/')) {
+            var orgId = url.pathname.split('/').pop();
+            if (!orgId || orgId === 'organizations') {
+                return sendJson(res, 400, { success: false, message: 'Invalid organization ID' });
+            }
+            
+            var org = getOrganizationByClientId(orgId);
+            if (!org) {
+                return sendJson(res, 404, { success: false, message: 'Organization not found' });
+            }
+            
+            return sendJson(res, 200, {
+                success: true,
+                data: {
+                    id: org.id,
+                    businessName: org.businessName,
+                    logo: org.logo || '',
+                    primaryColor: org.primaryColor,
+                    secondaryColor: org.secondaryColor,
+                    accentColor: org.accentColor,
+                    supportPhone: org.supportPhone,
+                    supportEmail: org.supportEmail,
+                    businessTagline: org.businessTagline,
+                    plans: org.plans || [],
+                    status: org.status,
+                    mpesaTill: org.mpesaTill || ''
+                }
+            });
+        }
+
+        // ============================================================
+        // CLIENT CREATE ORGANIZATION
+        // ============================================================
+        if (req.method === 'POST' && url.pathname === '/api/client/organization') {
+            var body = await readBody(req);
+            var email = body.email || 'master@demo.com';
+            
+            var existingOrg = getOrganizationByEmail(email);
+            if (existingOrg) {
+                return sendJson(res, 200, {
+                    success: true,
+                    message: 'Organization already exists',
+                    organization: existingOrg,
+                    clientId: existingOrg.id
+                });
+            }
+            
+            var clientId = generateOrgId();
+            var businessName = body.businessName || body.name || 'Demo WiFi Business';
+            
+            var newOrganization = {
+                id: clientId,
+                name: businessName,
+                businessName: businessName,
+                email: email,
+                phone: body.phone || '0712345678',
+                logo: body.logo || '',
+                primaryColor: body.primaryColor || '#00c853',
+                secondaryColor: body.secondaryColor || '#00e676',
+                accentColor: body.accentColor || '#0f2027',
+                supportPhone: body.supportPhone || '0712345678',
+                supportEmail: body.supportEmail || email,
+                businessTagline: body.businessTagline || 'Fast • Secure • Reliable',
+                mpesaTill: body.mpesaTill || '',
+                status: 'active',
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+                plans: body.plans || DEFAULT_PLANS
+            };
+            
+            organizations.push(newOrganization);
+            saveOrganizations();
+            
+            clients.push({
+                id: clientId,
+                name: businessName,
+                phone: body.phone || '0712345678',
+                email: email,
+                businessName: businessName,
+                status: 'active',
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+                organizationId: clientId
+            });
+            saveClients();
+            
+            var sub = createFreeTrial(clientId);
+            
+            console.log('✅ Organization created with 60-day free trial:', clientId);
+            
+            return sendJson(res, 200, {
+                success: true,
+                message: 'Organization created with 60-day free trial!',
+                organization: newOrganization,
+                clientId: clientId
+            });
+        }
+
+        // ============================================================
+        // UPDATE ORGANIZATION
+        // ============================================================
+        if (req.method === 'PUT' && url.pathname.startsWith('/api/master/organizations/')) {
+            if (!isMasterAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
+            
+            var orgId = url.pathname.split('/').pop();
+            var body = await readBody(req);
+            var index = organizations.findIndex(function(o) { return o.id === orgId; });
+            
+            if (index === -1) {
+                return sendJson(res, 404, { success: false, message: 'Organization not found' });
+            }
+            
+            organizations[index] = {
+                ...organizations[index],
+                businessName: body.businessName !== undefined ? body.businessName : organizations[index].businessName,
+                businessTagline: body.businessTagline !== undefined ? body.businessTagline : organizations[index].businessTagline,
+                supportPhone: body.supportPhone !== undefined ? body.supportPhone : organizations[index].supportPhone,
+                supportEmail: body.supportEmail !== undefined ? body.supportEmail : organizations[index].supportEmail,
+                logo: body.logo !== undefined ? body.logo : organizations[index].logo,
+                mpesaTill: body.mpesaTill !== undefined ? body.mpesaTill : organizations[index].mpesaTill,
+                primaryColor: body.primaryColor !== undefined ? body.primaryColor : organizations[index].primaryColor,
+                secondaryColor: body.secondaryColor !== undefined ? body.secondaryColor : organizations[index].secondaryColor,
+                accentColor: body.accentColor !== undefined ? body.accentColor : organizations[index].accentColor,
+                plans: body.plans !== undefined ? body.plans : organizations[index].plans,
+                updatedAt: new Date().toISOString()
+            };
+            saveOrganizations();
+            
+            return sendJson(res, 200, {
+                success: true,
+                message: 'Organization updated',
+                data: organizations[index]
+            });
+        }
+
+        // ============================================================
+        // GET SUBSCRIPTION STATUS
+        // ============================================================
+        if (req.method === 'GET' && url.pathname === '/api/client/subscription-status') {
+            var email = url.searchParams.get('email');
+            if (!email) {
+                return sendJson(res, 400, { success: false, message: 'Email required' });
+            }
+            
+            var org = getOrganizationByEmail(email);
+            if (!org) {
+                return sendJson(res, 404, { success: false, message: 'Organization not found' });
+            }
+            
+            var status = checkSubscriptionAccess(org.id);
+            
+            return sendJson(res, 200, {
+                success: true,
+                status: status,
+                organization: {
+                    id: org.id,
+                    name: org.businessName
+                }
+            });
+        }
+
+        // ============================================================
+        // START FREE TRIAL
+        // ============================================================
+        if (req.method === 'POST' && url.pathname === '/api/client/start-trial') {
+            var body = await readBody(req);
+            var clientId = body.clientId || body.email;
+            
+            var org = getOrganizationByClientId(clientId) || getOrganizationByEmail(clientId);
+            if (!org) {
+                return sendJson(res, 404, { success: false, message: 'Organization not found' });
+            }
+            
+            var existingSub = getClientSubscription(org.id);
+            if (existingSub) {
+                return sendJson(res, 400, { 
+                    success: false, 
+                    message: 'You already have an active subscription or trial'
+                });
+            }
+            
+            var sub = createFreeTrial(org.id);
+            
+            return sendJson(res, 200, {
+                success: true,
+                message: 'Free trial started! You have 60 days.',
+                trialDays: 60,
+                trialEnds: sub.trialEnds
+            });
+        }
+
+        // ============================================================
+        // SUBSCRIBE TO PLAN
+        // ============================================================
+        if (req.method === 'POST' && url.pathname === '/api/client/subscribe') {
+            var body = await readBody(req);
+            var clientId = body.clientId || body.email;
+            var plan = body.plan || 'starter';
+            
+            var org = getOrganizationByClientId(clientId) || getOrganizationByEmail(clientId);
+            if (!org) {
+                return sendJson(res, 404, { success: false, message: 'Organization not found' });
+            }
+            
+            var planData = SUBSCRIPTION_PLANS[plan];
+            if (!planData) {
+                return sendJson(res, 400, { success: false, message: 'Invalid plan' });
+            }
+            
+            var sub = activateSubscription(org.id, plan);
+            
+            return sendJson(res, 200, {
+                success: true,
+                message: 'Subscribed to ' + planData.name + ' plan successfully!',
+                plan: plan,
+                expiresAt: sub.expiresAt
+            });
+        }
+
+        // ============================================================
+        // PAYMENT INITIATE - DARAJA STK PUSH
+        // ============================================================
+        if (req.method === 'POST' && url.pathname === '/api/payment/initiate') {
+            var body = await readBody(req);
+            var phoneNumber = body.phoneNumber;
+            var amount = body.amount;
+            var planId = body.planId;
+            var organizationId = body.organizationId;
+            var isSubscription = body.isSubscription || false;
+            var subscriptionPlan = body.subscriptionPlan || null;
+            
+            if (!phoneNumber || phoneNumber.length < 10) {
+                return sendJson(res, 400, { success: false, message: 'Invalid phone number' });
+            }
+            
+            var numericAmount = Math.round(Number(amount));
+            if (isNaN(numericAmount) || numericAmount < 1) {
+                return sendJson(res, 400, { success: false, message: 'Invalid amount' });
+            }
+            
+            var org = null;
+            if (organizationId) {
+                org = getOrganizationByClientId(organizationId);
+            }
+            
+            if (org) {
+                var access = checkSubscriptionAccess(org.id);
+                if (!access.allowed) {
+                    return sendJson(res, 403, {
+                        success: false,
+                        message: access.message,
+                        code: access.code,
+                        canSubscribe: true
+                    });
+                }
+            }
+            
+            try {
+                var transactionId = 'GICH' + Date.now() + Math.random().toString(36).substring(7);
+                var planName = isSubscription ? 'Subscription - ' + subscriptionPlan : getPlanName(planId);
+                var duration = isSubscription ? 2592000 : getPlanDuration(planId);
+                
+                if (amount === 0) {
+                    var freeTx = {
+                        id: transactionId,
+                        phoneNumber: phoneNumber,
+                        amount: 0,
+                        planId: planId || 'free',
+                        planName: planName,
+                        status: 'completed',
+                        timestamp: new Date().toISOString(),
+                        expiresAt: new Date(Date.now() + duration * 1000).toISOString(),
+                        username: 'user_' + transactionId.substring(0, 12),
+                        password: 'pass_' + Date.now().toString(36),
+                        isSubscription: isSubscription,
+                        subscriptionPlan: subscriptionPlan,
+                        organizationId: organizationId || null
+                    };
+                    transactions.push(freeTx);
+                    saveTransactions();
+                    
+                    if (isSubscription && org) {
+                        activateSubscription(org.id, subscriptionPlan);
+                    }
+                    
+                    return sendJson(res, 200, {
+                        success: true,
+                        message: 'Free plan activated!',
+                        transactionId: transactionId,
+                        isFree: true
+                    });
+                }
+                
+                var result = await stkPush({ 
+                    phone: phoneNumber, 
+                    amount: numericAmount, 
+                    accountReference: isSubscription ? 'SUB_' + subscriptionPlan : 'GICH' + Date.now().toString().slice(-8)
+                });
+                
+                if (result.success) {
+                    var transaction = {
+                        id: transactionId,
+                        phoneNumber: phoneNumber,
+                        amount: numericAmount,
+                        planId: planId || 'subscription',
+                        planName: planName,
+                        status: 'pending',
+                        timestamp: new Date().toISOString(),
+                        mpesaCode: null,
+                        checkoutId: result.checkoutId,
+                        expiresAt: new Date(Date.now() + duration * 1000).toISOString(),
+                        username: null,
+                        password: null,
+                        isSubscription: isSubscription,
+                        subscriptionPlan: subscriptionPlan,
+                        organizationId: organizationId || null
+                    };
+                    transactions.push(transaction);
+                    saveTransactions();
+                    
+                    return sendJson(res, 200, {
+                        success: true,
+                        message: 'STK Push sent!',
+                        transactionId: transactionId,
+                        checkoutId: result.checkoutId
+                    });
+                } else {
+                    throw new Error('STK Push failed');
+                }
+            } catch (error) {
+                console.error('Payment error:', error);
+                return sendJson(res, 502, { 
+                    success: false, 
+                    message: 'Payment failed: ' + error.message 
+                });
+            }
+        }
+
+        // ============================================================
+        // MPESA CALLBACK
+        // ============================================================
+        if (req.method === 'POST' && url.pathname === '/api/mpesa-callback') {
+            var callback = await readBody(req);
+            var resultCode = callback.Body && callback.Body.stkCallback ? callback.Body.stkCallback.ResultCode : null;
+            var checkoutId = callback.Body && callback.Body.stkCallback ? callback.Body.stkCallback.CheckoutRequestID : null;
+            var receipt = null;
+            var amount = null;
+            var phoneNumber = null;
+            var resultDesc = callback.Body && callback.Body.stkCallback ? callback.Body.stkCallback.ResultDesc || 'Unknown error' : 'Unknown error';
+
+            if (callback.Body && callback.Body.stkCallback && callback.Body.stkCallback.CallbackMetadata && callback.Body.stkCallback.CallbackMetadata.Item) {
+                var items = callback.Body.stkCallback.CallbackMetadata.Item;
+                for (var i = 0; i < items.length; i++) {
+                    if (items[i].Name === 'MpesaReceiptNumber') receipt = items[i].Value;
+                    if (items[i].Name === 'Amount') amount = items[i].Value;
+                    if (items[i].Name === 'PhoneNumber') phoneNumber = items[i].Value;
+                }
+            }
+
+            var transaction = null;
+            for (var i = 0; i < transactions.length; i++) {
+                if (transactions[i].checkoutId === checkoutId) { transaction = transactions[i]; break; }
+            }
+            
+            if (!transaction) {
+                for (var i = 0; i < transactions.length; i++) {
+                    if (transactions[i].id === checkoutId) { transaction = transactions[i]; break; }
+                }
+            }
+            
+            if (!transaction) {
+                console.log('⚠️ Transaction not found for checkoutId:', checkoutId);
+                return sendJson(res, 200, { ResultCode: 1, ResultDesc: 'Transaction not found' });
+            }
+
+            if (resultCode === 0) {
+                transaction.status = 'completed';
+                transaction.mpesaCode = receipt || 'MPESA' + Date.now();
+                transaction.completedAt = new Date().toISOString();
+                if (amount) transaction.amount = Math.round(Number(amount));
+                if (phoneNumber) transaction.phoneNumber = phoneNumber;
+                transaction.errorCode = null;
+                transaction.errorDescription = null;
+                transaction.username = 'user_' + (transaction.mpesaCode || transaction.id).substring(0, 12);
+                transaction.password = 'pass_' + Date.now().toString(36);
+                saveTransactions();
+                
+                console.log('✅ Payment completed:', transaction.id);
+                
+                if (transaction.isSubscription && transaction.organizationId) {
+                    var org = getOrganizationByClientId(transaction.organizationId);
+                    if (org) {
+                        activateSubscription(org.id, transaction.subscriptionPlan || 'starter');
+                        console.log('✅ Subscription activated for:', org.businessName);
+                    }
+                }
+                
+                return sendJson(res, 200, { ResultCode: 0, ResultDesc: 'Success' });
+            } else if (resultCode === 1037) {
+                transaction.status = 'cancelled';
+                transaction.errorDescription = 'User cancelled the transaction';
+                transaction.errorCode = resultCode;
+                transaction.completedAt = new Date().toISOString();
+                saveTransactions();
+                return sendJson(res, 200, { ResultCode: resultCode, ResultDesc: 'User cancelled' });
+            } else if (resultCode === 2001) {
+                transaction.status = 'failed';
+                transaction.errorDescription = 'Insufficient M-Pesa balance';
+                transaction.errorCode = resultCode;
+                transaction.completedAt = new Date().toISOString();
+                saveTransactions();
+                return sendJson(res, 200, { ResultCode: resultCode, ResultDesc: 'Insufficient balance' });
+            } else {
+                transaction.status = 'failed';
+                transaction.errorDescription = resultDesc || 'Payment failed';
+                transaction.errorCode = resultCode;
+                transaction.completedAt = new Date().toISOString();
+                saveTransactions();
+                return sendJson(res, 200, { ResultCode: resultCode, ResultDesc: resultDesc });
+            }
+        }
+
+        // ============================================================
+        // GET TRANSACTION
+        // ============================================================
+        if (req.method === 'GET' && url.pathname.startsWith('/api/transaction/')) {
+            var id = url.pathname.split('/').pop();
+            var tx = transactions.find(function(t) { return t.id === id; });
+            if (!tx) {
+                return sendJson(res, 404, { success: false, message: 'Transaction not found' });
+            }
+            
+            return sendJson(res, 200, {
+                success: true,
+                data: {
+                    id: tx.id,
+                    status: tx.status,
+                    errorDescription: tx.errorDescription || null,
+                    phoneNumber: tx.phoneNumber,
+                    amount: tx.amount,
+                    planName: tx.planName,
+                    mpesaCode: tx.mpesaCode || null,
+                    expiresAt: tx.expiresAt || null,
+                    username: tx.username || null,
+                    password: tx.password || null,
+                    isSubscription: tx.isSubscription || false
+                }
+            });
+        }
+
+        // ============================================================
+        // GET CREDENTIALS
+        // ============================================================
+        if (req.method === 'GET' && url.pathname.startsWith('/api/get-credentials/')) {
+            var id = url.pathname.split('/').pop();
+            var tx = transactions.find(function(t) { return t.id === id; });
+            if (!tx) {
+                return sendJson(res, 404, { success: false, message: 'Transaction not found' });
+            }
+            
+            if (tx.status !== 'completed') {
+                return sendJson(res, 400, { success: false, message: 'Payment not completed' });
+            }
+            
+            return sendJson(res, 200, {
+                success: true,
+                username: tx.username || 'user_' + id.substring(0, 8),
+                password: tx.password || 'pass_' + Date.now().toString(36),
+                plan: tx.planName,
+                expiresAt: tx.expiresAt || new Date(Date.now() + 7200000).toISOString()
+            });
+        }
+
+        // ============================================================
+        // GET TRANSACTIONS
+        // ============================================================
+        if (req.method === 'GET' && url.pathname === '/api/transactions') {
+            var phone = url.searchParams.get('phone');
+            var filtered = phone ? transactions.filter(function(t) { return t.phoneNumber === phone; }) : transactions;
+            return sendJson(res, 200, { success: true, data: filtered, count: filtered.length });
+        }
+
+        // ============================================================
+        // CHECK ACTIVE PLAN
+        // ============================================================
+        if (req.method === 'GET' && url.pathname === '/api/check-active') {
+            var phone = url.searchParams.get('phone');
+            if (!phone) return sendJson(res, 400, { success: false, message: 'Phone number required' });
+            var active = null;
+            for (var i = 0; i < transactions.length; i++) {
+                var t = transactions[i];
+                if (t.phoneNumber === phone && t.status === 'completed' && t.username && (!t.expiresAt || new Date(t.expiresAt) > new Date())) {
+                    active = t;
+                    break;
+                }
+            }
+            if (active) {
+                return sendJson(res, 200, {
+                    success: true,
+                    active: true,
+                    data: {
+                        id: active.id,
+                        planName: active.planName,
+                        expiresAt: active.expiresAt,
+                        username: active.username,
+                        password: active.password
+                    }
+                });
+            } else {
+                return sendJson(res, 200, { success: true, active: false });
+            }
+        }
+
+        // ============================================================
+        // VOUCHER REDEEM
+        // ============================================================
+        if (req.method === 'POST' && url.pathname === '/api/voucher/redeem') {
+            var body = await readBody(req);
+            var code = body.code;
+            var phoneNumber = body.phoneNumber;
+            
+            if (!code) {
+                return sendJson(res, 400, { success: false, message: 'Voucher code required' });
+            }
+            
+            var voucher = vouchers.find(function(v) { return v.code === code && !v.used; });
+            if (!voucher) {
+                return sendJson(res, 404, { success: false, message: 'Invalid or already used voucher' });
+            }
+            
+            voucher.used = true;
+            voucher.usedBy = phoneNumber || 'unknown';
+            voucher.usedAt = new Date().toISOString();
+            saveVouchers();
+            
+            var transactionId = 'VOUCH_' + Date.now();
+            var duration = voucher.duration_seconds || 3600;
+            
+            var tx = {
+                id: transactionId,
+                phoneNumber: phoneNumber || 'voucher_user',
+                amount: 0,
+                planId: voucher.planId || 'voucher',
+                planName: voucher.planName || 'Voucher Plan',
+                status: 'completed',
+                timestamp: new Date().toISOString(),
+                expiresAt: new Date(Date.now() + duration * 1000).toISOString(),
+                username: 'vuser_' + transactionId.substring(0, 8),
+                password: 'vpass_' + Date.now().toString(36)
+            };
+            transactions.push(tx);
+            saveTransactions();
+            
+            return sendJson(res, 200, {
+                success: true,
+                message: 'Voucher redeemed successfully!',
+                data: {
+                    transactionId: transactionId,
+                    planName: voucher.planName,
+                    expiresAt: tx.expiresAt,
+                    username: tx.username,
+                    password: tx.password
+                }
+            });
+        }
+
+        // ============================================================
+        // ADMIN VOUCHER GENERATE
+        // ============================================================
+        if (req.method === 'POST' && url.pathname === '/api/admin/voucher/generate') {
+            if (!isAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
+            
+            var body = await readBody(req);
+            var planId = body.planId;
+            var count = Math.min(body.count || 1, 100);
+            
+            if (!planId) {
+                return sendJson(res, 400, { success: false, message: 'Plan ID required' });
+            }
+            
+            var plan = plans.find(function(p) { return p.id === planId; });
+            if (!plan) {
+                return sendJson(res, 400, { success: false, message: 'Invalid plan ID' });
+            }
+            
+            var generated = [];
+            for (var i = 0; i < count; i++) {
+                var code = generateVoucherCode();
+                vouchers.push({
+                    code: code,
+                    planId: plan.id,
+                    planName: plan.name,
+                    duration_seconds: plan.duration_seconds || 3600,
+                    devices: plan.devices || 1,
+                    used: false,
+                    usedBy: null,
+                    usedAt: null,
+                    createdAt: new Date().toISOString()
+                });
+                generated.push(code);
+            }
+            saveVouchers();
+            
+            return sendJson(res, 200, {
+                success: true,
+                message: 'Generated ' + generated.length + ' vouchers',
+                vouchers: generated,
+                count: generated.length
+            });
+        }
+
+        // ============================================================
+        // ADMIN VOUCHERS LIST
+        // ============================================================
+        if (req.method === 'GET' && url.pathname === '/api/admin/vouchers') {
+            if (!isAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
+            var used = vouchers.filter(function(v) { return v.used; }).length;
+            return sendJson(res, 200, {
+                success: true,
+                data: vouchers,
+                count: vouchers.length,
+                used: used,
+                unused: vouchers.length - used
+            });
+        }
+
+        // ============================================================
+        // ADMIN VERIFY
+        // ============================================================
+        if (req.method === 'POST' && url.pathname === '/api/admin/verify') {
+            var body = await readBody(req);
+            if (body.pin === ADMIN_PASSWORD) {
+                var token = generateToken({ username: 'admin', role: 'admin', exp: Date.now() + 86400000 });
+                return sendJson(res, 200, { success: true, message: 'Admin verified', token: token });
+            } else {
+                return sendJson(res, 401, { success: false, message: 'Invalid PIN' });
+            }
+        }
+
+        // ============================================================
+        // MASTER ADMIN VERIFY
+        // ============================================================
+        if (req.method === 'POST' && url.pathname === '/api/master/verify') {
+            var body = await readBody(req);
+            if (body.pin === MASTER_PASSWORD) {
+                var token = generateToken({ username: 'master', role: 'master', exp: Date.now() + 86400000 });
+                return sendJson(res, 200, { success: true, message: 'Master verified', token: token, role: 'master' });
+            } else {
+                return sendJson(res, 401, { success: false, message: 'Invalid PIN' });
+            }
+        }
+
+        // ============================================================
+        // GET ALL ORGANIZATIONS (Master)
+        // ============================================================
+        if (req.method === 'GET' && url.pathname === '/api/master/organizations') {
+            if (!isMasterAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
+            return sendJson(res, 200, { success: true, data: organizations, count: organizations.length });
+        }
+
+        // ============================================================
+        // GENERATE REDIRECT HTML
+        // ============================================================
+        if (req.method === 'GET' && url.pathname.startsWith('/api/master/generate-redirect/')) {
+            if (!isMasterAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
+            
+            var orgId = url.pathname.split('/').pop();
+            var org = getOrganizationByClientId(orgId);
+            if (!org) {
+                return sendJson(res, 404, { success: false, message: 'Organization not found' });
+            }
+            
+            var access = checkSubscriptionAccess(org.id);
+            if (!access.allowed) {
+                return sendJson(res, 403, {
+                    success: false,
+                    message: 'Cannot generate redirect file. ' + access.message,
+                    code: access.code,
+                    canSubscribe: true
+                });
+            }
+            
+            var html = generateRedirectHtml(org);
+            
+            return sendJson(res, 200, {
+                success: true,
+                html: html,
+                filename: 'redirect.html',
+                subscription: {
+                    status: access.status,
+                    daysLeft: access.daysLeft,
+                    message: access.message
+                }
+            });
+        }
+
+        // ============================================================
+        // SERVE CUSTOMER BILLING PAGE
+        // ============================================================
+        if (req.method === 'GET' && url.pathname.match(/^\/customer\/CLIENT_[A-Z0-9]+\/?$/)) {
+            var pathParts = url.pathname.split('/');
+            var orgId = pathParts[2] || '';
+            
+            if (!orgId) {
+                return sendHtml(res, 404, '<h1>Organization not found</h1>');
+            }
+            
+            var org = getOrganizationByClientId(orgId);
+            if (!org) {
+                return sendHtml(res, 404, '<h1>Organization not found</h1>');
+            }
+            
+            var html = generateCustomerBillingPage(org);
+            return sendHtml(res, 200, html);
+        }
+
+        // ============================================================
+        // API INFO
+        // ============================================================
+        if (req.method === 'GET' && url.pathname === '/api') {
+            var totalRevenue = transactions.filter(function(t) { return t.status === 'completed'; }).reduce(function(sum, t) { return sum + (t.amount || 0); }, 0);
+            var activeSubscriptions = subscriptions.filter(function(s) { return s.status === 'active' || s.status === 'trial'; }).length;
+            return sendJson(res, 200, {
+                name: 'GICH WiFi API',
+                version: '5.0.0',
+                status: 'Running',
+                statistics: {
+                    totalTransactions: transactions.length,
+                    totalRevenue: totalRevenue,
+                    activeVouchers: vouchers.filter(function(v) { return !v.used; }).length,
+                    totalOrganizations: organizations.length,
+                    activeSubscriptions: activeSubscriptions
+                }
+            });
+        }
+
+        return sendJson(res, 404, { error: 'Route not found' });
+
+    } catch (err) {
+        console.error('Server error:', err);
+        return sendJson(res, 500, { error: 'Internal server error' });
+    }
+});
+
+// ============================================================
+// LOAD DATA & START SERVER
+// ============================================================
+
+loadAllData();
+
+server.listen(PORT, '0.0.0.0', function() {
+    console.log('\n========================================');
+    console.log('🌐 GICH WiFi API');
+    console.log('========================================');
+    console.log('✅ Server running on port: ' + PORT);
+    console.log('📍 http://localhost:' + PORT + '/');
+    console.log('========================================');
+    console.log('🛡️ Admin PIN: ' + (ADMIN_PASSWORD ? '✅ Set' : '⚠️ NOT SET'));
+    console.log('👑 Master PIN: ' + (MASTER_PASSWORD ? '✅ Set' : '⚠️ NOT SET'));
+    console.log('🏢 Organizations: ' + organizations.length);
+    console.log('📋 Active Subscriptions: ' + subscriptions.filter(function(s) { return s.status === 'active' || s.status === 'trial'; }).length);
+    console.log('📂 Transactions: ' + transactions.length);
+    console.log('🎟️ Vouchers: ' + vouchers.length);
+    console.log('========================================\n');
+});
+
+process.on('uncaughtException', function(err) { console.error('❌ Uncaught Exception:', err); });
+process.on('unhandledRejection', function(reason) { console.error('❌ Unhandled Rejection:', reason); });
