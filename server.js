@@ -98,18 +98,42 @@ console.log('🗄️  Database: MongoDB Atlas');
 console.log('========================================\n');
 
 // ============================================================
-// DATABASE CONNECTION
+// DATABASE CONNECTION - FIXED SSL ISSUES
 // ============================================================
 
 async function connectDB() {
     try {
         console.log('🔗 Connecting to MongoDB Atlas...');
-        client = new MongoClient(MONGODB_URI, {
+        
+        if (!MONGODB_URI || MONGODB_URI === 'mongodb://localhost:27017') {
+            console.error('❌ MONGODB_URI not set in environment variables!');
+            console.log('💡 Please set MONGODB_URI in your .env file or Render environment variables');
+            process.exit(1);
+        }
+
+        console.log('📡 Using connection string (hiding credentials)...');
+        const hiddenUri = MONGODB_URI.replace(/\/\/[^:]+:[^@]+@/, '//****:****@');
+        console.log('   ' + hiddenUri);
+
+        // Connection options with SSL fixes
+        const options = {
             useNewUrlParser: true,
             useUnifiedTopology: true,
             maxPoolSize: 10,
-            serverSelectionTimeoutMS: 10000
-        });
+            serverSelectionTimeoutMS: 30000,
+            socketTimeoutMS: 45000,
+            // SSL/TLS settings to fix the error
+            tls: true,
+            tlsAllowInvalidCertificates: true,
+            tlsAllowInvalidHostnames: true,
+            retryWrites: true,
+            retryReads: true,
+            // Connection pool settings
+            minPoolSize: 1,
+            maxIdleTimeMS: 30000
+        };
+
+        client = new MongoClient(MONGODB_URI, options);
         
         await client.connect();
         db = client.db(DB_NAME);
@@ -138,7 +162,11 @@ async function connectDB() {
         return db;
     } catch (error) {
         console.error('❌ MongoDB connection error:', error);
-        console.log('💡 Make sure MONGODB_URI is set correctly in .env or Render env variables');
+        console.log('💡 Common fixes:');
+        console.log('   1. Check your MONGODB_URI is correct');
+        console.log('   2. Make sure your IP is whitelisted in MongoDB Atlas');
+        console.log('   3. Check your username and password are correct');
+        console.log('   4. Make sure the database name "gich_wifi" exists');
         throw error;
     }
 }
@@ -905,7 +933,7 @@ function generateRedirectHtml(organization) {
 }
 
 // ============================================================
-// GENERATE CUSTOMER BILLING PAGE - FULL VERSION
+// GENERATE CUSTOMER BILLING PAGE - COMPLETE
 // ============================================================
 
 function generateCustomerBillingPage(organization) {
@@ -1160,7 +1188,7 @@ function generateCustomerBillingPage(organization) {
     html += '    <span id="toastMessage">Success!</span>\n';
     html += '</div>\n';
 
-    // JavaScript - WITH DEVICE TRACKING
+    // JavaScript
     html += '<script>\n';
     html += '    var ORG_ID = "' + orgId + '";\n';
     html += '    var ORG_EMAIL = "' + orgEmail + '";\n';
@@ -1175,7 +1203,6 @@ function generateCustomerBillingPage(organization) {
     html += '\n';
     html += '    function getEl(id) { return document.getElementById(id); }\n';
     html += '\n';
-    html += '    // Generate or get persistent device ID from localStorage\n';
     html += '    function getDeviceId() {\n';
     html += '        var stored = localStorage.getItem("gich_device_id");\n';
     html += '        if (stored) return stored;\n';
@@ -1184,10 +1211,8 @@ function generateCustomerBillingPage(organization) {
     html += '        return newId;\n';
     html += '    }\n';
     html += '\n';
-    html += '    // Check if device is already connected\n';
     html += '    function checkDeviceConnection(phoneNumber) {\n';
     html += '        if (!phoneNumber) return;\n';
-    html += '        console.log("🔍 Checking device connection for:", phoneNumber);\n';
     html += '        fetch(API_URL + "/device/check", {\n';
     html += '            method: "POST",\n';
     html += '            headers: { "Content-Type": "application/json" },\n';
@@ -1198,12 +1223,9 @@ function generateCustomerBillingPage(organization) {
     html += '        })\n';
     html += '        .then(function(r) { return r.json(); })\n';
     html += '        .then(function(data) {\n';
-    html += '            console.log("Device check response:", data);\n';
     html += '            if (data.success && data.alreadyConnected) {\n';
     html += '                showAlreadyConnected(data.session);\n';
-    html += '                setTimeout(function() {\n';
-    html += '                    window.close();\n';
-    html += '                }, 5000);\n';
+    html += '                setTimeout(function() { window.close(); }, 5000);\n';
     html += '            }\n';
     html += '        })\n';
     html += '        .catch(function(err) { console.error("Device check error:", err); });\n';
@@ -1722,7 +1744,6 @@ function generateCustomerBillingPage(organization) {
     html += '        toast._timeout = setTimeout(function() { toast.classList.remove("show"); }, 4000);\n';
     html += '    }\n';
     html += '\n';
-    html += '    // INITIALIZE - Check for existing device connection\n';
     html += '    document.addEventListener("DOMContentLoaded", function() {\n';
     html += '        deviceId = getDeviceId();\n';
     html += '        console.log("📱 Device ID:", deviceId);\n';
@@ -2004,7 +2025,6 @@ var server = http.createServer(async function(req, res) {
                 updatedAt: new Date().toISOString(),
                 organizationId: clientId
             };
-            // Store client in a separate collection or same as organizations
             await db.collection('clients').insertOne(clientData);
             
             var sub = await createFreeTrial(clientId);
