@@ -1,7 +1,8 @@
 /**
- * GICH WiFi - Complete Backend with Daraja Integration & Subscription System
+ * GICH WiFi - Complete Backend with MongoDB
  * Full M-Pesa STK Push with multi-tenant support
  * INCLUDES: Device Tracking - Remembers devices with active plans
+ * DATABASE: MongoDB Atlas - Data NEVER lost
  */
 
 require('dotenv').config();
@@ -12,111 +13,7 @@ const { URL } = require('url');
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
-
-// ============================================================
-// DEVICE TRACKING SYSTEM - COMPLETE IMPLEMENTATION
-// ============================================================
-
-// Store active device connections
-var ACTIVE_DEVICES_FILE = path.join(__dirname, 'active_devices.json');
-var activeDevices = [];
-
-function loadActiveDevices() {
-    if (fs.existsSync(ACTIVE_DEVICES_FILE)) {
-        try {
-            activeDevices = JSON.parse(fs.readFileSync(ACTIVE_DEVICES_FILE, 'utf8'));
-            console.log('📱 Loaded ' + activeDevices.length + ' active devices');
-        } catch (e) {
-            console.error('Error loading active devices:', e);
-            activeDevices = [];
-        }
-    } else {
-        activeDevices = [];
-        saveActiveDevices();
-    }
-}
-
-function saveActiveDevices() {
-    try {
-        fs.writeFileSync(ACTIVE_DEVICES_FILE, JSON.stringify(activeDevices, null, 2));
-    } catch (e) {
-        console.error('⚠️ Could not save active devices:', e.message);
-    }
-}
-
-function checkDeviceAlreadyConnected(deviceId, phoneNumber) {
-    var now = new Date();
-    // Clean up expired connections - keep for 7 days instead of 1 hour
-    activeDevices = activeDevices.filter(function(d) {
-        var connectedAt = new Date(d.connectedAt);
-        var diffHours = (now - connectedAt) / (1000 * 60 * 60);
-        return diffHours < 168; // 7 days
-    });
-    saveActiveDevices();
-    
-    // Check if this device is already connected with an active plan
-    var existing = activeDevices.find(function(d) {
-        return d.deviceId === deviceId && d.active === true;
-    });
-    
-    if (existing) {
-        // Update the timestamp to keep it alive
-        existing.connectedAt = now.toISOString();
-        saveActiveDevices();
-        return existing;
-    }
-    return null;
-}
-
-function registerDeviceConnection(deviceId, phoneNumber, username, planName, expiresAt, transactionId) {
-    var now = new Date();
-    // Remove any existing entry for this device
-    activeDevices = activeDevices.filter(function(d) {
-        return d.deviceId !== deviceId;
-    });
-    
-    var newDevice = {
-        deviceId: deviceId,
-        phoneNumber: phoneNumber,
-        username: username,
-        planName: planName,
-        expiresAt: expiresAt,
-        connectedAt: now.toISOString(),
-        transactionId: transactionId,
-        active: true
-    };
-    activeDevices.push(newDevice);
-    saveActiveDevices();
-    return newDevice;
-}
-
-function removeDeviceConnection(deviceId) {
-    activeDevices = activeDevices.filter(function(d) {
-        return d.deviceId !== deviceId;
-    });
-    saveActiveDevices();
-}
-
-// Auto-cleanup expired devices every hour - keep for 7 days
-setInterval(function() {
-    var now = new Date();
-    var removed = 0;
-    activeDevices = activeDevices.filter(function(d) {
-        var connectedAt = new Date(d.connectedAt);
-        var diffHours = (now - connectedAt) / (1000 * 60 * 60);
-        if (diffHours > 168) { // 7 days
-            removed++;
-            return false;
-        }
-        // Also check if subscription expired - but keep the device record even if expired
-        // so the user knows they had a connection
-        return true;
-    });
-    if (removed > 0) {
-        saveActiveDevices();
-        console.log('🧹 Cleaned up ' + removed + ' old device connections (older than 7 days)');
-    }
-}, 60 * 60 * 1000); // Run every hour
+const { MongoClient } = require('mongodb');
 
 // ============================================================
 // CONFIGURATION
@@ -131,6 +28,10 @@ const PORT = process.env.PORT || 10000;
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '126483';
 const MASTER_PASSWORD = process.env.MASTER_PASSWORD || 'master126483';
 const JWT_SECRET = process.env.JWT_SECRET || crypto.randomBytes(32).toString('hex');
+
+// MongoDB Connection
+const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017';
+const DB_NAME = 'gich_wifi';
 
 // Subscription Plans
 const SUBSCRIPTION_PLANS = {
@@ -160,15 +61,375 @@ const SUBSCRIPTION_PLANS = {
     }
 };
 
+const DEFAULT_SETTINGS = {
+    businessName: 'GICH WIFI',
+    businessTagline: 'Fast • Secure • Reliable',
+    supportPhone: '0796587763',
+    supportEmail: 'support@gichwifi.co.ke',
+    primaryColor: '#00c853',
+    secondaryColor: '#00e676',
+    accentColor: '#0f2027',
+    logo: ''
+};
+
+const DEFAULT_PLANS = [
+    { id: '2_Hours', name: '2 Hours', price: 10, devices: 1, duration_seconds: 7200 },
+    { id: '5_Hours', name: '5 Hours', price: 20, devices: 1, duration_seconds: 18000 },
+    { id: '8_Hours', name: '8 Hours', price: 30, devices: 1, duration_seconds: 28800 },
+    { id: '12_Hours', name: '12 Hours', price: 50, devices: 1, duration_seconds: 43200 },
+    { id: '24_Hours', name: '24 Hours', price: 80, devices: 1, duration_seconds: 86400 }
+];
+
+// Cache for frequently accessed data
+let plans = [];
+let settings = {};
+let db = null;
+let client = null;
+
 console.log('\n========================================');
-console.log('🌐 GICH WiFi API');
+console.log('🌐 GICH WiFi API - MongoDB Version');
 console.log('========================================');
 console.log('   Port: ' + PORT);
 console.log('   Admin PIN: ' + (ADMIN_PASSWORD ? '✅ Configured' : '⚠️ NOT SET'));
 console.log('   Master PIN: ' + (MASTER_PASSWORD ? '✅ Configured' : '⚠️ NOT SET'));
 console.log('   M-Pesa Shortcode: ' + SHORTCODE);
-console.log('📱 Device Tracking: ✅ ENABLED (7 day retention)');
+console.log('📱 Device Tracking: ✅ ENABLED');
+console.log('🗄️  Database: MongoDB Atlas');
 console.log('========================================\n');
+
+// ============================================================
+// DATABASE CONNECTION
+// ============================================================
+
+async function connectDB() {
+    try {
+        console.log('🔗 Connecting to MongoDB Atlas...');
+        client = new MongoClient(MONGODB_URI, {
+            useNewUrlParser: true,
+            useUnifiedTopology: true,
+            maxPoolSize: 10,
+            serverSelectionTimeoutMS: 10000
+        });
+        
+        await client.connect();
+        db = client.db(DB_NAME);
+        
+        console.log('✅ Connected to MongoDB Atlas successfully!');
+        console.log('📊 Creating indexes...');
+        
+        try {
+            await db.collection('transactions').createIndex({ phoneNumber: 1 });
+            await db.collection('transactions').createIndex({ status: 1 });
+            await db.collection('transactions').createIndex({ checkoutId: 1 });
+            await db.collection('organizations').createIndex({ email: 1 }, { unique: true });
+            await db.collection('organizations').createIndex({ id: 1 }, { unique: true });
+            await db.collection('vouchers').createIndex({ code: 1 }, { unique: true });
+            await db.collection('vouchers').createIndex({ used: 1 });
+            await db.collection('activeDevices').createIndex({ deviceId: 1 }, { unique: true });
+            await db.collection('activeDevices').createIndex({ connectedAt: 1 });
+            await db.collection('subscriptions').createIndex({ clientId: 1 }, { unique: true });
+            console.log('✅ Indexes created successfully');
+        } catch (indexError) {
+            console.log('⚠️ Some indexes may already exist:', indexError.message);
+        }
+        
+        // Load initial data into cache
+        await loadCache();
+        return db;
+    } catch (error) {
+        console.error('❌ MongoDB connection error:', error);
+        console.log('💡 Make sure MONGODB_URI is set correctly in .env or Render env variables');
+        throw error;
+    }
+}
+
+async function loadCache() {
+    try {
+        // Load plans
+        const plansData = await db.collection('plans').find({}).toArray();
+        if (plansData.length === 0) {
+            await db.collection('plans').insertMany(DEFAULT_PLANS);
+            plans = DEFAULT_PLANS;
+            console.log('📦 Loaded default plans');
+        } else {
+            plans = plansData;
+            console.log('📦 Loaded ' + plans.length + ' plans from database');
+        }
+        
+        // Load settings
+        const settingsData = await db.collection('settings').findOne({ _id: 'settings' });
+        if (!settingsData) {
+            await db.collection('settings').insertOne({ _id: 'settings', ...DEFAULT_SETTINGS });
+            settings = DEFAULT_SETTINGS;
+            console.log('⚙️ Loaded default settings');
+        } else {
+            delete settingsData._id;
+            settings = settingsData;
+            console.log('⚙️ Loaded settings from database');
+        }
+    } catch (error) {
+        console.error('❌ Error loading cache:', error);
+    }
+}
+
+// ============================================================
+// DATABASE OPERATIONS
+// ============================================================
+
+// Organizations
+async function getOrganizationByEmail(email) {
+    try {
+        return await db.collection('organizations').findOne({ email: email });
+    } catch (error) {
+        console.error('Error getting organization by email:', error);
+        return null;
+    }
+}
+
+async function getOrganizationByClientId(clientId) {
+    try {
+        return await db.collection('organizations').findOne({ id: clientId });
+    } catch (error) {
+        console.error('Error getting organization by clientId:', error);
+        return null;
+    }
+}
+
+async function createOrganization(orgData) {
+    try {
+        const result = await db.collection('organizations').insertOne(orgData);
+        return orgData;
+    } catch (error) {
+        console.error('Error creating organization:', error);
+        throw error;
+    }
+}
+
+async function updateOrganization(clientId, updateData) {
+    try {
+        const result = await db.collection('organizations').findOneAndUpdate(
+            { id: clientId },
+            { $set: updateData },
+            { returnDocument: 'after' }
+        );
+        return result.value;
+    } catch (error) {
+        console.error('Error updating organization:', error);
+        throw error;
+    }
+}
+
+async function getAllOrganizations() {
+    try {
+        return await db.collection('organizations').find({}).toArray();
+    } catch (error) {
+        console.error('Error getting all organizations:', error);
+        return [];
+    }
+}
+
+// Transactions
+async function createTransaction(txData) {
+    try {
+        const result = await db.collection('transactions').insertOne(txData);
+        return txData;
+    } catch (error) {
+        console.error('Error creating transaction:', error);
+        throw error;
+    }
+}
+
+async function getTransaction(id) {
+    try {
+        return await db.collection('transactions').findOne({ id: id });
+    } catch (error) {
+        console.error('Error getting transaction:', error);
+        return null;
+    }
+}
+
+async function getTransactionByCheckoutId(checkoutId) {
+    try {
+        return await db.collection('transactions').findOne({ checkoutId: checkoutId });
+    } catch (error) {
+        console.error('Error getting transaction by checkoutId:', error);
+        return null;
+    }
+}
+
+async function updateTransaction(id, updateData) {
+    try {
+        const result = await db.collection('transactions').findOneAndUpdate(
+            { id: id },
+            { $set: updateData },
+            { returnDocument: 'after' }
+        );
+        return result.value;
+    } catch (error) {
+        console.error('Error updating transaction:', error);
+        throw error;
+    }
+}
+
+async function getTransactionsByPhone(phone) {
+    try {
+        return await db.collection('transactions')
+            .find({ phoneNumber: phone })
+            .sort({ timestamp: -1 })
+            .toArray();
+    } catch (error) {
+        console.error('Error getting transactions by phone:', error);
+        return [];
+    }
+}
+
+async function getAllTransactions() {
+    try {
+        return await db.collection('transactions')
+            .find({})
+            .sort({ timestamp: -1 })
+            .toArray();
+    } catch (error) {
+        console.error('Error getting all transactions:', error);
+        return [];
+    }
+}
+
+// Subscriptions
+async function getClientSubscription(clientId) {
+    try {
+        return await db.collection('subscriptions').findOne({ clientId: clientId });
+    } catch (error) {
+        console.error('Error getting client subscription:', error);
+        return null;
+    }
+}
+
+async function createSubscription(subData) {
+    try {
+        const result = await db.collection('subscriptions').insertOne(subData);
+        return subData;
+    } catch (error) {
+        console.error('Error creating subscription:', error);
+        throw error;
+    }
+}
+
+async function updateSubscription(clientId, updateData) {
+    try {
+        const result = await db.collection('subscriptions').findOneAndUpdate(
+            { clientId: clientId },
+            { $set: updateData },
+            { returnDocument: 'after' }
+        );
+        return result.value;
+    } catch (error) {
+        console.error('Error updating subscription:', error);
+        throw error;
+    }
+}
+
+async function getAllSubscriptions() {
+    try {
+        return await db.collection('subscriptions').find({}).toArray();
+    } catch (error) {
+        console.error('Error getting all subscriptions:', error);
+        return [];
+    }
+}
+
+// Vouchers
+async function getVoucherByCode(code) {
+    try {
+        return await db.collection('vouchers').findOne({ code: code });
+    } catch (error) {
+        console.error('Error getting voucher by code:', error);
+        return null;
+    }
+}
+
+async function createVouchers(vouchersData) {
+    try {
+        const result = await db.collection('vouchers').insertMany(vouchersData);
+        return vouchersData;
+    } catch (error) {
+        console.error('Error creating vouchers:', error);
+        throw error;
+    }
+}
+
+async function updateVoucher(code, updateData) {
+    try {
+        const result = await db.collection('vouchers').findOneAndUpdate(
+            { code: code },
+            { $set: updateData },
+            { returnDocument: 'after' }
+        );
+        return result.value;
+    } catch (error) {
+        console.error('Error updating voucher:', error);
+        throw error;
+    }
+}
+
+async function getAllVouchers() {
+    try {
+        return await db.collection('vouchers').find({}).toArray();
+    } catch (error) {
+        console.error('Error getting all vouchers:', error);
+        return [];
+    }
+}
+
+// Active Devices
+async function checkDeviceAlreadyConnected(deviceId) {
+    try {
+        // Clean up devices older than 30 days
+        const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+        await db.collection('activeDevices').deleteMany({
+            connectedAt: { $lt: thirtyDaysAgo.toISOString() }
+        });
+        
+        return await db.collection('activeDevices').findOne({
+            deviceId: deviceId,
+            active: true
+        });
+    } catch (error) {
+        console.error('Error checking device:', error);
+        return null;
+    }
+}
+
+async function registerDevice(deviceData) {
+    try {
+        // Remove any existing entry for this device
+        await db.collection('activeDevices').deleteMany({ deviceId: deviceData.deviceId });
+        
+        // Insert new device
+        const result = await db.collection('activeDevices').insertOne(deviceData);
+        return deviceData;
+    } catch (error) {
+        console.error('Error registering device:', error);
+        throw error;
+    }
+}
+
+async function removeDevice(deviceId) {
+    try {
+        await db.collection('activeDevices').deleteMany({ deviceId: deviceId });
+    } catch (error) {
+        console.error('Error removing device:', error);
+    }
+}
+
+async function getActiveDevicesCount() {
+    try {
+        return await db.collection('activeDevices').countDocuments({ active: true });
+    } catch (error) {
+        console.error('Error getting active devices count:', error);
+        return 0;
+    }
+}
 
 // ============================================================
 // JWT HELPER
@@ -210,236 +471,43 @@ var agent = new https.Agent({
 });
 
 // ============================================================
-// DATA STORAGE
-// ============================================================
-
-var TRANSACTIONS_FILE = path.join(__dirname, 'transactions.json');
-var VOUCHERS_FILE = path.join(__dirname, 'vouchers.json');
-var PLANS_FILE = path.join(__dirname, 'plans.json');
-var SETTINGS_FILE = path.join(__dirname, 'settings.json');
-var CLIENTS_FILE = path.join(__dirname, 'clients.json');
-var ORGANIZATIONS_FILE = path.join(__dirname, 'organizations.json');
-var SUBSCRIPTIONS_FILE = path.join(__dirname, 'subscriptions.json');
-
-var transactions = [];
-var vouchers = [];
-var plans = [];
-var settings = {};
-var clients = [];
-var organizations = [];
-var subscriptions = [];
-
-// ============================================================
-// DEFAULT SETTINGS
-// ============================================================
-
-var DEFAULT_SETTINGS = {
-    businessName: 'GICH WIFI',
-    businessTagline: 'Fast • Secure • Reliable',
-    supportPhone: '0796587763',
-    supportEmail: 'support@gichwifi.co.ke',
-    primaryColor: '#00c853',
-    secondaryColor: '#00e676',
-    accentColor: '#0f2027',
-    logo: ''
-};
-
-var DEFAULT_PLANS = [
-    { id: '2_Hours', name: '2 Hours', price: 10, devices: 1, duration_seconds: 7200 },
-    { id: '5_Hours', name: '5 Hours', price: 20, devices: 1, duration_seconds: 18000 },
-    { id: '8_Hours', name: '8 Hours', price: 30, devices: 1, duration_seconds: 28800 },
-    { id: '12_Hours', name: '12 Hours', price: 50, devices: 1, duration_seconds: 43200 },
-    { id: '24_Hours', name: '24 Hours', price: 80, devices: 1, duration_seconds: 86400 }
-];
-
-// ============================================================
-// LOAD DATA - WITH BETTER ERROR HANDLING
-// ============================================================
-
-function loadAllData() {
-    // Load transactions
-    if (fs.existsSync(TRANSACTIONS_FILE)) {
-        try { 
-            var txData = fs.readFileSync(TRANSACTIONS_FILE, 'utf8');
-            transactions = JSON.parse(txData); 
-            console.log('📂 Loaded ' + transactions.length + ' transactions');
-        } catch (e) { 
-            console.error('Error loading transactions:', e);
-            transactions = [];
-        }
-    } else {
-        transactions = [];
-        saveTransactions();
-    }
-    
-    // Load vouchers
-    if (fs.existsSync(VOUCHERS_FILE)) {
-        try { 
-            var vData = fs.readFileSync(VOUCHERS_FILE, 'utf8');
-            vouchers = JSON.parse(vData); 
-            console.log('🎟️ Loaded ' + vouchers.length + ' vouchers');
-        } catch (e) { 
-            console.error('Error loading vouchers:', e);
-            vouchers = [];
-        }
-    } else {
-        vouchers = [];
-        saveVouchers();
-    }
-    
-    // Load plans
-    if (fs.existsSync(PLANS_FILE)) {
-        try { 
-            var pData = fs.readFileSync(PLANS_FILE, 'utf8');
-            plans = JSON.parse(pData); 
-            console.log('📦 Loaded ' + plans.length + ' plans');
-        } catch (e) { 
-            console.error('Error loading plans:', e);
-            plans = DEFAULT_PLANS;
-            savePlans();
-        }
-    } else { 
-        plans = DEFAULT_PLANS; 
-        savePlans(); 
-    }
-    
-    // Load settings
-    if (fs.existsSync(SETTINGS_FILE)) {
-        try { 
-            var sData = fs.readFileSync(SETTINGS_FILE, 'utf8');
-            settings = JSON.parse(sData); 
-            console.log('⚙️ Loaded settings');
-        } catch (e) { 
-            console.error('Error loading settings:', e);
-            settings = DEFAULT_SETTINGS;
-            saveSettings();
-        }
-    } else { 
-        settings = DEFAULT_SETTINGS; 
-        saveSettings(); 
-    }
-    
-    // Load clients
-    if (fs.existsSync(CLIENTS_FILE)) {
-        try { 
-            var cData = fs.readFileSync(CLIENTS_FILE, 'utf8');
-            clients = JSON.parse(cData); 
-            console.log('👤 Loaded ' + clients.length + ' clients');
-        } catch (e) { 
-            console.error('Error loading clients:', e);
-            clients = [];
-        }
-    } else { 
-        clients = []; 
-        saveClients(); 
-    }
-    
-    // Load organizations
-    if (fs.existsSync(ORGANIZATIONS_FILE)) {
-        try { 
-            var oData = fs.readFileSync(ORGANIZATIONS_FILE, 'utf8');
-            organizations = JSON.parse(oData); 
-            console.log('🏢 Loaded ' + organizations.length + ' organizations');
-        } catch (e) { 
-            console.error('Error loading organizations:', e);
-            organizations = [];
-        }
-    } else { 
-        organizations = []; 
-        saveOrganizations(); 
-    }
-    
-    // Load subscriptions
-    if (fs.existsSync(SUBSCRIPTIONS_FILE)) {
-        try { 
-            var subData = fs.readFileSync(SUBSCRIPTIONS_FILE, 'utf8');
-            subscriptions = JSON.parse(subData); 
-            console.log('📋 Loaded ' + subscriptions.length + ' subscriptions');
-        } catch (e) { 
-            console.error('Error loading subscriptions:', e);
-            subscriptions = [];
-        }
-    } else { 
-        subscriptions = []; 
-        saveSubscriptions(); 
-    }
-    
-    loadActiveDevices();
-}
-
-function saveTransactions() { 
-    try { 
-        fs.writeFileSync(TRANSACTIONS_FILE, JSON.stringify(transactions, null, 2)); 
-    } catch (e) { 
-        console.error('⚠️ Could not save transactions:', e.message); 
-    } 
-}
-
-function saveVouchers() { 
-    try { 
-        fs.writeFileSync(VOUCHERS_FILE, JSON.stringify(vouchers, null, 2)); 
-    } catch (e) { 
-        console.error('⚠️ Could not save vouchers:', e.message); 
-    } 
-}
-
-function savePlans() { 
-    try { 
-        fs.writeFileSync(PLANS_FILE, JSON.stringify(plans, null, 2)); 
-    } catch (e) { 
-        console.error('⚠️ Could not save plans:', e.message); 
-    } 
-}
-
-function saveSettings() { 
-    try { 
-        fs.writeFileSync(SETTINGS_FILE, JSON.stringify(settings, null, 2)); 
-    } catch (e) { 
-        console.error('⚠️ Could not save settings:', e.message); 
-    } 
-}
-
-function saveClients() { 
-    try { 
-        fs.writeFileSync(CLIENTS_FILE, JSON.stringify(clients, null, 2)); 
-    } catch (e) { 
-        console.error('⚠️ Could not save clients:', e.message); 
-    } 
-}
-
-function saveOrganizations() { 
-    try { 
-        fs.writeFileSync(ORGANIZATIONS_FILE, JSON.stringify(organizations, null, 2)); 
-    } catch (e) { 
-        console.error('⚠️ Could not save organizations:', e.message); 
-    } 
-}
-
-function saveSubscriptions() { 
-    try { 
-        fs.writeFileSync(SUBSCRIPTIONS_FILE, JSON.stringify(subscriptions, null, 2)); 
-    } catch (e) { 
-        console.error('⚠️ Could not save subscriptions:', e.message); 
-    } 
-}
-
-// ============================================================
 // HELPERS
 // ============================================================
 
-function getPlanName(planId) { var plan = plans.find(function(p) { return p.id === planId; }); return plan ? plan.name : planId; }
-function getPlanDuration(planId) { var plan = plans.find(function(p) { return p.id === planId; }); return plan ? plan.duration_seconds : 3600; }
-function generateVoucherCode() { var chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'; var code = ''; for (var i = 0; i < 10; i++) { code += chars.charAt(Math.floor(Math.random() * chars.length)); } return code; }
-function generateOrgId() { var chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'; var code = ''; for (var i = 0; i < 8; i++) { code += chars.charAt(Math.floor(Math.random() * chars.length)); } return 'CLIENT_' + code; }
-function getOrganizationByClientId(clientId) { return organizations.find(function(org) { return org.id === clientId; }); }
-function getOrganizationByEmail(email) { return organizations.find(function(org) { return org.email === email; }); }
+function getPlanName(planId) {
+    var plan = plans.find(function(p) { return p.id === planId; });
+    return plan ? plan.name : planId;
+}
+
+function getPlanDuration(planId) {
+    var plan = plans.find(function(p) { return p.id === planId; });
+    return plan ? plan.duration_seconds : 3600;
+}
+
+function generateVoucherCode() {
+    var chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    var code = '';
+    for (var i = 0; i < 10; i++) {
+        code += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return code;
+}
+
+function generateOrgId() {
+    var chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    var code = '';
+    for (var i = 0; i < 8; i++) {
+        code += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return 'CLIENT_' + code;
+}
 
 // ============================================================
 // SUBSCRIPTION SYSTEM
 // ============================================================
 
-function getClientSubscription(clientId) {
-    var sub = subscriptions.find(function(s) { return s.clientId === clientId; });
+async function getClientSubscriptionStatus(clientId) {
+    var sub = await getClientSubscription(clientId);
     if (!sub) return null;
     
     var now = new Date();
@@ -448,7 +516,7 @@ function getClientSubscription(clientId) {
         var trialEnd = new Date(sub.trialEnds);
         if (now > trialEnd) {
             sub.status = 'expired';
-            saveSubscriptions();
+            await updateSubscription(clientId, { status: 'expired' });
             return null;
         }
         return sub;
@@ -458,7 +526,7 @@ function getClientSubscription(clientId) {
         var expiresAt = new Date(sub.expiresAt);
         if (now > expiresAt) {
             sub.status = 'expired';
-            saveSubscriptions();
+            await updateSubscription(clientId, { status: 'expired' });
             return null;
         }
         return sub;
@@ -467,8 +535,8 @@ function getClientSubscription(clientId) {
     return null;
 }
 
-function checkSubscriptionAccess(clientId) {
-    var sub = getClientSubscription(clientId);
+async function checkSubscriptionAccess(clientId) {
+    var sub = await getClientSubscriptionStatus(clientId);
     
     if (!sub) {
         return {
@@ -511,7 +579,7 @@ function checkSubscriptionAccess(clientId) {
     };
 }
 
-function createFreeTrial(clientId) {
+async function createFreeTrial(clientId) {
     var sub = {
         clientId: clientId,
         plan: 'free_trial',
@@ -520,13 +588,11 @@ function createFreeTrial(clientId) {
         trialEnds: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString(),
         createdAt: new Date().toISOString()
     };
-    subscriptions.push(sub);
-    saveSubscriptions();
-    return sub;
+    return await createSubscription(sub);
 }
 
-function activateSubscription(clientId, plan) {
-    var sub = subscriptions.find(function(s) { return s.clientId === clientId; });
+async function activateSubscription(clientId, plan) {
+    var sub = await getClientSubscription(clientId);
     var planData = SUBSCRIPTION_PLANS[plan];
     if (!planData) return null;
     
@@ -538,57 +604,23 @@ function activateSubscription(clientId, plan) {
             expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
             createdAt: new Date().toISOString()
         };
-        subscriptions.push(sub);
+        await createSubscription(sub);
     } else {
         sub.plan = plan;
         sub.status = 'active';
         sub.expiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
         sub.updatedAt = new Date().toISOString();
+        await updateSubscription(clientId, sub);
     }
-    saveSubscriptions();
     
-    var org = getOrganizationByClientId(clientId);
+    var org = await getOrganizationByClientId(clientId);
     if (org && org.status === 'suspended') {
         org.status = 'active';
-        saveOrganizations();
+        await updateOrganization(clientId, { status: 'active' });
     }
     
     return sub;
 }
-
-function autoSuspendExpiredAccounts() {
-    console.log('🔄 Running auto-suspend check...');
-    var now = new Date();
-    var suspended = 0;
-    
-    subscriptions.forEach(function(sub) {
-        if (sub.status === 'trial' || sub.status === 'active') {
-            var expiryDate = sub.status === 'trial' ? sub.trialEnds : sub.expiresAt;
-            var expiry = new Date(expiryDate);
-            
-            if (now > expiry) {
-                sub.status = 'expired';
-                var org = getOrganizationByClientId(sub.clientId);
-                if (org) {
-                    org.status = 'suspended';
-                    org.suspendedAt = now.toISOString();
-                    org.suspensionReason = sub.status === 'trial' ? 'Trial expired' : 'Subscription expired';
-                    suspended++;
-                    console.log('🔒 Suspended:', org.businessName);
-                }
-            }
-        }
-    });
-    
-    if (suspended > 0) {
-        saveSubscriptions();
-        saveOrganizations();
-        console.log('✅ Auto-suspended', suspended, 'accounts');
-    }
-}
-
-setInterval(autoSuspendExpiredAccounts, 12 * 60 * 60 * 1000);
-autoSuspendExpiredAccounts();
 
 // ============================================================
 // DARAJA OAUTH
@@ -873,7 +905,7 @@ function generateRedirectHtml(organization) {
 }
 
 // ============================================================
-// GENERATE CUSTOMER BILLING PAGE - WITH DEVICE TRACKING
+// GENERATE CUSTOMER BILLING PAGE - FULL VERSION
 // ============================================================
 
 function generateCustomerBillingPage(organization) {
@@ -1168,9 +1200,7 @@ function generateCustomerBillingPage(organization) {
     html += '        .then(function(data) {\n';
     html += '            console.log("Device check response:", data);\n';
     html += '            if (data.success && data.alreadyConnected) {\n';
-    html += '                // Show already connected overlay\n';
     html += '                showAlreadyConnected(data.session);\n';
-    html += '                // Auto-close after 5 seconds\n';
     html += '                setTimeout(function() {\n';
     html += '                    window.close();\n';
     html += '                }, 5000);\n';
@@ -1393,7 +1423,6 @@ function generateCustomerBillingPage(organization) {
     html += '                        expiresAt: data.expiresAt,\n';
     html += '                        phoneNumber: getEl("phoneInput").value.trim()\n';
     html += '                    };\n';
-    html += '                    // Register device connection\n';
     html += '                    registerDevice(credentials);\n';
     html += '                    showConnectedPage(credentials);\n';
     html += '                } else {\n';
@@ -1499,7 +1528,6 @@ function generateCustomerBillingPage(organization) {
     html += '                    expiresAt: data.data.expiresAt || new Date(Date.now() + 3600000).toISOString(),\n';
     html += '                    phoneNumber: phone\n';
     html += '                };\n';
-    html += '                // Register device for voucher\n';
     html += '                registerDevice(credentials);\n';
     html += '                showConnectedPage(credentials);\n';
     html += '            } else {\n';
@@ -1529,7 +1557,6 @@ function generateCustomerBillingPage(organization) {
     html += '            .then(function(r) { return r.json(); })\n';
     html += '            .then(function(data) {\n';
     html += '                if (data.success && data.active) {\n';
-    html += '                    // Check device connection first\n';
     html += '                    checkDeviceConnection(phone);\n';
     html += '                    resultEl.className = "result-box show success";\n';
     html += '                    resultEl.textContent = "✅ Active plan found! Connecting...";\n';
@@ -1705,15 +1732,12 @@ function generateCustomerBillingPage(organization) {
     html += '        getEl("checkPhoneInput").addEventListener("keydown", function(e) { if (e.key === "Enter") checkPlan(); });\n';
     html += '        checkSubscriptionStatus();\n';
     html += '        \n';
-    html += '        // Check device connection on load\n';
     html += '        var savedPhone = localStorage.getItem("gich_last_phone");\n';
     html += '        if (savedPhone) {\n';
     html += '            getEl("phoneInput").value = savedPhone;\n';
-    html += '            // Check if this device is already connected\n';
     html += '            checkDeviceConnection(savedPhone);\n';
     html += '        }\n';
     html += '        \n';
-    html += '        // Save phone number on input\n';
     html += '        getEl("phoneInput").addEventListener("change", function() {\n';
     html += '            var phone = this.value.trim();\n';
     html += '            if (phone && phone.length >= 10) {\n';
@@ -1751,7 +1775,7 @@ var server = http.createServer(async function(req, res) {
         // ===== SERVE HTML FILES =====
         if (req.method === 'GET' && url.pathname === '/') {
             if (serveHtmlFile(res, 'GICH_wifi.html')) return;
-            sendHtml(res, 200, '<h1>🌐 GICH WiFi Server</h1><p>✅ Server is running!</p>');
+            sendHtml(res, 200, '<h1>🌐 GICH WiFi Server</h1><p>✅ Server is running with MongoDB!</p>');
             return;
         }
 
@@ -1760,7 +1784,12 @@ var server = http.createServer(async function(req, res) {
         // ============================================================
 
         if (req.method === 'GET' && url.pathname === '/api/health') {
-            return sendJson(res, 200, { status: 'ok', timestamp: new Date().toISOString() });
+            return sendJson(res, 200, { 
+                status: 'ok', 
+                timestamp: new Date().toISOString(),
+                database: 'connected',
+                version: '6.0.0-mongodb'
+            });
         }
 
         if (req.method === 'GET' && url.pathname === '/api/plans') {
@@ -1786,8 +1815,7 @@ var server = http.createServer(async function(req, res) {
                 return sendJson(res, 400, { success: false, message: 'Device ID required' });
             }
             
-            // Check if device is already connected
-            var existingSession = checkDeviceAlreadyConnected(deviceId, phoneNumber);
+            var existingSession = await checkDeviceAlreadyConnected(deviceId);
             
             if (existingSession) {
                 return sendJson(res, 200, {
@@ -1829,7 +1857,17 @@ var server = http.createServer(async function(req, res) {
                 return sendJson(res, 400, { success: false, message: 'Device ID required' });
             }
             
-            registerDeviceConnection(deviceId, phoneNumber, username || 'user', planName || 'Unknown Plan', expiresAt, null);
+            var deviceData = {
+                deviceId: deviceId,
+                phoneNumber: phoneNumber,
+                username: username || 'user',
+                planName: planName || 'Unknown Plan',
+                expiresAt: expiresAt,
+                connectedAt: new Date().toISOString(),
+                active: true
+            };
+            
+            await registerDevice(deviceData);
             
             return sendJson(res, 200, {
                 success: true,
@@ -1846,8 +1884,12 @@ var server = http.createServer(async function(req, res) {
             if (!email) {
                 return sendJson(res, 400, { success: false, message: 'Email required' });
             }
-            var orgExists = organizations.some(function(o) { return o.email === email; });
-            return sendJson(res, 200, { success: true, hasOrganization: orgExists, email: email });
+            var org = await getOrganizationByEmail(email);
+            return sendJson(res, 200, { 
+                success: true, 
+                hasOrganization: !!org, 
+                email: email 
+            });
         }
 
         if (req.method === 'GET' && url.pathname === '/api/organization/by-email') {
@@ -1855,7 +1897,7 @@ var server = http.createServer(async function(req, res) {
             if (!email) {
                 return sendJson(res, 400, { success: false, message: 'Email required' });
             }
-            var org = getOrganizationByEmail(email);
+            var org = await getOrganizationByEmail(email);
             if (!org) {
                 return sendJson(res, 404, { success: false, message: 'Organization not found' });
             }
@@ -1884,7 +1926,7 @@ var server = http.createServer(async function(req, res) {
                 return sendJson(res, 400, { success: false, message: 'Invalid organization ID' });
             }
             
-            var org = getOrganizationByClientId(orgId);
+            var org = await getOrganizationByClientId(orgId);
             if (!org) {
                 return sendJson(res, 404, { success: false, message: 'Organization not found' });
             }
@@ -1915,7 +1957,7 @@ var server = http.createServer(async function(req, res) {
             var body = await readBody(req);
             var email = body.email || 'master@demo.com';
             
-            var existingOrg = getOrganizationByEmail(email);
+            var existingOrg = await getOrganizationByEmail(email);
             if (existingOrg) {
                 return sendJson(res, 200, {
                     success: true,
@@ -1948,10 +1990,10 @@ var server = http.createServer(async function(req, res) {
                 plans: body.plans || DEFAULT_PLANS
             };
             
-            organizations.push(newOrganization);
-            saveOrganizations();
+            await createOrganization(newOrganization);
             
-            clients.push({
+            // Also create a client entry
+            var clientData = {
                 id: clientId,
                 name: businessName,
                 phone: body.phone || '0712345678',
@@ -1961,10 +2003,11 @@ var server = http.createServer(async function(req, res) {
                 createdAt: new Date().toISOString(),
                 updatedAt: new Date().toISOString(),
                 organizationId: clientId
-            });
-            saveClients();
+            };
+            // Store client in a separate collection or same as organizations
+            await db.collection('clients').insertOne(clientData);
             
-            var sub = createFreeTrial(clientId);
+            var sub = await createFreeTrial(clientId);
             
             console.log('✅ Organization created with 60-day free trial:', clientId);
             
@@ -1984,32 +2027,32 @@ var server = http.createServer(async function(req, res) {
             
             var orgId = url.pathname.split('/').pop();
             var body = await readBody(req);
-            var index = organizations.findIndex(function(o) { return o.id === orgId; });
+            var org = await getOrganizationByClientId(orgId);
             
-            if (index === -1) {
+            if (!org) {
                 return sendJson(res, 404, { success: false, message: 'Organization not found' });
             }
             
-            organizations[index] = {
-                ...organizations[index],
-                businessName: body.businessName !== undefined ? body.businessName : organizations[index].businessName,
-                businessTagline: body.businessTagline !== undefined ? body.businessTagline : organizations[index].businessTagline,
-                supportPhone: body.supportPhone !== undefined ? body.supportPhone : organizations[index].supportPhone,
-                supportEmail: body.supportEmail !== undefined ? body.supportEmail : organizations[index].supportEmail,
-                logo: body.logo !== undefined ? body.logo : organizations[index].logo,
-                mpesaTill: body.mpesaTill !== undefined ? body.mpesaTill : organizations[index].mpesaTill,
-                primaryColor: body.primaryColor !== undefined ? body.primaryColor : organizations[index].primaryColor,
-                secondaryColor: body.secondaryColor !== undefined ? body.secondaryColor : organizations[index].secondaryColor,
-                accentColor: body.accentColor !== undefined ? body.accentColor : organizations[index].accentColor,
-                plans: body.plans !== undefined ? body.plans : organizations[index].plans,
+            var updateData = {
+                businessName: body.businessName !== undefined ? body.businessName : org.businessName,
+                businessTagline: body.businessTagline !== undefined ? body.businessTagline : org.businessTagline,
+                supportPhone: body.supportPhone !== undefined ? body.supportPhone : org.supportPhone,
+                supportEmail: body.supportEmail !== undefined ? body.supportEmail : org.supportEmail,
+                logo: body.logo !== undefined ? body.logo : org.logo,
+                mpesaTill: body.mpesaTill !== undefined ? body.mpesaTill : org.mpesaTill,
+                primaryColor: body.primaryColor !== undefined ? body.primaryColor : org.primaryColor,
+                secondaryColor: body.secondaryColor !== undefined ? body.secondaryColor : org.secondaryColor,
+                accentColor: body.accentColor !== undefined ? body.accentColor : org.accentColor,
+                plans: body.plans !== undefined ? body.plans : org.plans,
                 updatedAt: new Date().toISOString()
             };
-            saveOrganizations();
+            
+            var updated = await updateOrganization(orgId, updateData);
             
             return sendJson(res, 200, {
                 success: true,
                 message: 'Organization updated',
-                data: organizations[index]
+                data: updated
             });
         }
 
@@ -2022,12 +2065,12 @@ var server = http.createServer(async function(req, res) {
                 return sendJson(res, 400, { success: false, message: 'Email required' });
             }
             
-            var org = getOrganizationByEmail(email);
+            var org = await getOrganizationByEmail(email);
             if (!org) {
                 return sendJson(res, 404, { success: false, message: 'Organization not found' });
             }
             
-            var status = checkSubscriptionAccess(org.id);
+            var status = await checkSubscriptionAccess(org.id);
             
             return sendJson(res, 200, {
                 success: true,
@@ -2046,12 +2089,12 @@ var server = http.createServer(async function(req, res) {
             var body = await readBody(req);
             var clientId = body.clientId || body.email;
             
-            var org = getOrganizationByClientId(clientId) || getOrganizationByEmail(clientId);
+            var org = await getOrganizationByClientId(clientId) || await getOrganizationByEmail(clientId);
             if (!org) {
                 return sendJson(res, 404, { success: false, message: 'Organization not found' });
             }
             
-            var existingSub = getClientSubscription(org.id);
+            var existingSub = await getClientSubscriptionStatus(org.id);
             if (existingSub) {
                 return sendJson(res, 400, { 
                     success: false, 
@@ -2059,7 +2102,7 @@ var server = http.createServer(async function(req, res) {
                 });
             }
             
-            var sub = createFreeTrial(org.id);
+            var sub = await createFreeTrial(org.id);
             
             return sendJson(res, 200, {
                 success: true,
@@ -2077,7 +2120,7 @@ var server = http.createServer(async function(req, res) {
             var clientId = body.clientId || body.email;
             var plan = body.plan || 'starter';
             
-            var org = getOrganizationByClientId(clientId) || getOrganizationByEmail(clientId);
+            var org = await getOrganizationByClientId(clientId) || await getOrganizationByEmail(clientId);
             if (!org) {
                 return sendJson(res, 404, { success: false, message: 'Organization not found' });
             }
@@ -2087,7 +2130,7 @@ var server = http.createServer(async function(req, res) {
                 return sendJson(res, 400, { success: false, message: 'Invalid plan' });
             }
             
-            var sub = activateSubscription(org.id, plan);
+            var sub = await activateSubscription(org.id, plan);
             
             return sendJson(res, 200, {
                 success: true,
@@ -2116,7 +2159,7 @@ var server = http.createServer(async function(req, res) {
             
             // Check if device is already connected before allowing new payment
             if (deviceId) {
-                var existing = checkDeviceAlreadyConnected(deviceId, phoneNumber);
+                var existing = await checkDeviceAlreadyConnected(deviceId);
                 if (existing) {
                     return sendJson(res, 409, {
                         success: false,
@@ -2138,11 +2181,11 @@ var server = http.createServer(async function(req, res) {
             
             var org = null;
             if (organizationId) {
-                org = getOrganizationByClientId(organizationId);
+                org = await getOrganizationByClientId(organizationId);
             }
             
             if (org) {
-                var access = checkSubscriptionAccess(org.id);
+                var access = await checkSubscriptionAccess(org.id);
                 if (!access.allowed) {
                     return sendJson(res, 403, {
                         success: false,
@@ -2175,16 +2218,23 @@ var server = http.createServer(async function(req, res) {
                         organizationId: organizationId || null,
                         deviceId: deviceId
                     };
-                    transactions.push(freeTx);
-                    saveTransactions();
+                    await createTransaction(freeTx);
                     
                     if (isSubscription && org) {
-                        activateSubscription(org.id, subscriptionPlan);
+                        await activateSubscription(org.id, subscriptionPlan);
                     }
                     
                     // Register device for free plan
                     if (deviceId) {
-                        registerDeviceConnection(deviceId, phoneNumber, freeTx.username, planName, freeTx.expiresAt, transactionId);
+                        await registerDevice({
+                            deviceId: deviceId,
+                            phoneNumber: phoneNumber,
+                            username: freeTx.username,
+                            planName: planName,
+                            expiresAt: freeTx.expiresAt,
+                            connectedAt: new Date().toISOString(),
+                            active: true
+                        });
                     }
                     
                     return sendJson(res, 200, {
@@ -2220,8 +2270,7 @@ var server = http.createServer(async function(req, res) {
                         organizationId: organizationId || null,
                         deviceId: deviceId
                     };
-                    transactions.push(transaction);
-                    saveTransactions();
+                    await createTransaction(transaction);
                     
                     return sendJson(res, 200, {
                         success: true,
@@ -2262,16 +2311,7 @@ var server = http.createServer(async function(req, res) {
                 }
             }
 
-            var transaction = null;
-            for (var i = 0; i < transactions.length; i++) {
-                if (transactions[i].checkoutId === checkoutId) { transaction = transactions[i]; break; }
-            }
-            
-            if (!transaction) {
-                for (var i = 0; i < transactions.length; i++) {
-                    if (transactions[i].id === checkoutId) { transaction = transactions[i]; break; }
-                }
-            }
+            var transaction = await getTransactionByCheckoutId(checkoutId);
             
             if (!transaction) {
                 console.log('⚠️ Transaction not found for checkoutId:', checkoutId);
@@ -2288,26 +2328,27 @@ var server = http.createServer(async function(req, res) {
                 transaction.errorDescription = null;
                 transaction.username = 'user_' + (transaction.mpesaCode || transaction.id).substring(0, 12);
                 transaction.password = 'pass_' + Date.now().toString(36);
-                saveTransactions();
+                await updateTransaction(transaction.id, transaction);
                 
                 console.log('✅ Payment completed:', transaction.id);
                 
                 // Register device for this transaction
                 if (transaction.deviceId) {
-                    registerDeviceConnection(
-                        transaction.deviceId,
-                        transaction.phoneNumber,
-                        transaction.username,
-                        transaction.planName,
-                        transaction.expiresAt,
-                        transaction.id
-                    );
+                    await registerDevice({
+                        deviceId: transaction.deviceId,
+                        phoneNumber: transaction.phoneNumber,
+                        username: transaction.username,
+                        planName: transaction.planName,
+                        expiresAt: transaction.expiresAt,
+                        connectedAt: new Date().toISOString(),
+                        active: true
+                    });
                 }
                 
                 if (transaction.isSubscription && transaction.organizationId) {
-                    var org = getOrganizationByClientId(transaction.organizationId);
+                    var org = await getOrganizationByClientId(transaction.organizationId);
                     if (org) {
-                        activateSubscription(org.id, transaction.subscriptionPlan || 'starter');
+                        await activateSubscription(org.id, transaction.subscriptionPlan || 'starter');
                         console.log('✅ Subscription activated for:', org.businessName);
                     }
                 }
@@ -2318,21 +2359,21 @@ var server = http.createServer(async function(req, res) {
                 transaction.errorDescription = 'User cancelled the transaction';
                 transaction.errorCode = resultCode;
                 transaction.completedAt = new Date().toISOString();
-                saveTransactions();
+                await updateTransaction(transaction.id, transaction);
                 return sendJson(res, 200, { ResultCode: resultCode, ResultDesc: 'User cancelled' });
             } else if (resultCode === 2001) {
                 transaction.status = 'failed';
                 transaction.errorDescription = 'Insufficient M-Pesa balance';
                 transaction.errorCode = resultCode;
                 transaction.completedAt = new Date().toISOString();
-                saveTransactions();
+                await updateTransaction(transaction.id, transaction);
                 return sendJson(res, 200, { ResultCode: resultCode, ResultDesc: 'Insufficient balance' });
             } else {
                 transaction.status = 'failed';
                 transaction.errorDescription = resultDesc || 'Payment failed';
                 transaction.errorCode = resultCode;
                 transaction.completedAt = new Date().toISOString();
-                saveTransactions();
+                await updateTransaction(transaction.id, transaction);
                 return sendJson(res, 200, { ResultCode: resultCode, ResultDesc: resultDesc });
             }
         }
@@ -2342,7 +2383,7 @@ var server = http.createServer(async function(req, res) {
         // ============================================================
         if (req.method === 'GET' && url.pathname.startsWith('/api/transaction/')) {
             var id = url.pathname.split('/').pop();
-            var tx = transactions.find(function(t) { return t.id === id; });
+            var tx = await getTransaction(id);
             if (!tx) {
                 return sendJson(res, 404, { success: false, message: 'Transaction not found' });
             }
@@ -2370,7 +2411,7 @@ var server = http.createServer(async function(req, res) {
         // ============================================================
         if (req.method === 'GET' && url.pathname.startsWith('/api/get-credentials/')) {
             var id = url.pathname.split('/').pop();
-            var tx = transactions.find(function(t) { return t.id === id; });
+            var tx = await getTransaction(id);
             if (!tx) {
                 return sendJson(res, 404, { success: false, message: 'Transaction not found' });
             }
@@ -2393,7 +2434,7 @@ var server = http.createServer(async function(req, res) {
         // ============================================================
         if (req.method === 'GET' && url.pathname === '/api/transactions') {
             var phone = url.searchParams.get('phone');
-            var filtered = phone ? transactions.filter(function(t) { return t.phoneNumber === phone; }) : transactions;
+            var filtered = phone ? await getTransactionsByPhone(phone) : await getAllTransactions();
             return sendJson(res, 200, { success: true, data: filtered, count: filtered.length });
         }
 
@@ -2404,8 +2445,10 @@ var server = http.createServer(async function(req, res) {
             var phone = url.searchParams.get('phone');
             if (!phone) return sendJson(res, 400, { success: false, message: 'Phone number required' });
             var active = null;
-            for (var i = 0; i < transactions.length; i++) {
-                var t = transactions[i];
+            
+            var allTx = await getAllTransactions();
+            for (var i = 0; i < allTx.length; i++) {
+                var t = allTx[i];
                 if (t.phoneNumber === phone && t.status === 'completed' && t.username && (!t.expiresAt || new Date(t.expiresAt) > new Date())) {
                     active = t;
                     break;
@@ -2441,15 +2484,15 @@ var server = http.createServer(async function(req, res) {
                 return sendJson(res, 400, { success: false, message: 'Voucher code required' });
             }
             
-            var voucher = vouchers.find(function(v) { return v.code === code && !v.used; });
-            if (!voucher) {
+            var voucher = await getVoucherByCode(code);
+            if (!voucher || voucher.used) {
                 return sendJson(res, 404, { success: false, message: 'Invalid or already used voucher' });
             }
             
             voucher.used = true;
             voucher.usedBy = phoneNumber || 'unknown';
             voucher.usedAt = new Date().toISOString();
-            saveVouchers();
+            await updateVoucher(code, voucher);
             
             var transactionId = 'VOUCH_' + Date.now();
             var duration = voucher.duration_seconds || 3600;
@@ -2467,19 +2510,19 @@ var server = http.createServer(async function(req, res) {
                 password: 'vpass_' + Date.now().toString(36),
                 deviceId: deviceId || null
             };
-            transactions.push(tx);
-            saveTransactions();
+            await createTransaction(tx);
             
             // Register device for voucher
             if (deviceId) {
-                registerDeviceConnection(
-                    deviceId,
-                    phoneNumber || 'voucher_user',
-                    tx.username,
-                    voucher.planName,
-                    tx.expiresAt,
-                    transactionId
-                );
+                await registerDevice({
+                    deviceId: deviceId,
+                    phoneNumber: phoneNumber || 'voucher_user',
+                    username: tx.username,
+                    planName: voucher.planName,
+                    expiresAt: tx.expiresAt,
+                    connectedAt: new Date().toISOString(),
+                    active: true
+                });
             }
             
             return sendJson(res, 200, {
@@ -2515,9 +2558,10 @@ var server = http.createServer(async function(req, res) {
             }
             
             var generated = [];
+            var vouchersToInsert = [];
             for (var i = 0; i < count; i++) {
                 var code = generateVoucherCode();
-                vouchers.push({
+                var voucherData = {
                     code: code,
                     planId: plan.id,
                     planName: plan.name,
@@ -2527,10 +2571,11 @@ var server = http.createServer(async function(req, res) {
                     usedBy: null,
                     usedAt: null,
                     createdAt: new Date().toISOString()
-                });
+                };
+                vouchersToInsert.push(voucherData);
                 generated.push(code);
             }
-            saveVouchers();
+            await createVouchers(vouchersToInsert);
             
             return sendJson(res, 200, {
                 success: true,
@@ -2545,13 +2590,14 @@ var server = http.createServer(async function(req, res) {
         // ============================================================
         if (req.method === 'GET' && url.pathname === '/api/admin/vouchers') {
             if (!isAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
-            var used = vouchers.filter(function(v) { return v.used; }).length;
+            var allVouchers = await getAllVouchers();
+            var used = allVouchers.filter(function(v) { return v.used; }).length;
             return sendJson(res, 200, {
                 success: true,
-                data: vouchers,
-                count: vouchers.length,
+                data: allVouchers,
+                count: allVouchers.length,
                 used: used,
-                unused: vouchers.length - used
+                unused: allVouchers.length - used
             });
         }
 
@@ -2586,7 +2632,8 @@ var server = http.createServer(async function(req, res) {
         // ============================================================
         if (req.method === 'GET' && url.pathname === '/api/master/organizations') {
             if (!isMasterAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
-            return sendJson(res, 200, { success: true, data: organizations, count: organizations.length });
+            var allOrgs = await getAllOrganizations();
+            return sendJson(res, 200, { success: true, data: allOrgs, count: allOrgs.length });
         }
 
         // ============================================================
@@ -2596,12 +2643,12 @@ var server = http.createServer(async function(req, res) {
             if (!isMasterAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
             
             var orgId = url.pathname.split('/').pop();
-            var org = getOrganizationByClientId(orgId);
+            var org = await getOrganizationByClientId(orgId);
             if (!org) {
                 return sendJson(res, 404, { success: false, message: 'Organization not found' });
             }
             
-            var access = checkSubscriptionAccess(org.id);
+            var access = await checkSubscriptionAccess(org.id);
             if (!access.allowed) {
                 return sendJson(res, 403, {
                     success: false,
@@ -2636,7 +2683,7 @@ var server = http.createServer(async function(req, res) {
                 return sendHtml(res, 404, '<h1>Organization not found</h1>');
             }
             
-            var org = getOrganizationByClientId(orgId);
+            var org = await getOrganizationByClientId(orgId);
             if (!org) {
                 return sendHtml(res, 404, '<h1>Organization not found</h1>');
             }
@@ -2649,19 +2696,28 @@ var server = http.createServer(async function(req, res) {
         // API INFO
         // ============================================================
         if (req.method === 'GET' && url.pathname === '/api') {
-            var totalRevenue = transactions.filter(function(t) { return t.status === 'completed'; }).reduce(function(sum, t) { return sum + (t.amount || 0); }, 0);
-            var activeSubscriptions = subscriptions.filter(function(s) { return s.status === 'active' || s.status === 'trial'; }).length;
+            var allTx = await getAllTransactions();
+            var completedTx = allTx.filter(function(t) { return t.status === 'completed'; });
+            var totalRevenue = completedTx.reduce(function(sum, t) { return sum + (t.amount || 0); }, 0);
+            var allSubs = await getAllSubscriptions();
+            var activeSubs = allSubs.filter(function(s) { return s.status === 'active' || s.status === 'trial'; });
+            var activeDevicesCount = await getActiveDevicesCount();
+            var allOrgs = await getAllOrganizations();
+            var allVouchers = await getAllVouchers();
+            var unusedVouchers = allVouchers.filter(function(v) { return !v.used; });
+            
             return sendJson(res, 200, {
                 name: 'GICH WiFi API',
-                version: '5.0.0',
+                version: '6.0.0-mongodb',
                 status: 'Running',
+                database: 'MongoDB Atlas',
                 statistics: {
-                    totalTransactions: transactions.length,
+                    totalTransactions: allTx.length,
                     totalRevenue: totalRevenue,
-                    activeVouchers: vouchers.filter(function(v) { return !v.used; }).length,
-                    totalOrganizations: organizations.length,
-                    activeSubscriptions: activeSubscriptions,
-                    activeDevices: activeDevices.length
+                    activeVouchers: unusedVouchers.length,
+                    totalOrganizations: allOrgs.length,
+                    activeSubscriptions: activeSubs.length,
+                    activeDevices: activeDevicesCount
                 }
             });
         }
@@ -2670,32 +2726,56 @@ var server = http.createServer(async function(req, res) {
 
     } catch (err) {
         console.error('Server error:', err);
-        return sendJson(res, 500, { error: 'Internal server error' });
+        return sendJson(res, 500, { error: 'Internal server error', message: err.message });
     }
 });
 
 // ============================================================
-// LOAD DATA & START SERVER
+// START SERVER
 // ============================================================
 
-loadAllData();
+async function startServer() {
+    try {
+        // Connect to MongoDB first
+        await connectDB();
+        
+        // Then start the HTTP server
+        server.listen(PORT, '0.0.0.0', function() {
+            console.log('\n========================================');
+            console.log('🌐 GICH WiFi API');
+            console.log('========================================');
+            console.log('✅ Server running on port: ' + PORT);
+            console.log('📍 http://localhost:' + PORT + '/');
+            console.log('========================================');
+            console.log('🛡️ Admin PIN: ' + (ADMIN_PASSWORD ? '✅ Set' : '⚠️ NOT SET'));
+            console.log('👑 Master PIN: ' + (MASTER_PASSWORD ? '✅ Set' : '⚠️ NOT SET'));
+            console.log('🗄️  Database: MongoDB Atlas - CONNECTED');
+            console.log('📱 Device Tracking: ✅ ENABLED');
+            console.log('========================================\n');
+        });
+    } catch (error) {
+        console.error('❌ Failed to start server:', error);
+        process.exit(1);
+    }
+}
 
-server.listen(PORT, '0.0.0.0', function() {
-    console.log('\n========================================');
-    console.log('🌐 GICH WiFi API');
-    console.log('========================================');
-    console.log('✅ Server running on port: ' + PORT);
-    console.log('📍 http://localhost:' + PORT + '/');
-    console.log('========================================');
-    console.log('🛡️ Admin PIN: ' + (ADMIN_PASSWORD ? '✅ Set' : '⚠️ NOT SET'));
-    console.log('👑 Master PIN: ' + (MASTER_PASSWORD ? '✅ Set' : '⚠️ NOT SET'));
-    console.log('🏢 Organizations: ' + organizations.length);
-    console.log('📋 Active Subscriptions: ' + subscriptions.filter(function(s) { return s.status === 'active' || s.status === 'trial'; }).length);
-    console.log('📂 Transactions: ' + transactions.length);
-    console.log('🎟️ Vouchers: ' + vouchers.length);
-    console.log('📱 Active Devices: ' + activeDevices.length);
-    console.log('========================================\n');
+// Handle graceful shutdown
+process.on('SIGINT', async function() {
+    console.log('\n🛑 Shutting down...');
+    if (client) {
+        await client.close();
+        console.log('✅ MongoDB connection closed');
+    }
+    process.exit(0);
 });
 
-process.on('uncaughtException', function(err) { console.error('❌ Uncaught Exception:', err); });
-process.on('unhandledRejection', function(reason) { console.error('❌ Unhandled Rejection:', reason); });
+process.on('uncaughtException', function(err) { 
+    console.error('❌ Uncaught Exception:', err); 
+});
+
+process.on('unhandledRejection', function(reason) { 
+    console.error('❌ Unhandled Rejection:', reason); 
+});
+
+// Start the server
+startServer();
