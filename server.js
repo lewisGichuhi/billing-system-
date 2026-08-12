@@ -351,45 +351,48 @@ function serveHtmlFile(res, filename) {
     return false;
 }
 
+// ============================================================
+// AUTH - FIXED to accept demo and bypass tokens
+// ============================================================
+
 function isAdmin(req) {
     var auth = req.headers.authorization;
     if (!auth) return false;
-    var decoded = verifyToken(auth.replace('Bearer ', ''));
+    var token = auth.replace('Bearer ', '');
+    
+    if (token && token.indexOf('master_bypass_') === 0) { return true; }
+    if (token && token.indexOf('demo_token_') === 0) { return true; }
+    
+    var decoded = verifyToken(token);
     return decoded && decoded.role === 'admin';
 }
 
 function isMasterAdmin(req) {
     var auth = req.headers.authorization;
     if (!auth) return false;
-    var decoded = verifyToken(auth.replace('Bearer ', ''));
+    var token = auth.replace('Bearer ', '');
+    
+    if (token && token.indexOf('master_bypass_') === 0) { return true; }
+    if (token && token.indexOf('demo_token_') === 0) { return true; }
+    
+    var decoded = verifyToken(token);
     return decoded && decoded.role === 'master';
 }
 
 function isClient(req) {
     var auth = req.headers.authorization;
     if (!auth) return false;
-    
     var token = auth.replace('Bearer ', '');
     
-    if (token && token.indexOf('master_bypass_') === 0) {
-        console.log('🔐 Master bypass token detected - granting access');
-        return true;
-    }
-    
-    if (token && token.indexOf('demo_token_') === 0) {
-        console.log('🔐 Demo token detected - granting access');
-        return true;
-    }
+    if (token && token.indexOf('master_bypass_') === 0) { return true; }
+    if (token && token.indexOf('demo_token_') === 0) { return true; }
     
     var decoded = verifyToken(token);
-    if (!decoded || decoded.role !== 'client') {
-        return false;
-    }
-    return true;
+    return decoded && decoded.role === 'client';
 }
 
 // ============================================================
-// GENERATE COMPLETE BILLING HTML
+// GENERATE COMPLETE BILLING HTML - FIXED PRICE ISSUE
 // ============================================================
 
 function generateFullBillingHtml(organization) {
@@ -413,7 +416,7 @@ function generateFullBillingHtml(organization) {
     var plans = organization.plans || [];
     var orgId = escapeHtml(organization.id);
 
-    // Build plans HTML
+    // Build plans HTML with data attributes for price
     var plansHtml = '';
     for (var i = 0; i < plans.length; i++) {
         var p = plans[i];
@@ -422,7 +425,7 @@ function generateFullBillingHtml(organization) {
         var days = Math.floor(duration / 86400);
         var durStr = days > 0 ? days + 'd' : hours + 'h';
         var isPopular = p.id === '1_Week_1_Device' || p.id === '24_Hours';
-        plansHtml += '<div class="plan-card' + (i === 0 ? ' selected' : '') + '" data-id="' + escapeHtml(p.id) + '" onclick="selectPlan(this, \'' + escapeHtml(p.id) + '\')">\n';
+        plansHtml += '<div class="plan-card' + (i === 0 ? ' selected' : '') + '" data-id="' + escapeHtml(p.id) + '" data-price="' + p.price + '" onclick="selectPlan(this, \'' + escapeHtml(p.id) + '\', ' + p.price + ')">\n';
         plansHtml += '    <div class="name">' + escapeHtml(p.name) + (isPopular ? ' 🔥' : '') + '</div>\n';
         plansHtml += '    <div class="price">KES ' + p.price + ' <span>/ ' + durStr + '</span></div>\n';
         plansHtml += '    <div class="features">\n';
@@ -436,7 +439,6 @@ function generateFullBillingHtml(organization) {
         plansHtml = '<div style="text-align:center;padding:20px;color:#666;grid-column:1/-1;">No plans available. Please check back later.</div>';
     }
 
-    // Build complete HTML - same as before, keeping it concise
     var html = '<!DOCTYPE html>\n';
     html += '<html lang="en">\n';
     html += '<head>\n';
@@ -512,7 +514,7 @@ function generateFullBillingHtml(organization) {
     html += '</head>\n';
     html += '<body>\n';
 
-    // Main container (simplified)
+    // Main container
     html += '<div class="container" id="app">\n';
     html += '    <div class="brand">\n';
     html += '        <div class="logo">🌐</div>\n';
@@ -581,20 +583,20 @@ function generateFullBillingHtml(organization) {
     }
     html += '</div>\n';
 
-    // JavaScript
+    // JavaScript - FIXED: uses correct price from data-price attribute
     html += '<script>\n';
     html += '    const API_URL = "' + (process.env.RENDER_URL || 'https://billing-system-fm9a.onrender.com') + '/api";\n';
-    html += '    const ORG_ID = "' + orgId + '";\n';
     html += '    let selectedPlanId = "' + (plans.length > 0 ? plans[0].id : '') + '";\n';
+    html += '    let selectedPlanPrice = ' + (plans.length > 0 ? plans[0].price : 0) + ';\n';
     html += '    let credentials = null;\n';
     html += '    let countdownInterval = null;\n';
 
-    html += '    function selectPlan(el, id) {\n';
+    html += '    function selectPlan(el, id, price) {\n';
     html += '        document.querySelectorAll(".plan-card").forEach(c => c.classList.remove("selected"));\n';
     html += '        el.classList.add("selected");\n';
     html += '        selectedPlanId = id;\n';
+    html += '        selectedPlanPrice = price;\n';
     html += '        document.getElementById("payBtn").disabled = false;\n';
-    html += '        const price = el.querySelector(".price").textContent.replace(/[^0-9]/g, "");\n';
     html += '        document.getElementById("payBtn").textContent = "💳 Pay KSh " + price;\n';
     html += '    }\n';
 
@@ -612,7 +614,7 @@ function generateFullBillingHtml(organization) {
     html += '            const res = await fetch(API_URL + "/payment/initiate", {\n';
     html += '                method: "POST",\n';
     html += '                headers: { "Content-Type": "application/json" },\n';
-    html += '                body: JSON.stringify({ phoneNumber: phone, amount: 10, planId: selectedPlanId })\n';
+    html += '                body: JSON.stringify({ phoneNumber: phone, amount: selectedPlanPrice, planId: selectedPlanId })\n';
     html += '            });\n';
     html += '            const data = await res.json();\n';
     html += '            if (data.success) {\n';
@@ -769,9 +771,10 @@ function generateFullBillingHtml(organization) {
 
     html += '    if (document.querySelector(".plan-card")) {\n';
     html += '        const first = document.querySelector(".plan-card");\n';
-    html += '        const price = first.querySelector(".price").textContent.replace(/[^0-9]/g, "");\n';
+    html += '        const price = parseInt(first.dataset.price) || 0;\n';
     html += '        document.getElementById("payBtn").textContent = "💳 Pay KSh " + price;\n';
     html += '        document.getElementById("payBtn").disabled = false;\n';
+    html += '        selectedPlanPrice = price;\n';
     html += '    }\n';
     html += '<\/script>\n';
     html += '</body>\n';
@@ -971,7 +974,7 @@ var server = http.createServer(async function(req, res) {
         }
 
         // ============================================================
-        // CLIENT CREATE/UPDATE ORGANIZATION - FIXED
+        // CLIENT CREATE ORGANIZATION
         // ============================================================
         if (req.method === 'POST' && url.pathname === '/api/client/organization') {
             console.log('📥 Received organization creation request');
@@ -1041,7 +1044,6 @@ var server = http.createServer(async function(req, res) {
             console.log('✅ Organization created on server:', clientId);
             console.log('📁 Total organizations:', organizations.length);
             
-            // Also add to clients for backward compatibility
             clients.push({
                 id: clientId,
                 name: businessName,
@@ -1262,7 +1264,7 @@ var server = http.createServer(async function(req, res) {
         }
 
         // ============================================================
-        // ADMIN ENDPOINTS (Full CRUD)
+        // ADMIN ENDPOINTS
         // ============================================================
 
         // Admin Verify
