@@ -1,6 +1,7 @@
 /**
  * GICH WiFi - Complete Backend with Daraja Integration & Subscription System
  * Full M-Pesa STK Push with multi-tenant support
+ * INCLUDES: Device Tracking - Remembers devices with active plans
  */
 
 require('dotenv').config();
@@ -13,7 +14,7 @@ const path = require('path');
 const crypto = require('crypto');
 
 // ============================================================
-// DEVICE TRACKING SYSTEM - NEW FEATURE
+// DEVICE TRACKING SYSTEM - COMPLETE IMPLEMENTATION
 // ============================================================
 
 // Store active device connections
@@ -43,18 +44,7 @@ function saveActiveDevices() {
     }
 }
 
-function getDeviceFingerprint(req) {
-    // Create a unique device fingerprint from IP and User-Agent
-    var ip = req.headers['x-forwarded-for'] || req.connection.remoteAddress || req.socket.remoteAddress || 'unknown';
-    var userAgent = req.headers['user-agent'] || 'unknown';
-    // Simple fingerprint - combination of IP and browser info
-    var fingerprint = crypto.createHash('sha256')
-        .update(ip + '|' + userAgent)
-        .digest('hex');
-    return fingerprint;
-}
-
-function checkDeviceAlreadyConnected(deviceFingerprint, phoneNumber) {
+function checkDeviceAlreadyConnected(deviceId, phoneNumber) {
     var now = new Date();
     // Clean up expired connections (older than 1 hour)
     activeDevices = activeDevices.filter(function(d) {
@@ -62,46 +52,46 @@ function checkDeviceAlreadyConnected(deviceFingerprint, phoneNumber) {
         var diffMinutes = (now - connectedAt) / (1000 * 60);
         return diffMinutes < 60; // Remove after 1 hour of inactivity
     });
-    saveActiveDevices();
     
     // Check if this device is already connected with an active plan
     var existing = activeDevices.find(function(d) {
-        return d.fingerprint === deviceFingerprint && 
-               d.phoneNumber === phoneNumber &&
-               d.active === true;
+        return d.deviceId === deviceId && d.active === true;
     });
     
     if (existing) {
         // Update the timestamp to keep it alive
         existing.connectedAt = now.toISOString();
         saveActiveDevices();
-        return true;
+        return existing;
     }
-    return false;
+    return null;
 }
 
-function registerDeviceConnection(deviceFingerprint, phoneNumber, username, planName, expiresAt) {
+function registerDeviceConnection(deviceId, phoneNumber, username, planName, expiresAt, transactionId) {
     var now = new Date();
     // Remove any existing entry for this device
     activeDevices = activeDevices.filter(function(d) {
-        return d.fingerprint !== deviceFingerprint;
+        return d.deviceId !== deviceId;
     });
     
-    activeDevices.push({
-        fingerprint: deviceFingerprint,
+    var newDevice = {
+        deviceId: deviceId,
         phoneNumber: phoneNumber,
         username: username,
         planName: planName,
         expiresAt: expiresAt,
         connectedAt: now.toISOString(),
+        transactionId: transactionId,
         active: true
-    });
+    };
+    activeDevices.push(newDevice);
     saveActiveDevices();
+    return newDevice;
 }
 
-function removeDeviceConnection(deviceFingerprint) {
+function removeDeviceConnection(deviceId) {
     activeDevices = activeDevices.filter(function(d) {
-        return d.fingerprint !== deviceFingerprint;
+        return d.deviceId !== deviceId;
     });
     saveActiveDevices();
 }
@@ -754,7 +744,7 @@ function generateRedirectHtml(organization) {
 }
 
 // ============================================================
-// GENERATE CUSTOMER BILLING PAGE - FIXED
+// GENERATE CUSTOMER BILLING PAGE - WITH DEVICE TRACKING
 // ============================================================
 
 function generateCustomerBillingPage(organization) {
@@ -896,12 +886,35 @@ function generateCustomerBillingPage(organization) {
     html += '        .toast.success { border-color: ' + primaryColor + '; }\n';
     html += '        .toast.error { border-color: #ff4444; }\n';
     html += '        .toast.info { border-color: #2196f3; }\n';
+    html += '        .already-connected-overlay { position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: ' + accentColor + '; display: none; flex-direction: column; align-items: center; justify-content: center; z-index: 10000; padding: 30px; }\n';
+    html += '        .already-connected-overlay.active { display: flex; }\n';
+    html += '        .already-connected-overlay .icon { font-size: 80px; margin-bottom: 16px; }\n';
+    html += '        .already-connected-overlay .title { font-size: 32px; font-weight: 700; color: ' + primaryColor + '; margin-bottom: 8px; }\n';
+    html += '        .already-connected-overlay .sub { color: #aaa; font-size: 18px; margin-bottom: 8px; }\n';
+    html += '        .already-connected-overlay .details { color: #666; font-size: 14px; margin-top: 8px; }\n';
+    html += '        .already-connected-overlay .timer-box { background: rgba(255,255,255,0.03); padding: 20px 40px; border-radius: 16px; border: 1px solid rgba(255,255,255,0.04); margin: 16px 0; text-align: center; }\n';
+    html += '        .already-connected-overlay .timer-box .label { color: #666; font-size: 12px; text-transform: uppercase; letter-spacing: 2px; }\n';
+    html += '        .already-connected-overlay .timer-box .time { font-size: 44px; font-weight: 700; color: ' + primaryColor + '; font-family: \'Courier New\', monospace; letter-spacing: 4px; }\n';
     html += '        @keyframes toastIn { from { opacity: 0; transform: translateX(-50%) translateY(30px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }\n';
     html += '        @media (max-width: 480px) { .container { padding: 20px 16px; } .plan-grid { grid-template-columns: 1fr 1fr; gap: 8px; } .plan-card { padding: 12px 10px; } .plan-card .price { font-size: 18px; } .voucher-row { flex-direction: column; } .voucher-row .btn { width: 100%; } .check-row { flex-direction: column; } .check-row .btn { width: 100%; } .connected-overlay .timer-box .time { font-size: 34px; } .connected-overlay .timer-box { padding: 20px; } .upgrade-section .plan-options { grid-template-columns: 1fr 1fr; } }\n';
     html += '        @media (max-width: 380px) { .plan-grid { grid-template-columns: 1fr; } .upgrade-section .plan-options { grid-template-columns: 1fr; } }\n';
     html += '    </style>\n';
     html += '</head>\n';
     html += '<body>\n';
+
+    // ALREADY CONNECTED OVERLAY
+    html += '<div class="already-connected-overlay" id="alreadyConnectedOverlay">\n';
+    html += '    <div class="icon">🔌</div>\n';
+    html += '    <div class="title">Already Connected!</div>\n';
+    html += '    <div class="sub">You are already connected on this device</div>\n';
+    html += '    <div class="details" id="alreadyConnectedDetails">Plan: <span id="alreadyPlan">-</span></div>\n';
+    html += '    <div class="timer-box">\n';
+    html += '        <div class="label">⏱ Time Remaining</div>\n';
+    html += '        <div class="time" id="alreadyTimer">--:--:--</div>\n';
+    html += '    </div>\n';
+    html += '    <div class="details" style="margin-top:12px;">This page will close automatically...</div>\n';
+    html += '    <div class="powered" style="margin-top:20px;color:#444;font-size:12px;">Powered by <span class="brand" style="color:' + primaryColor + ';font-weight:600;">GICH WiFi</span></div>\n';
+    html += '</div>\n';
 
     // Main container
     html += '<div class="container" id="app">\n';
@@ -986,7 +999,7 @@ function generateCustomerBillingPage(organization) {
     html += '    <span id="toastMessage">Success!</span>\n';
     html += '</div>\n';
 
-    // JavaScript - ALL FUNCTIONS IN GLOBAL SCOPE
+    // JavaScript - WITH DEVICE TRACKING
     html += '<script>\n';
     html += '    var ORG_ID = "' + orgId + '";\n';
     html += '    var ORG_EMAIL = "' + orgEmail + '";\n';
@@ -997,8 +1010,77 @@ function generateCustomerBillingPage(organization) {
     html += '    var countdownInterval = null;\n';
     html += '    var pollingInterval = null;\n';
     html += '    var subscriptionStatus = null;\n';
+    html += '    var deviceId = null;\n';
     html += '\n';
     html += '    function getEl(id) { return document.getElementById(id); }\n';
+    html += '\n';
+    html += '    // Generate or get persistent device ID from localStorage\n';
+    html += '    function getDeviceId() {\n';
+    html += '        var stored = localStorage.getItem("gich_device_id");\n';
+    html += '        if (stored) return stored;\n';
+    html += '        var newId = "device_" + Date.now() + "_" + Math.random().toString(36).substring(2, 15);\n';
+    html += '        localStorage.setItem("gich_device_id", newId);\n';
+    html += '        return newId;\n';
+    html += '    }\n';
+    html += '\n';
+    html += '    // Check if device is already connected\n';
+    html += '    function checkDeviceConnection(phoneNumber) {\n';
+    html += '        if (!phoneNumber) return;\n';
+    html += '        fetch(API_URL + "/device/check", {\n';
+    html += '            method: "POST",\n';
+    html += '            headers: { "Content-Type": "application/json" },\n';
+    html += '            body: JSON.stringify({\n';
+    html += '                phoneNumber: phoneNumber,\n';
+    html += '                deviceId: deviceId\n';
+    html += '            })\n';
+    html += '        })\n';
+    html += '        .then(function(r) { return r.json(); })\n';
+    html += '        .then(function(data) {\n';
+    html += '            if (data.success && data.alreadyConnected) {\n';
+    html += '                // Show already connected overlay\n';
+    html += '                showAlreadyConnected(data.session);\n';
+    html += '                // Auto-close after 5 seconds\n';
+    html += '                setTimeout(function() {\n';
+    html += '                    window.close();\n';
+    html += '                }, 5000);\n';
+    html += '            }\n';
+    html += '        })\n';
+    html += '        .catch(function(err) { console.error("Device check error:", err); });\n';
+    html += '    }\n';
+    html += '\n';
+    html += '    function showAlreadyConnected(session) {\n';
+    html += '        document.getElementById("app").style.display = "none";\n';
+    html += '        var overlay = getEl("alreadyConnectedOverlay");\n';
+    html += '        overlay.classList.add("active");\n';
+    html += '        if (session) {\n';
+    html += '            getEl("alreadyPlan").textContent = session.planName || "Unknown Plan";\n';
+    html += '            if (session.expiresAt) {\n';
+    html += '                startAlreadyCountdown(session.expiresAt);\n';
+    html += '            }\n';
+    html += '        }\n';
+    html += '    }\n';
+    html += '\n';
+    html += '    function startAlreadyCountdown(expiresAt) {\n';
+    html += '        var timer = getEl("alreadyTimer");\n';
+    html += '        function update() {\n';
+    html += '            var now = Date.now();\n';
+    html += '            var expiry = new Date(expiresAt).getTime();\n';
+    html += '            var diff = Math.max(0, expiry - now);\n';
+    html += '            if (diff <= 0) {\n';
+    html += '                timer.textContent = "00:00:00";\n';
+    html += '                timer.classList.add("expired");\n';
+    html += '                clearInterval(countdownInterval);\n';
+    html += '                return;\n';
+    html += '            }\n';
+    html += '            timer.classList.remove("expired");\n';
+    html += '            var hours = Math.floor(diff / 3600000);\n';
+    html += '            var mins = Math.floor((diff % 3600000) / 60000);\n';
+    html += '            var secs = Math.floor((diff % 60000) / 1000);\n';
+    html += '            timer.textContent = String(hours).padStart(2, "0") + ":" + String(mins).padStart(2, "0") + ":" + String(secs).padStart(2, "0");\n';
+    html += '        }\n';
+    html += '        update();\n';
+    html += '        countdownInterval = setInterval(update, 1000);\n';
+    html += '    }\n';
     html += '\n';
     html += '    function selectPlan(el, id, price) {\n';
     html += '        var cards = document.querySelectorAll(".plan-card");\n';
@@ -1086,7 +1168,8 @@ function generateCustomerBillingPage(organization) {
     html += '                phoneNumber: phone,\n';
     html += '                amount: selectedPlanPrice,\n';
     html += '                planId: selectedPlan,\n';
-    html += '                organizationId: ORG_ID\n';
+    html += '                organizationId: ORG_ID,\n';
+    html += '                deviceId: deviceId\n';
     html += '            })\n';
     html += '        })\n';
     html += '        .then(function(r) { return r.json(); })\n';
@@ -1168,8 +1251,11 @@ function generateCustomerBillingPage(organization) {
     html += '                        username: data.username || "N/A",\n';
     html += '                        password: data.password || "N/A",\n';
     html += '                        plan: data.plan || "N/A",\n';
-    html += '                        expiresAt: data.expiresAt\n';
+    html += '                        expiresAt: data.expiresAt,\n';
+    html += '                        phoneNumber: getEl("phoneInput").value.trim()\n';
     html += '                    };\n';
+    html += '                    // Register device connection\n';
+    html += '                    registerDevice(credentials);\n';
     html += '                    showConnectedPage(credentials);\n';
     html += '                } else {\n';
     html += '                    showToast("❌ Failed to get credentials", "error");\n';
@@ -1179,6 +1265,27 @@ function generateCustomerBillingPage(organization) {
     html += '                console.error("Error fetching credentials:", err);\n';
     html += '                showToast("❌ Error fetching credentials", "error");\n';
     html += '            });\n';
+    html += '    }\n';
+    html += '\n';
+    html += '    function registerDevice(cred) {\n';
+    html += '        fetch(API_URL + "/device/register", {\n';
+    html += '            method: "POST",\n';
+    html += '            headers: { "Content-Type": "application/json" },\n';
+    html += '            body: JSON.stringify({\n';
+    html += '                deviceId: deviceId,\n';
+    html += '                phoneNumber: cred.phoneNumber,\n';
+    html += '                username: cred.username,\n';
+    html += '                planName: cred.plan,\n';
+    html += '                expiresAt: cred.expiresAt\n';
+    html += '            })\n';
+    html += '        })\n';
+    html += '        .then(function(r) { return r.json(); })\n';
+    html += '        .then(function(data) {\n';
+    html += '            if (data.success) {\n';
+    html += '                console.log("Device registered:", data.message);\n';
+    html += '            }\n';
+    html += '        })\n';
+    html += '        .catch(function(err) { console.error("Device registration error:", err); });\n';
     html += '    }\n';
     html += '\n';
     html += '    function showConnectedPage(cred) {\n';
@@ -1218,6 +1325,12 @@ function generateCustomerBillingPage(organization) {
     html += '    function redeemVoucher() {\n';
     html += '        var code = getEl("voucherInput").value.trim().toUpperCase();\n';
     html += '        var resultEl = getEl("voucherResult");\n';
+    html += '        var phone = getEl("phoneInput").value.trim();\n';
+    html += '        if (!phone || phone.length < 10) {\n';
+    html += '            resultEl.className = "result-box show error";\n';
+    html += '            resultEl.textContent = "📱 Please enter your phone number first";\n';
+    html += '            return;\n';
+    html += '        }\n';
     html += '        if (!code) {\n';
     html += '            resultEl.className = "result-box show error";\n';
     html += '            resultEl.textContent = "❌ Please enter a voucher code";\n';
@@ -1228,7 +1341,7 @@ function generateCustomerBillingPage(organization) {
     html += '        fetch(API_URL + "/voucher/redeem", {\n';
     html += '            method: "POST",\n';
     html += '            headers: { "Content-Type": "application/json" },\n';
-    html += '            body: JSON.stringify({ code: code, phoneNumber: getEl("phoneInput").value.trim() || "voucher_user" })\n';
+    html += '            body: JSON.stringify({ code: code, phoneNumber: phone })\n';
     html += '        })\n';
     html += '        .then(function(r) { return r.json(); })\n';
     html += '        .then(function(data) {\n';
@@ -1240,8 +1353,11 @@ function generateCustomerBillingPage(organization) {
     html += '                    username: data.data.username || "voucher_user",\n';
     html += '                    password: data.data.password || "pass_" + Date.now(),\n';
     html += '                    plan: data.data.planName || "Voucher Plan",\n';
-    html += '                    expiresAt: data.data.expiresAt || new Date(Date.now() + 3600000).toISOString()\n';
+    html += '                    expiresAt: data.data.expiresAt || new Date(Date.now() + 3600000).toISOString(),\n';
+    html += '                    phoneNumber: phone\n';
     html += '                };\n';
+    html += '                // Register device for voucher\n';
+    html += '                registerDevice(credentials);\n';
     html += '                showConnectedPage(credentials);\n';
     html += '            } else {\n';
     html += '                resultEl.className = "result-box show error";\n';
@@ -1270,14 +1386,18 @@ function generateCustomerBillingPage(organization) {
     html += '            .then(function(r) { return r.json(); })\n';
     html += '            .then(function(data) {\n';
     html += '                if (data.success && data.active) {\n';
+    html += '                    // Check device connection first\n';
+    html += '                    checkDeviceConnection(phone);\n';
     html += '                    resultEl.className = "result-box show success";\n';
     html += '                    resultEl.textContent = "✅ Active plan found! Connecting...";\n';
     html += '                    credentials = {\n';
     html += '                        username: data.data.username,\n';
     html += '                        password: data.data.password,\n';
     html += '                        plan: data.data.planName,\n';
-    html += '                        expiresAt: data.data.expiresAt\n';
+    html += '                        expiresAt: data.data.expiresAt,\n';
+    html += '                        phoneNumber: phone\n';
     html += '                    };\n';
+    html += '                    registerDevice(credentials);\n';
     html += '                    showConnectedPage(credentials);\n';
     html += '                } else {\n';
     html += '                    resultEl.className = "result-box show error";\n';
@@ -1314,7 +1434,8 @@ function generateCustomerBillingPage(organization) {
     html += '                planId: "subscription_" + planType,\n';
     html += '                organizationId: ORG_ID,\n';
     html += '                isSubscription: true,\n';
-    html += '                subscriptionPlan: planType\n';
+    html += '                subscriptionPlan: planType,\n';
+    html += '                deviceId: deviceId\n';
     html += '            })\n';
     html += '        })\n';
     html += '        .then(function(r) { return r.json(); })\n';
@@ -1425,12 +1546,30 @@ function generateCustomerBillingPage(organization) {
     html += '        toast._timeout = setTimeout(function() { toast.classList.remove("show"); }, 4000);\n';
     html += '    }\n';
     html += '\n';
-    html += '    // Event listeners\n';
+    html += '    // INITIALIZE - Check for existing device connection\n';
     html += '    document.addEventListener("DOMContentLoaded", function() {\n';
+    html += '        deviceId = getDeviceId();\n';
+    html += '        console.log("📱 Device ID:", deviceId);\n';
+    html += '        \n';
     html += '        getEl("phoneInput").addEventListener("keydown", function(e) { if (e.key === "Enter") initiatePayment(); });\n';
     html += '        getEl("voucherInput").addEventListener("keydown", function(e) { if (e.key === "Enter") redeemVoucher(); });\n';
     html += '        getEl("checkPhoneInput").addEventListener("keydown", function(e) { if (e.key === "Enter") checkPlan(); });\n';
     html += '        checkSubscriptionStatus();\n';
+    html += '        \n';
+    html += '        // Check device connection on load\n';
+    html += '        var savedPhone = localStorage.getItem("gich_last_phone");\n';
+    html += '        if (savedPhone) {\n';
+    html += '            getEl("phoneInput").value = savedPhone;\n';
+    html += '            checkDeviceConnection(savedPhone);\n';
+    html += '        }\n';
+    html += '        \n';
+    html += '        // Save phone number on input\n';
+    html += '        getEl("phoneInput").addEventListener("change", function() {\n';
+    html += '            var phone = this.value.trim();\n';
+    html += '            if (phone && phone.length >= 10) {\n';
+    html += '                localStorage.setItem("gich_last_phone", phone);\n';
+    html += '            }\n';
+    html += '        });\n';
     html += '    });\n';
     html += '<\/script>\n';
     html += '</body>\n';
@@ -1483,37 +1622,35 @@ var server = http.createServer(async function(req, res) {
         }
 
         // ============================================================
-        // DEVICE CONNECTION CHECK - NEW ENDPOINT
+        // DEVICE CONNECTION CHECK
         // ============================================================
         if (req.method === 'POST' && url.pathname === '/api/device/check') {
             var body = await readBody(req);
             var phoneNumber = body.phoneNumber;
-            var deviceFingerprint = body.deviceFingerprint || getDeviceFingerprint(req);
+            var deviceId = body.deviceId;
             
             if (!phoneNumber) {
                 return sendJson(res, 400, { success: false, message: 'Phone number required' });
             }
+            if (!deviceId) {
+                return sendJson(res, 400, { success: false, message: 'Device ID required' });
+            }
             
             // Check if device is already connected
-            var alreadyConnected = checkDeviceAlreadyConnected(deviceFingerprint, phoneNumber);
+            var existingSession = checkDeviceAlreadyConnected(deviceId, phoneNumber);
             
-            if (alreadyConnected) {
-                // Find the active session
-                var activeSession = activeDevices.find(function(d) {
-                    return d.fingerprint === deviceFingerprint && d.phoneNumber === phoneNumber;
-                });
-                
+            if (existingSession) {
                 return sendJson(res, 200, {
                     success: true,
                     alreadyConnected: true,
                     message: 'You are already connected on this device',
-                    session: activeSession ? {
-                        username: activeSession.username,
-                        planName: activeSession.planName,
-                        expiresAt: activeSession.expiresAt,
-                        connectedAt: activeSession.connectedAt
-                    } : null,
-                    shouldClose: true // Tell client to close itself
+                    session: {
+                        username: existingSession.username,
+                        planName: existingSession.planName,
+                        expiresAt: existingSession.expiresAt,
+                        connectedAt: existingSession.connectedAt
+                    },
+                    shouldClose: true
                 });
             }
             
@@ -1533,13 +1670,16 @@ var server = http.createServer(async function(req, res) {
             var username = body.username;
             var planName = body.planName;
             var expiresAt = body.expiresAt;
-            var deviceFingerprint = body.deviceFingerprint || getDeviceFingerprint(req);
+            var deviceId = body.deviceId;
             
             if (!phoneNumber) {
                 return sendJson(res, 400, { success: false, message: 'Phone number required' });
             }
+            if (!deviceId) {
+                return sendJson(res, 400, { success: false, message: 'Device ID required' });
+            }
             
-            registerDeviceConnection(deviceFingerprint, phoneNumber, username || 'user', planName || 'Unknown Plan', expiresAt);
+            registerDeviceConnection(deviceId, phoneNumber, username || 'user', planName || 'Unknown Plan', expiresAt, null);
             
             return sendJson(res, 200, {
                 success: true,
@@ -1818,9 +1958,27 @@ var server = http.createServer(async function(req, res) {
             var organizationId = body.organizationId;
             var isSubscription = body.isSubscription || false;
             var subscriptionPlan = body.subscriptionPlan || null;
+            var deviceId = body.deviceId;
             
             if (!phoneNumber || phoneNumber.length < 10) {
                 return sendJson(res, 400, { success: false, message: 'Invalid phone number' });
+            }
+            
+            // Check if device is already connected before allowing new payment
+            if (deviceId) {
+                var existing = checkDeviceAlreadyConnected(deviceId, phoneNumber);
+                if (existing) {
+                    return sendJson(res, 409, {
+                        success: false,
+                        alreadyConnected: true,
+                        message: 'You are already connected on this device. Please close this window.',
+                        session: {
+                            username: existing.username,
+                            planName: existing.planName,
+                            expiresAt: existing.expiresAt
+                        }
+                    });
+                }
             }
             
             var numericAmount = Math.round(Number(amount));
@@ -1864,13 +2022,19 @@ var server = http.createServer(async function(req, res) {
                         password: 'pass_' + Date.now().toString(36),
                         isSubscription: isSubscription,
                         subscriptionPlan: subscriptionPlan,
-                        organizationId: organizationId || null
+                        organizationId: organizationId || null,
+                        deviceId: deviceId
                     };
                     transactions.push(freeTx);
                     saveTransactions();
                     
                     if (isSubscription && org) {
                         activateSubscription(org.id, subscriptionPlan);
+                    }
+                    
+                    // Register device for free plan
+                    if (deviceId) {
+                        registerDeviceConnection(deviceId, phoneNumber, freeTx.username, planName, freeTx.expiresAt, transactionId);
                     }
                     
                     return sendJson(res, 200, {
@@ -1903,7 +2067,8 @@ var server = http.createServer(async function(req, res) {
                         password: null,
                         isSubscription: isSubscription,
                         subscriptionPlan: subscriptionPlan,
-                        organizationId: organizationId || null
+                        organizationId: organizationId || null,
+                        deviceId: deviceId
                     };
                     transactions.push(transaction);
                     saveTransactions();
@@ -1976,6 +2141,18 @@ var server = http.createServer(async function(req, res) {
                 saveTransactions();
                 
                 console.log('✅ Payment completed:', transaction.id);
+                
+                // Register device for this transaction
+                if (transaction.deviceId) {
+                    registerDeviceConnection(
+                        transaction.deviceId,
+                        transaction.phoneNumber,
+                        transaction.username,
+                        transaction.planName,
+                        transaction.expiresAt,
+                        transaction.id
+                    );
+                }
                 
                 if (transaction.isSubscription && transaction.organizationId) {
                     var org = getOrganizationByClientId(transaction.organizationId);
@@ -2136,10 +2313,23 @@ var server = http.createServer(async function(req, res) {
                 timestamp: new Date().toISOString(),
                 expiresAt: new Date(Date.now() + duration * 1000).toISOString(),
                 username: 'vuser_' + transactionId.substring(0, 8),
-                password: 'vpass_' + Date.now().toString(36)
+                password: 'vpass_' + Date.now().toString(36),
+                deviceId: body.deviceId || null
             };
             transactions.push(tx);
             saveTransactions();
+            
+            // Register device for voucher
+            if (body.deviceId) {
+                registerDeviceConnection(
+                    body.deviceId,
+                    phoneNumber || 'voucher_user',
+                    tx.username,
+                    voucher.planName,
+                    tx.expiresAt,
+                    transactionId
+                );
+            }
             
             return sendJson(res, 200, {
                 success: true,
