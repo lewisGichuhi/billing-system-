@@ -1,6 +1,6 @@
 /**
- * GICH WiFi - Complete Backend with Multi-Tenant Support
- * Deployable on Render with .env support
+ * GICH WiFi - Complete Backend with Aggregator Payment Support
+ * Supports Test & Production Modes
  */
 
 require('dotenv').config();
@@ -16,15 +16,60 @@ const crypto = require('crypto');
 // CONFIGURATION
 // ============================================================
 
-const SHORTCODE = process.env.SHORTCODE || '174379';
-const PASSKEY = process.env.PASSKEY || 'bfb279f9aa9bdbcf158e97dd71a467cd2e0c893059b10f78e6b72ada1ed2c919';
-const CONSUMER_KEY = process.env.CONSUMER_KEY || '';
-const CONSUMER_SECRET = process.env.CONSUMER_SECRET || '';
-const CALLBACK_URL = process.env.CALLBACK_URL || 'https://billing-system-fm9a.onrender.com/api/mpesa-callback';
 const PORT = process.env.PORT || 10000;
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '126483';
 const MASTER_PASSWORD = process.env.MASTER_PASSWORD || 'master126483';
 const JWT_SECRET = process.env.JWT_SECRET || crypto.randomBytes(32).toString('hex');
+
+// Aggregator Configuration
+const AGGREGATOR_CONFIG = {
+    defaultMode: process.env.AGGREGATOR_DEFAULT_MODE || 'test',
+    defaultProvider: process.env.AGGREGATOR_DEFAULT_PROVIDER || 'dpo',
+    providers: {
+        dpo: {
+            name: 'DPO Group',
+            feePercent: 1.5,
+            test: {
+                apiKey: process.env.DPO_TEST_API_KEY || 'test_dpo_key',
+                apiSecret: process.env.DPO_TEST_API_SECRET || 'test_dpo_secret',
+                baseUrl: 'https://sandbox.dpogroup.com/v1'
+            },
+            production: {
+                apiKey: process.env.DPO_PROD_API_KEY || '',
+                apiSecret: process.env.DPO_PROD_API_SECRET || '',
+                baseUrl: 'https://api.dpogroup.com/v1'
+            }
+        },
+        cellulant: {
+            name: 'Cellulant',
+            feePercent: 2.0,
+            test: {
+                apiKey: process.env.CELLULANT_TEST_API_KEY || 'test_cellulant_key',
+                apiSecret: process.env.CELLULANT_TEST_API_SECRET || 'test_cellulant_secret',
+                baseUrl: 'https://sandbox.cellulant.com/v1'
+            },
+            production: {
+                apiKey: process.env.CELLULANT_PROD_API_KEY || '',
+                apiSecret: process.env.CELLULANT_PROD_API_SECRET || '',
+                baseUrl: 'https://api.cellulant.com/v1'
+            }
+        },
+        jambopay: {
+            name: 'JamboPay',
+            feePercent: 2.5,
+            test: {
+                apiKey: process.env.JAMBOPAY_TEST_API_KEY || 'test_jambopay_key',
+                apiSecret: process.env.JAMBOPAY_TEST_API_SECRET || 'test_jambopay_secret',
+                baseUrl: 'https://sandbox.jambopay.com/v1'
+            },
+            production: {
+                apiKey: process.env.JAMBOPAY_PROD_API_KEY || '',
+                apiSecret: process.env.JAMBOPAY_PROD_API_SECRET || '',
+                baseUrl: 'https://api.jambopay.com/v1'
+            }
+        }
+    }
+};
 
 console.log('\n========================================');
 console.log('🌐 GICH WiFi API');
@@ -32,6 +77,8 @@ console.log('========================================');
 console.log('   Port: ' + PORT);
 console.log('   Admin PIN: ' + (ADMIN_PASSWORD ? '✅ Configured' : '⚠️ NOT SET'));
 console.log('   Master PIN: ' + (MASTER_PASSWORD ? '✅ Configured' : '⚠️ NOT SET'));
+console.log('   Aggregator Mode: ' + AGGREGATOR_CONFIG.defaultMode);
+console.log('   Aggregator Provider: ' + AGGREGATOR_CONFIG.defaultProvider);
 console.log('========================================\n');
 
 // ============================================================
@@ -64,16 +111,6 @@ function verifyToken(token) {
 }
 
 // ============================================================
-// HTTPS AGENT
-// ============================================================
-
-var agent = new https.Agent({
-    rejectUnauthorized: false,
-    keepAlive: true,
-    timeout: 60000
-});
-
-// ============================================================
 // DATA STORAGE
 // ============================================================
 
@@ -83,9 +120,8 @@ var PLANS_FILE = path.join(__dirname, 'plans.json');
 var SETTINGS_FILE = path.join(__dirname, 'settings.json');
 var THEMES_FILE = path.join(__dirname, 'themes.json');
 var CLIENTS_FILE = path.join(__dirname, 'clients.json');
-var PRODUCTS_FILE = path.join(__dirname, 'products.json');
 var ORGANIZATIONS_FILE = path.join(__dirname, 'organizations.json');
-var MASTER_SETTINGS_FILE = path.join(__dirname, 'master-settings.json');
+var SUBSCRIPTIONS_FILE = path.join(__dirname, 'subscriptions.json');
 
 var transactions = [];
 var vouchers = [];
@@ -93,9 +129,8 @@ var plans = [];
 var settings = {};
 var themes = [];
 var clients = [];
-var products = [];
 var organizations = [];
-var masterSettings = {};
+var subscriptions = [];
 
 // ============================================================
 // DEFAULT SETTINGS
@@ -118,16 +153,6 @@ var DEFAULT_SETTINGS = {
     bgGradient: 'linear-gradient(135deg, #0f2027, #203a43, #2c5364)'
 };
 
-var DEFAULT_MASTER_SETTINGS = {
-    masterBusinessName: 'GICH WiFi Master',
-    masterEmail: 'master@gichwifi.co.ke',
-    masterPhone: '0796587763',
-    defaultPrimaryColor: '#00c853',
-    defaultBgGradient: 'linear-gradient(135deg, #0f2027, #203a43, #2c5364)',
-    commissionRate: 5,
-    createdAt: new Date().toISOString()
-};
-
 var DEFAULT_THEMES = [
     { id: 'default', name: 'Default Green', preview: '🌿', colors: { primary: '#00c853', secondary: '#00e676', accent: '#0f2027', text: '#ffffff', headerText: '#ffffff', buttonText: '#000000' }, gradient: 'linear-gradient(135deg, #0f2027, #203a43, #2c5364)' },
     { id: 'ocean', name: 'Ocean Blue', preview: '🌊', colors: { primary: '#0077be', secondary: '#00b4d8', accent: '#03045e', text: '#ffffff', headerText: '#ffffff', buttonText: '#000000' }, gradient: 'linear-gradient(135deg, #03045e, #0077be, #00b4d8)' },
@@ -144,12 +169,56 @@ var DEFAULT_PLANS = [
     { id: '5_Hours', name: '5 Hours', price: 20, devices: 1, shared_users: 1, duration_seconds: 18000 },
     { id: '8_Hours', name: '8 Hours', price: 30, devices: 1, shared_users: 1, duration_seconds: 28800 },
     { id: '12_Hours', name: '12 Hours', price: 50, devices: 1, shared_users: 1, duration_seconds: 43200 },
-    { id: '24_Hours', name: '24 Hours', price: 80, devices: 1, shared_users: 1, duration_seconds: 86400 },
-    { id: '1_Week_1_Device', name: '1 Week (1 Device)', price: 300, devices: 1, shared_users: 1, duration_seconds: 604800 },
-    { id: '1_Week_3_Devices', name: '1 Week (3 Devices)', price: 400, devices: 3, shared_users: 3, duration_seconds: 604800 },
-    { id: '1_Month_1_Device', name: '1 Month (1 Device)', price: 1000, devices: 1, shared_users: 1, duration_seconds: 2592000 },
-    { id: '1_Month_3_Devices', name: '1 Month (3 Devices)', price: 1200, devices: 3, shared_users: 3, duration_seconds: 2592000 }
+    { id: '24_Hours', name: '24 Hours', price: 80, devices: 1, shared_users: 1, duration_seconds: 86400 }
 ];
+
+// ============================================================
+// SUBSCRIPTION PLANS
+// ============================================================
+
+var SUBSCRIPTION_PLANS = {
+    'free_trial': {
+        name: 'Free Trial',
+        price: 0,
+        maxOrganizations: 1,
+        maxPlans: 3,
+        maxTransactions: 50,
+        trialDays: 60,
+        features: ['1 Organization', '3 Plans', '50 Transactions/month', '60-day trial']
+    },
+    'starter': {
+        name: 'Starter',
+        price: 500,
+        maxOrganizations: 1,
+        maxPlans: 5,
+        maxTransactions: 200,
+        features: ['1 Organization', '5 Plans', '200 Transactions/month']
+    },
+    'pro': {
+        name: 'Pro',
+        price: 1000,
+        maxOrganizations: 3,
+        maxPlans: 10,
+        maxTransactions: 500,
+        features: ['3 Organizations', '10 Plans', '500 Transactions/month', 'Vouchers']
+    },
+    'business': {
+        name: 'Business',
+        price: 2000,
+        maxOrganizations: 10,
+        maxPlans: 999,
+        maxTransactions: 2000,
+        features: ['10 Organizations', 'Unlimited Plans', '2000 Transactions/month', 'Vouchers', 'Analytics']
+    },
+    'enterprise': {
+        name: 'Enterprise',
+        price: 5000,
+        maxOrganizations: 9999,
+        maxPlans: 9999,
+        maxTransactions: 99999,
+        features: ['Unlimited Organizations', 'Everything Included', 'Dedicated Support']
+    }
+};
 
 // ============================================================
 // LOAD DATA
@@ -174,15 +243,12 @@ function loadAllData() {
     if (fs.existsSync(CLIENTS_FILE)) {
         try { clients = JSON.parse(fs.readFileSync(CLIENTS_FILE, 'utf8')); console.log('👤 Loaded ' + clients.length + ' clients'); } catch (e) { console.error('Error loading clients:', e); clients = []; }
     } else { clients = []; saveClients(); }
-    if (fs.existsSync(PRODUCTS_FILE)) {
-        try { products = JSON.parse(fs.readFileSync(PRODUCTS_FILE, 'utf8')); console.log('📦 Loaded ' + products.length + ' products'); } catch (e) { console.error('Error loading products:', e); products = []; }
-    } else { products = []; saveProducts(); }
     if (fs.existsSync(ORGANIZATIONS_FILE)) {
         try { organizations = JSON.parse(fs.readFileSync(ORGANIZATIONS_FILE, 'utf8')); console.log('🏢 Loaded ' + organizations.length + ' organizations'); } catch (e) { console.error('Error loading organizations:', e); organizations = []; }
     } else { organizations = []; saveOrganizations(); }
-    if (fs.existsSync(MASTER_SETTINGS_FILE)) {
-        try { masterSettings = JSON.parse(fs.readFileSync(MASTER_SETTINGS_FILE, 'utf8')); console.log('⚙️ Loaded master settings'); } catch (e) { console.error('Error loading master settings:', e); masterSettings = DEFAULT_MASTER_SETTINGS; }
-    } else { masterSettings = DEFAULT_MASTER_SETTINGS; saveMasterSettings(); }
+    if (fs.existsSync(SUBSCRIPTIONS_FILE)) {
+        try { subscriptions = JSON.parse(fs.readFileSync(SUBSCRIPTIONS_FILE, 'utf8')); console.log('📋 Loaded ' + subscriptions.length + ' subscriptions'); } catch (e) { console.error('Error loading subscriptions:', e); subscriptions = []; }
+    } else { subscriptions = []; saveSubscriptions(); }
 }
 
 function saveTransactions() { try { fs.writeFileSync(TRANSACTIONS_FILE, JSON.stringify(transactions, null, 2)); } catch (e) { console.error('⚠️ Could not save transactions:', e.message); } }
@@ -191,24 +257,431 @@ function savePlans() { try { fs.writeFileSync(PLANS_FILE, JSON.stringify(plans, 
 function saveSettings() { try { fs.writeFileSync(SETTINGS_FILE, JSON.stringify(settings, null, 2)); } catch (e) { console.error('⚠️ Could not save settings:', e.message); } }
 function saveThemes() { try { fs.writeFileSync(THEMES_FILE, JSON.stringify(themes, null, 2)); } catch (e) { console.error('⚠️ Could not save themes:', e.message); } }
 function saveClients() { try { fs.writeFileSync(CLIENTS_FILE, JSON.stringify(clients, null, 2)); } catch (e) { console.error('⚠️ Could not save clients:', e.message); } }
-function saveProducts() { try { fs.writeFileSync(PRODUCTS_FILE, JSON.stringify(products, null, 2)); } catch (e) { console.error('⚠️ Could not save products:', e.message); } }
 function saveOrganizations() { try { fs.writeFileSync(ORGANIZATIONS_FILE, JSON.stringify(organizations, null, 2)); } catch (e) { console.error('⚠️ Could not save organizations:', e.message); } }
-function saveMasterSettings() { try { fs.writeFileSync(MASTER_SETTINGS_FILE, JSON.stringify(masterSettings, null, 2)); } catch (e) { console.error('⚠️ Could not save master settings:', e.message); } }
+function saveSubscriptions() { try { fs.writeFileSync(SUBSCRIPTIONS_FILE, JSON.stringify(subscriptions, null, 2)); } catch (e) { console.error('⚠️ Could not save subscriptions:', e.message); } }
 
 // ============================================================
 // HELPERS
 // ============================================================
 
-function getPlanName(planId) { var plan = plans.find(function(p) { return p.id === planId; }); return plan ? plan.name : planId; }
-function getPlanDuration(planId) { var plan = plans.find(function(p) { return p.id === planId; }); return plan ? plan.duration_seconds : 3600; }
 function generateVoucherCode() { var chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'; var code = ''; for (var i = 0; i < 10; i++) { code += chars.charAt(Math.floor(Math.random() * chars.length)); } return code; }
-function normalizePhone(rawPhone) { if (!rawPhone) return null; var digits = String(rawPhone).trim().replace(/[^0-9+]/g, ''); digits = digits.replace(/^\+/, ''); if (digits.startsWith('0')) digits = digits.substring(1); if (digits.length === 9 && digits.startsWith('7')) return '254' + digits; if (digits.length === 10 && digits.startsWith('7')) return '254' + digits; if (digits.startsWith('254')) return digits; return digits; }
-function timestampNow() { var now = new Date(); var pad = function(n) { return String(n).padStart(2, '0'); }; return '' + now.getFullYear() + pad(now.getMonth() + 1) + pad(now.getDate()) + pad(now.getHours()) + pad(now.getMinutes()) + pad(now.getSeconds()); }
-function generateClientId() { var chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'; var code = ''; for (var i = 0; i < 8; i++) { code += chars.charAt(Math.floor(Math.random() * chars.length)); } return 'CLIENT_' + code; }
-function generateProductId() { var chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'; var code = ''; for (var i = 0; i < 6; i++) { code += chars.charAt(Math.floor(Math.random() * chars.length)); } return 'PROD_' + code; }
 function generateOrgId() { var chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'; var code = ''; for (var i = 0; i < 8; i++) { code += chars.charAt(Math.floor(Math.random() * chars.length)); } return 'CLIENT_' + code; }
+function generateClientId() { var chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789'; var code = ''; for (var i = 0; i < 8; i++) { code += chars.charAt(Math.floor(Math.random() * chars.length)); } return 'CLIENT_' + code; }
 function getOrganizationByClientId(clientId) { return organizations.find(function(org) { return org.id === clientId; }); }
 function getOrganizationByEmail(email) { return organizations.find(function(org) { return org.email === email; }); }
+
+// ============================================================
+// SUBSCRIPTION HELPERS
+// ============================================================
+
+function getClientSubscription(clientId) {
+    var sub = subscriptions.find(s => s.clientId === clientId);
+    if (!sub) return null;
+    
+    // Check if subscription is active
+    if (sub.status === 'active' && new Date(sub.expiresAt) > new Date()) {
+        return sub;
+    }
+    
+    // Check if trial is active
+    if (sub.status === 'trial' && new Date(sub.trialEnds) > new Date()) {
+        return sub;
+    }
+    
+    return null;
+}
+
+function getClientSubscriptionStatus(clientId) {
+    var client = clients.find(c => c.id === clientId || c.email === clientId);
+    if (!client) return { exists: false };
+    
+    var sub = subscriptions.find(s => s.clientId === clientId);
+    
+    if (!sub) {
+        return {
+            exists: true,
+            status: 'no_subscription',
+            canStartTrial: true,
+            trialDays: 60
+        };
+    }
+    
+    if (sub.status === 'trial') {
+        var now = new Date();
+        var trialEnd = new Date(sub.trialEnds);
+        if (now < trialEnd) {
+            var daysLeft = Math.ceil((trialEnd - now) / (1000 * 60 * 60 * 24));
+            return {
+                exists: true,
+                status: 'trial_active',
+                trialEnds: sub.trialEnds,
+                daysLeft: daysLeft,
+                plan: 'free_trial'
+            };
+        } else {
+            return {
+                exists: true,
+                status: 'trial_expired',
+                trialEnded: sub.trialEnds
+            };
+        }
+    }
+    
+    if (sub.status === 'active') {
+        var now = new Date();
+        var expiresAt = new Date(sub.expiresAt);
+        if (now < expiresAt) {
+            var daysLeft = Math.ceil((expiresAt - now) / (1000 * 60 * 60 * 24));
+            return {
+                exists: true,
+                status: 'active_paid',
+                plan: sub.plan,
+                expiresAt: sub.expiresAt,
+                daysLeft: daysLeft
+            };
+        } else {
+            return {
+                exists: true,
+                status: 'expired',
+                expiredAt: sub.expiresAt
+            };
+        }
+    }
+    
+    return { exists: true, status: 'unknown' };
+}
+
+function checkOrganizationLimit(clientId) {
+    var client = clients.find(c => c.id === clientId || c.email === clientId);
+    if (!client) return { allowed: false, message: 'Client not found' };
+    
+    var sub = getClientSubscription(clientId);
+    if (!sub) {
+        return { 
+            allowed: false, 
+            message: 'No active subscription. Please start a free trial or subscribe.',
+            requiresAction: true
+        };
+    }
+    
+    var plan = SUBSCRIPTION_PLANS[sub.plan] || SUBSCRIPTION_PLANS.starter;
+    var orgCount = organizations.filter(o => o.clientId === clientId).length;
+    
+    if (orgCount >= plan.maxOrganizations) {
+        return {
+            allowed: false,
+            message: `You've reached your limit of ${plan.maxOrganizations} organization(s). Upgrade to create more.`,
+            current: orgCount,
+            max: plan.maxOrganizations,
+            plan: plan.name,
+            requiresUpgrade: true
+        };
+    }
+    
+    return {
+        allowed: true,
+        current: orgCount,
+        max: plan.maxOrganizations,
+        plan: plan.name
+    };
+}
+
+// ============================================================
+// AGGREGATOR HELPERS
+// ============================================================
+
+function getAggregatorConfig(provider, mode) {
+    provider = provider || AGGREGATOR_CONFIG.defaultProvider;
+    mode = mode || AGGREGATOR_CONFIG.defaultMode;
+    
+    var providerConfig = AGGREGATOR_CONFIG.providers[provider];
+    if (!providerConfig) {
+        throw new Error('Unsupported aggregator: ' + provider);
+    }
+    
+    var modeConfig = providerConfig[mode] || providerConfig.test;
+    return {
+        name: providerConfig.name,
+        feePercent: providerConfig.feePercent,
+        mode: mode,
+        provider: provider,
+        ...modeConfig
+    };
+}
+
+function calculatePriceWithFee(price, feePercent) {
+    var fee = price * (feePercent / 100);
+    return {
+        basePrice: price,
+        fee: Math.round(fee * 100) / 100,
+        total: Math.round((price + fee) * 100) / 100,
+        feePercent: feePercent
+    };
+}
+
+// ============================================================
+// AGGREGATOR PAYMENT FUNCTIONS
+// ============================================================
+
+async function initiateAggregatorPayment(organization, plan, customerPhone, provider, mode) {
+    provider = provider || organization.aggregatorProvider || AGGREGATOR_CONFIG.defaultProvider;
+    mode = mode || organization.aggregatorMode || AGGREGATOR_CONFIG.defaultMode;
+    
+    var config = getAggregatorConfig(provider, mode);
+    var priceData = calculatePriceWithFee(plan.price, config.feePercent);
+    
+    var transactionId = 'AGG_' + Date.now() + '_' + Math.random().toString(36).substring(7);
+    
+    // For test mode, simulate payment
+    if (mode === 'test') {
+        console.log('🧪 TEST MODE: Simulating payment for', organization.businessName);
+        
+        var testTransaction = {
+            id: transactionId,
+            organizationId: organization.id,
+            planId: plan.id,
+            planName: plan.name,
+            customerPhone: customerPhone,
+            amount: priceData.total,
+            baseAmount: priceData.basePrice,
+            fee: priceData.fee,
+            feePercent: priceData.feePercent,
+            status: 'completed',
+            provider: provider,
+            mode: mode,
+            isTest: true,
+            timestamp: new Date().toISOString(),
+            expiresAt: new Date(Date.now() + (plan.duration_seconds || 7200) * 1000).toISOString(),
+            username: 'test_user_' + transactionId.substring(0, 8),
+            password: 'test_pass_' + Date.now().toString(36)
+        };
+        
+        // Store test transaction
+        transactions.push(testTransaction);
+        saveTransactions();
+        
+        return {
+            success: true,
+            transactionId: transactionId,
+            isTest: true,
+            mode: mode,
+            amount: priceData.total,
+            fee: priceData.fee,
+            feePercent: priceData.feePercent,
+            baseAmount: priceData.basePrice,
+            username: testTransaction.username,
+            password: testTransaction.password,
+            expiresAt: testTransaction.expiresAt,
+            message: '🧪 TEST MODE: Payment simulated successfully. No real money charged.'
+        };
+    }
+    
+    // Production mode - call actual aggregator API
+    try {
+        var payload = {
+            amount: priceData.total,
+            currency: 'KES',
+            phoneNumber: customerPhone,
+            email: customerPhone + '@gichwifi.co.ke',
+            reference: transactionId,
+            description: 'WiFi Plan: ' + plan.name,
+            callbackUrl: 'https://' + (process.env.RENDER_URL || 'localhost:' + PORT) + '/api/aggregator/callback',
+            settlementAccount: {
+                phoneNumber: organization.mpesaPhoneNumber || organization.phone,
+                name: organization.businessName,
+                email: organization.supportEmail
+            }
+        };
+        
+        // Route to specific aggregator
+        var result;
+        switch(provider) {
+            case 'dpo':
+                result = await initiateDPOPayment(payload, config);
+                break;
+            case 'cellulant':
+                result = await initiateCellulantPayment(payload, config);
+                break;
+            case 'jambopay':
+                result = await initiateJamboPayPayment(payload, config);
+                break;
+            default:
+                throw new Error('Unsupported aggregator: ' + provider);
+        }
+        
+        // Store transaction
+        var transaction = {
+            id: result.transactionId || transactionId,
+            organizationId: organization.id,
+            planId: plan.id,
+            planName: plan.name,
+            customerPhone: customerPhone,
+            amount: priceData.total,
+            baseAmount: priceData.basePrice,
+            fee: priceData.fee,
+            feePercent: priceData.feePercent,
+            status: 'pending',
+            provider: provider,
+            mode: mode,
+            isTest: false,
+            timestamp: new Date().toISOString(),
+            paymentUrl: result.paymentUrl
+        };
+        transactions.push(transaction);
+        saveTransactions();
+        
+        return {
+            success: true,
+            transactionId: transaction.id,
+            isTest: false,
+            mode: mode,
+            amount: priceData.total,
+            fee: priceData.fee,
+            feePercent: priceData.feePercent,
+            baseAmount: priceData.basePrice,
+            paymentUrl: result.paymentUrl,
+            redirectUrl: result.redirectUrl
+        };
+    } catch (error) {
+        console.error('❌ Aggregator payment error:', error);
+        throw error;
+    }
+}
+
+// ============================================================
+// AGGREGATOR API FUNCTIONS
+// ============================================================
+
+async function initiateDPOPayment(payload, config) {
+    var url = config.baseUrl + '/payments';
+    
+    var requestPayload = {
+        companyToken: config.apiKey,
+        customerPhone: payload.phoneNumber,
+        customerEmail: payload.email,
+        amount: payload.amount,
+        currency: payload.currency,
+        reference: payload.reference,
+        description: payload.description,
+        callbackURL: payload.callbackUrl,
+        settlementDetails: {
+            phoneNumber: payload.settlementAccount.phoneNumber,
+            accountName: payload.settlementAccount.name,
+            email: payload.settlementAccount.email
+        }
+    };
+    
+    console.log('📤 DPO Request:', JSON.stringify(requestPayload, null, 2));
+    
+    // For testing without actual API
+    if (config.mode === 'test') {
+        return {
+            transactionId: 'DPO_TEST_' + Date.now(),
+            paymentUrl: config.baseUrl + '/pay/' + Date.now(),
+            redirectUrl: config.baseUrl + '/pay/' + Date.now()
+        };
+    }
+    
+    var response = await simpleRequest('POST', url, {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + config.apiSecret
+    }, requestPayload);
+    
+    if (response.statusCode === 200 || response.statusCode === 201) {
+        return {
+            transactionId: response.bodyJson.transactionId,
+            paymentUrl: response.bodyJson.paymentUrl,
+            redirectUrl: response.bodyJson.redirectUrl
+        };
+    } else {
+        throw new Error('DPO payment failed: ' + response.bodyText);
+    }
+}
+
+async function initiateCellulantPayment(payload, config) {
+    var url = config.baseUrl + '/payments/request';
+    
+    var requestPayload = {
+        apiKey: config.apiKey,
+        productId: 'GICH_WIFI',
+        amount: payload.amount,
+        currency: payload.currency,
+        msisdn: payload.phoneNumber,
+        reference: payload.reference,
+        description: payload.description,
+        webhook: payload.callbackUrl,
+        settlementDetails: {
+            accountNumber: payload.settlementAccount.phoneNumber,
+            accountName: payload.settlementAccount.name,
+            email: payload.settlementAccount.email
+        }
+    };
+    
+    console.log('📤 Cellulant Request:', JSON.stringify(requestPayload, null, 2));
+    
+    if (config.mode === 'test') {
+        return {
+            transactionId: 'CEL_TEST_' + Date.now(),
+            paymentUrl: config.baseUrl + '/pay/' + Date.now()
+        };
+    }
+    
+    var response = await simpleRequest('POST', url, {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + config.apiSecret
+    }, requestPayload);
+    
+    if (response.statusCode === 200 || response.statusCode === 201) {
+        return {
+            transactionId: response.bodyJson.transactionId,
+            paymentUrl: response.bodyJson.paymentUrl
+        };
+    } else {
+        throw new Error('Cellulant payment failed: ' + response.bodyText);
+    }
+}
+
+async function initiateJamboPayPayment(payload, config) {
+    var url = config.baseUrl + '/transactions';
+    
+    var requestPayload = {
+        merchantId: config.apiKey,
+        amount: payload.amount,
+        currency: payload.currency,
+        phone: payload.phoneNumber,
+        reference: payload.reference,
+        description: payload.description,
+        callbackUrl: payload.callbackUrl,
+        settlement: {
+            phoneNumber: payload.settlementAccount.phoneNumber,
+            name: payload.settlementAccount.name,
+            email: payload.settlementAccount.email
+        }
+    };
+    
+    console.log('📤 JamboPay Request:', JSON.stringify(requestPayload, null, 2));
+    
+    if (config.mode === 'test') {
+        return {
+            transactionId: 'JAMBO_TEST_' + Date.now(),
+            paymentUrl: config.baseUrl + '/pay/' + Date.now()
+        };
+    }
+    
+    var response = await simpleRequest('POST', url, {
+        'Content-Type': 'application/json',
+        'Authorization': 'Bearer ' + config.apiSecret
+    }, requestPayload);
+    
+    if (response.statusCode === 200 || response.statusCode === 201) {
+        return {
+            transactionId: response.bodyJson.transactionId,
+            paymentUrl: response.bodyJson.paymentUrl
+        };
+    } else {
+        throw new Error('JamboPay payment failed: ' + response.bodyText);
+    }
+}
 
 // ============================================================
 // REQUEST HELPER
@@ -227,7 +700,6 @@ function simpleRequest(method, urlString, headers, jsonBody) {
             method: method.toUpperCase(),
             headers: headers,
             timeout: 60000,
-            agent: agent,
             family: 4
         };
         if (payload) { options.headers['Content-Length'] = Buffer.byteLength(payload); }
@@ -247,63 +719,6 @@ function simpleRequest(method, urlString, headers, jsonBody) {
         if (payload) { req.write(payload); }
         req.end();
     });
-}
-
-// ============================================================
-// OAUTH
-// ============================================================
-
-async function getAccessToken() {
-    console.log('\n🔑 Getting access token...');
-    if (!CONSUMER_KEY || !CONSUMER_SECRET) { throw new Error('Consumer Key or Secret not configured.'); }
-    var auth = Buffer.from(CONSUMER_KEY.trim() + ':' + CONSUMER_SECRET.trim()).toString('base64');
-    var res = await simpleRequest('GET', 'https://sandbox.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials', { 'Authorization': 'Basic ' + auth, 'Accept': 'application/json' });
-    if (res.statusCode !== 200) { throw new Error('OAuth failed (' + res.statusCode + '): ' + res.bodyText); }
-    if (!res.bodyJson || !res.bodyJson.access_token) { throw new Error('No access token in response'); }
-    console.log('✅ Access token obtained');
-    return res.bodyJson.access_token;
-}
-
-// ============================================================
-// STK PUSH
-// ============================================================
-
-async function stkPush(params) {
-    var phone = params.phone;
-    var amount = params.amount;
-    var accountReference = params.accountReference;
-    console.log('\n💳 Starting STK Push...');
-    console.log('📱 Phone: ' + phone);
-    console.log('💰 Amount: ' + amount);
-    var numericAmount = Math.round(Number(amount));
-    if (isNaN(numericAmount) || numericAmount < 1) { throw new Error('Invalid amount'); }
-    var formattedPhone = normalizePhone(phone);
-    if (!formattedPhone || formattedPhone.length < 10) { throw new Error('Invalid phone: ' + phone); }
-    var token = await getAccessToken();
-    var timestamp = timestampNow();
-    var password = Buffer.from(SHORTCODE + PASSKEY + timestamp).toString('base64');
-    var payload = {
-        BusinessShortCode: SHORTCODE,
-        Password: password,
-        Timestamp: timestamp,
-        TransactionType: 'CustomerPayBillOnline',
-        Amount: numericAmount,
-        PartyA: formattedPhone,
-        PartyB: SHORTCODE,
-        PhoneNumber: formattedPhone,
-        CallBackURL: CALLBACK_URL,
-        AccountReference: accountReference || 'GICH-WIFI',
-        TransactionDesc: 'GICH WiFi Payment'
-    };
-    console.log('📤 Sending STK Push to Safaricom...');
-    var res = await simpleRequest('POST', 'https://sandbox.safaricom.co.ke/mpesa/stkpush/v1/processrequest', { 'Authorization': 'Bearer ' + token, 'Content-Type': 'application/json' }, payload);
-    if (!res.bodyJson) { throw new Error('Invalid response from Safaricom'); }
-    if (res.bodyJson.ResponseCode === '0') {
-        console.log('✅ STK Push successful!');
-        return { success: true, data: res.bodyJson, checkoutId: res.bodyJson.CheckoutRequestID, message: res.bodyJson.CustomerMessage || 'STK Push sent' };
-    } else {
-        throw new Error(res.bodyJson.ResponseDescription || 'STK Push failed');
-    }
 }
 
 // ============================================================
@@ -404,25 +819,24 @@ function isClient(req) {
 }
 
 // ============================================================
-// GENERATE COMPLETE BILLING HTML
+// GENERATE BILLING HTML
 // ============================================================
 
-function generateFullBillingHtml(organization) {
+function generateBillingHtml(organization) {
     var escapeHtml = function(str) {
         if (!str) return '';
         return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
             .replace(/"/g, '&quot;').replace(/'/g, '&#039;');
     };
 
-    var bizName = escapeHtml(organization.businessName || organization.name || 'WiFi Business');
+    var bizName = escapeHtml(organization.businessName || 'WiFi Business');
     var tagline = escapeHtml(organization.businessTagline || 'Fast • Secure • Reliable');
     var primaryColor = escapeHtml(organization.primaryColor || '#00c853');
     var secondaryColor = escapeHtml(organization.secondaryColor || '#00e676');
     var accentColor = escapeHtml(organization.accentColor || '#0f2027');
     var supportPhone = escapeHtml(organization.supportPhone || '0796587763');
     var supportEmail = escapeHtml(organization.supportEmail || 'support@example.com');
-    var mpesaTill = escapeHtml(organization.mpesaTill || '174379');
-    var logo = escapeHtml(organization.logo || '');
+    var mpesaTill = escapeHtml(organization.mpesaTill || '');
     var businessAddress = escapeHtml(organization.businessAddress || '');
     var website = escapeHtml(organization.website || '');
     var plans = organization.plans || [];
@@ -435,9 +849,8 @@ function generateFullBillingHtml(organization) {
         var hours = Math.floor(duration / 3600);
         var days = Math.floor(duration / 86400);
         var durStr = days > 0 ? days + 'd' : hours + 'h';
-        var isPopular = p.id === '1_Week_1_Device' || p.id === '24_Hours';
         plansHtml += '<div class="plan-card' + (i === 0 ? ' selected' : '') + '" data-id="' + escapeHtml(p.id) + '" data-price="' + p.price + '" onclick="selectPlan(this, \'' + escapeHtml(p.id) + '\', ' + p.price + ')">\n';
-        plansHtml += '    <div class="name">' + escapeHtml(p.name) + (isPopular ? ' 🔥' : '') + '</div>\n';
+        plansHtml += '    <div class="name">' + escapeHtml(p.name) + '</div>\n';
         plansHtml += '    <div class="price">KES ' + p.price + ' <span>/ ' + durStr + '</span></div>\n';
         plansHtml += '    <div class="features">\n';
         plansHtml += '        <span>📱 ' + (p.devices || 1) + ' device' + (p.devices > 1 ? 's' : '') + '</span>\n';
@@ -447,7 +860,7 @@ function generateFullBillingHtml(organization) {
     }
 
     if (!plansHtml) {
-        plansHtml = '<div style="text-align:center;padding:20px;color:#666;grid-column:1/-1;">No plans available. Please check back later.</div>';
+        plansHtml = '<div style="text-align:center;padding:20px;color:#666;grid-column:1/-1;">No plans available.</div>';
     }
 
     var html = '<!DOCTYPE html>\n';
@@ -544,7 +957,7 @@ function generateFullBillingHtml(organization) {
     html += '    </div>\n';
 
     html += '    <div class="input-group">\n';
-    html += '        <label>📱 M-Pesa Phone Number</label>\n';
+    html += '        <label>📱 Phone Number</label>\n';
     html += '        <input type="tel" id="phoneInput" placeholder="0712345678" />\n';
     html += '    </div>\n';
     html += '    <button class="btn" id="payBtn" onclick="initiatePayment()">💳 Pay Now</button>\n';
@@ -617,19 +1030,33 @@ function generateFullBillingHtml(organization) {
     html += '        btn.textContent = "⏳ Processing...";\n';
     html += '        const resultEl = document.getElementById("paymentResult");\n';
     html += '        resultEl.className = "result-box info";\n';
-    html += '        resultEl.textContent = "⏳ Sending M-Pesa request...";\n';
+    html += '        resultEl.textContent = "⏳ Sending payment request...";\n';
     html += '        try {\n';
-    html += '            const res = await fetch(API_URL + "/payment/initiate", {\n';
+    html += '            const res = await fetch(API_URL + "/aggregator/initiate", {\n';
     html += '                method: "POST",\n';
     html += '                headers: { "Content-Type": "application/json" },\n';
-    html += '                body: JSON.stringify({ phoneNumber: phone, amount: selectedPlanPrice, planId: selectedPlanId })\n';
+    html += '                body: JSON.stringify({ organizationId: "' + orgId + '", planId: selectedPlanId, phoneNumber: phone })\n';
     html += '            });\n';
     html += '            const data = await res.json();\n';
     html += '            if (data.success) {\n';
-    html += '                resultEl.className = "result-box success";\n';
-    html += '                resultEl.textContent = "✅ M-Pesa prompt sent! Check your phone.";\n';
-    html += '                showToast("📱 M-Pesa prompt sent!", "success");\n';
-    html += '                await pollTransaction(data.transactionId);\n';
+    html += '                const result = data.data;\n';
+    html += '                if (result.isTest) {\n';
+    html += '                    resultEl.className = "result-box success";\n';
+    html += '                    resultEl.textContent = "🧪 TEST MODE: Payment simulated! No money charged.";\n';
+    html += '                    showToast("🧪 TEST MODE: Payment simulated!", "info");\n';
+    html += '                    setTimeout(() => {\n';
+    html += '                        credentials = { username: result.username, password: result.password, planName: "' + (plans.length > 0 ? plans[0].name : 'Plan') + '", expiresAt: result.expiresAt };\n';
+    html += '                        showConnectedPage(credentials);\n';
+    html += '                    }, 1500);\n';
+    html += '                } else {\n';
+    html += '                    resultEl.className = "result-box success";\n';
+    html += '                    resultEl.textContent = "✅ Payment initiated! Follow the instructions.";\n';
+    html += '                    showToast("📱 Payment initiated!", "success");\n';
+    html += '                    if (result.paymentUrl) {\n';
+    html += '                        window.open(result.paymentUrl, "_blank");\n';
+    html += '                    }\n';
+    html += '                    await pollTransaction(result.transactionId);\n';
+    html += '                }\n';
     html += '            } else {\n';
     html += '                resultEl.className = "result-box error";\n';
     html += '                resultEl.textContent = "❌ " + (data.message || "Payment failed");\n';
@@ -675,7 +1102,7 @@ function generateFullBillingHtml(organization) {
     html += '        }\n';
     html += '        const resultEl = document.getElementById("paymentResult");\n';
     html += '        resultEl.className = "result-box info";\n';
-    html += '        resultEl.textContent = "⏳ Still processing... Please check M-Pesa.";\n';
+    html += '        resultEl.textContent = "⏳ Still processing... Please check your payment.";\n';
     html += '        document.getElementById("payBtn").disabled = false;\n';
     html += '        document.getElementById("payBtn").textContent = "💳 Pay Now";\n';
     html += '    }\n';
@@ -818,12 +1245,6 @@ var server = http.createServer(async function(req, res) {
             return;
         }
 
-        if (req.method === 'GET' && (url.pathname === '/GICH_wifi.html' || url.pathname === '/GICH%20wifi.html')) {
-            if (serveHtmlFile(res, 'GICH_wifi.html')) return;
-            sendHtml(res, 404, '<h1>File not found</h1>');
-            return;
-        }
-
         // ============================================================
         // PUBLIC API ENDPOINTS
         // ============================================================
@@ -832,120 +1253,29 @@ var server = http.createServer(async function(req, res) {
             return sendJson(res, 200, { status: 'ok', timestamp: new Date().toISOString() });
         }
 
-        if (req.method === 'GET' && url.pathname === '/api/plans') {
-            return sendJson(res, 200, { success: true, data: plans });
-        }
-
-        if (req.method === 'GET' && url.pathname === '/api/settings') {
-            return sendJson(res, 200, { success: true, data: settings });
-        }
-
-        if (req.method === 'GET' && url.pathname === '/api/themes') {
-            return sendJson(res, 200, { success: true, data: themes });
-        }
-
-        if (req.method === 'GET' && url.pathname === '/api/products') {
-            return sendJson(res, 200, { success: true, data: products });
-        }
-
-        if (req.method === 'GET' && url.pathname.startsWith('/api/transaction/')) {
-            var id = url.pathname.split('/').pop();
-            var transaction = null;
-            for (var i = 0; i < transactions.length; i++) {
-                if (transactions[i].id === id) { transaction = transactions[i]; break; }
-            }
-            if (!transaction) return sendJson(res, 404, { success: false, message: 'Transaction not found' });
-            return sendJson(res, 200, {
-                success: true,
-                data: {
-                    id: transaction.id,
-                    status: transaction.status,
-                    errorDescription: transaction.errorDescription || null,
-                    phoneNumber: transaction.phoneNumber,
-                    amount: transaction.amount,
-                    planName: transaction.planName,
-                    mpesaCode: transaction.mpesaCode || null,
-                    expiresAt: transaction.expiresAt || null,
-                    mikrotikUsername: transaction.mikrotikUsername || null,
-                    mikrotikPassword: transaction.mikrotikPassword || null
-                }
-            });
-        }
-
-        if (req.method === 'GET' && url.pathname === '/api/transactions') {
-            var phone = url.searchParams.get('phone');
-            var filtered = phone ? transactions.filter(function(t) { return t.phoneNumber === phone; }) : transactions;
-            return sendJson(res, 200, { success: true, data: filtered, count: filtered.length });
-        }
-
-        if (req.method === 'GET' && url.pathname === '/api/check-active') {
-            var phone = url.searchParams.get('phone');
-            if (!phone) return sendJson(res, 400, { success: false, message: 'Phone number required' });
-            var active = null;
-            for (var i = 0; i < transactions.length; i++) {
-                var t = transactions[i];
-                if (t.phoneNumber === phone && t.status === 'completed' && t.mikrotikCreated && (!t.expiresAt || new Date(t.expiresAt) > new Date())) {
-                    active = t;
-                    break;
-                }
-            }
-            if (active) {
-                return sendJson(res, 200, {
-                    success: true,
-                    active: true,
-                    data: {
-                        id: active.id,
-                        planName: active.planName,
-                        expiresAt: active.expiresAt,
-                        username: active.mikrotikUsername,
-                        password: active.mikrotikPassword,
-                        mpesaCode: active.mpesaCode
-                    }
-                });
-            } else {
-                return sendJson(res, 200, { success: true, active: false });
-            }
-        }
-
         // ============================================================
         // CLIENT PORTAL ENDPOINTS
         // ============================================================
 
+        // Check if organization exists for email
         if (req.method === 'GET' && url.pathname === '/api/client/check-org') {
             var email = url.searchParams.get('email');
             if (!email) {
                 return sendJson(res, 400, { success: false, message: 'Email required' });
             }
 
-            var orgExists = false;
-            for (var i = 0; i < organizations.length; i++) {
-                if (organizations[i].email === email) {
-                    orgExists = true;
-                    break;
-                }
-            }
-
-            return sendJson(res, 200, {
-                success: true,
-                hasOrganization: orgExists,
-                email: email
-            });
+            var orgExists = organizations.some(o => o.email === email);
+            return sendJson(res, 200, { success: true, hasOrganization: orgExists, email: email });
         }
 
+        // Get organization by email
         if (req.method === 'GET' && url.pathname === '/api/organization/by-email') {
             var email = url.searchParams.get('email');
             if (!email) {
                 return sendJson(res, 400, { success: false, message: 'Email required' });
             }
 
-            var org = null;
-            for (var i = 0; i < organizations.length; i++) {
-                if (organizations[i].email === email) {
-                    org = organizations[i];
-                    break;
-                }
-            }
-
+            var org = getOrganizationByEmail(email);
             if (!org) {
                 return sendJson(res, 404, { success: false, message: 'Organization not found' });
             }
@@ -975,24 +1305,11 @@ var server = http.createServer(async function(req, res) {
         // CLIENT CREATE ORGANIZATION
         // ============================================================
         if (req.method === 'POST' && url.pathname === '/api/client/organization') {
-            console.log('📥 Received organization creation request');
-            
             var body = await readBody(req);
-            console.log('📥 Body:', body);
-            
             var email = body.email || 'master@demo.com';
-            console.log('📧 Email:', email);
             
-            var existingOrg = null;
-            for (var i = 0; i < organizations.length; i++) {
-                if (organizations[i].email === email) {
-                    existingOrg = organizations[i];
-                    break;
-                }
-            }
-            
+            var existingOrg = getOrganizationByEmail(email);
             if (existingOrg) {
-                console.log('✅ Organization already exists for this email:', existingOrg.id);
                 return sendJson(res, 200, {
                     success: true,
                     message: 'Organization already exists',
@@ -1023,32 +1340,26 @@ var server = http.createServer(async function(req, res) {
                 website: body.website || '',
                 businessTagline: body.businessTagline || 'Fast • Secure • Reliable',
                 mpesaTill: body.mpesaTill || '',
+                mpesaPhoneNumber: body.mpesaPhoneNumber || body.phone || '0712345678',
                 businessAddress: body.businessAddress || '',
-                mpesaShortcode: SHORTCODE,
+                aggregatorProvider: body.aggregatorProvider || AGGREGATOR_CONFIG.defaultProvider,
+                aggregatorMode: body.aggregatorMode || AGGREGATOR_CONFIG.defaultMode,
                 status: 'active',
                 createdAt: new Date().toISOString(),
                 updatedAt: new Date().toISOString(),
-                plans: body.plans || [
-                    { id: '2_Hours', name: '2 Hours', price: 10, devices: 1, shared_users: 1, duration_seconds: 7200 },
-                    { id: '5_Hours', name: '5 Hours', price: 20, devices: 1, shared_users: 1, duration_seconds: 18000 },
-                    { id: '8_Hours', name: '8 Hours', price: 30, devices: 1, shared_users: 1, duration_seconds: 28800 },
-                    { id: '12_Hours', name: '12 Hours', price: 50, devices: 1, shared_users: 1, duration_seconds: 43200 },
-                    { id: '24_Hours', name: '24 Hours', price: 80, devices: 1, shared_users: 1, duration_seconds: 86400 }
-                ]
+                plans: body.plans || DEFAULT_PLANS
             };
             
             organizations.push(newOrganization);
             saveOrganizations();
-            console.log('✅ Organization created on server:', clientId);
-            console.log('📁 Total organizations:', organizations.length);
             
+            // Create client record
             clients.push({
                 id: clientId,
                 name: businessName,
-                phone: newOrganization.phone,
+                phone: body.phone || '0712345678',
                 email: email,
                 businessName: businessName,
-                mpesaTill: '',
                 status: 'active',
                 createdAt: new Date().toISOString(),
                 updatedAt: new Date().toISOString(),
@@ -1057,275 +1368,325 @@ var server = http.createServer(async function(req, res) {
             });
             saveClients();
             
+            // Start free trial automatically
+            var sub = {
+                clientId: clientId,
+                plan: 'free_trial',
+                status: 'trial',
+                trialStarted: new Date().toISOString(),
+                trialEnds: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString(),
+                createdAt: new Date().toISOString()
+            };
+            subscriptions.push(sub);
+            saveSubscriptions();
+            
             return sendJson(res, 200, {
                 success: true,
-                message: 'Organization created successfully!',
+                message: 'Organization created with 60-day free trial!',
                 organization: newOrganization,
                 clientId: clientId
             });
         }
 
         // ============================================================
-        // PAYMENT
+        // GET ORGANIZATION BY ID
         // ============================================================
-
-        if (req.method === 'POST' && url.pathname === '/api/payment/initiate') {
-            var body = await readBody(req);
-            var phoneNumber = body.phoneNumber;
-            var amount = body.amount;
-            var planId = body.planId;
-            if (!phoneNumber || phoneNumber.length < 10) {
-                return sendJson(res, 400, { success: false, message: 'Invalid phone number' });
+        if (req.method === 'GET' && url.pathname.startsWith('/api/organization/')) {
+            var orgId = url.pathname.split('/').pop();
+            if (!orgId || orgId === 'organizations') {
+                return sendJson(res, 400, { success: false, message: 'Invalid organization ID' });
             }
-            try {
-                var transactionId = 'GICH' + Date.now() + Math.random().toString(36).substring(7);
-                var duration = getPlanDuration(planId);
-                var planName = getPlanName(planId);
-                var transaction = {
-                    id: transactionId,
-                    phoneNumber: phoneNumber,
-                    amount: amount,
-                    planId: planId,
-                    planName: planName,
-                    status: 'pending',
-                    timestamp: new Date().toISOString(),
-                    mpesaCode: null,
-                    checkoutId: null,
-                    expiresAt: new Date(Date.now() + duration * 1000).toISOString(),
-                    mikrotikUsername: null,
-                    mikrotikPassword: null,
-                    mikrotikCreated: false,
-                    errorCode: null,
-                    errorDescription: null
-                };
-                transactions.push(transaction);
-                saveTransactions();
-
-                if (amount === 0) {
-                    transaction.status = 'completed';
-                    transaction.mpesaCode = 'FREE' + Date.now();
-                    transaction.mikrotikUsername = 'user_' + transaction.id.substring(0, 12);
-                    transaction.mikrotikPassword = 'pass_' + Date.now().toString(36);
-                    transaction.mikrotikCreated = true;
-                    saveTransactions();
-                    return sendJson(res, 200, { success: true, message: 'Free plan activated!', transactionId: transactionId, isFree: true });
-                }
-
-                var result = await stkPush({ phone: phoneNumber, amount: amount, accountReference: 'GICH' + Date.now().toString().slice(-8) });
-                if (result.success) {
-                    transaction.checkoutId = result.checkoutId;
-                    saveTransactions();
-                    return sendJson(res, 200, { success: true, message: 'STK Push sent!', transactionId: transactionId, checkoutId: result.checkoutId });
-                } else {
-                    transaction.status = 'completed';
-                    transaction.mpesaCode = 'MOCK' + Date.now();
-                    transaction.isMock = true;
-                    transaction.mikrotikUsername = 'user_' + transaction.id.substring(0, 12);
-                    transaction.mikrotikPassword = 'pass_' + Date.now().toString(36);
-                    transaction.mikrotikCreated = true;
-                    saveTransactions();
-                    return sendJson(res, 200, { success: true, message: 'MOCK MODE: Payment simulated.', transactionId: transactionId, mock: true });
-                }
-            } catch (error) {
-                return sendJson(res, 502, { success: false, message: 'Payment failed: ' + error.message });
+            
+            var org = getOrganizationByClientId(orgId);
+            if (!org) {
+                return sendJson(res, 404, { success: false, message: 'Organization not found' });
             }
-        }
-
-        // ===== MPESA CALLBACK =====
-        if (req.method === 'POST' && url.pathname === '/api/mpesa-callback') {
-            var callback = await readBody(req);
-            var resultCode = callback.Body && callback.Body.stkCallback ? callback.Body.stkCallback.ResultCode : null;
-            var checkoutId = callback.Body && callback.Body.stkCallback ? callback.Body.stkCallback.CheckoutRequestID : null;
-            var receipt = null;
-            var amount = null;
-            var phoneNumber = null;
-            var resultDesc = callback.Body && callback.Body.stkCallback ? callback.Body.stkCallback.ResultDesc || 'Unknown error' : 'Unknown error';
-
-            if (callback.Body && callback.Body.stkCallback && callback.Body.stkCallback.CallbackMetadata && callback.Body.stkCallback.CallbackMetadata.Item) {
-                var items = callback.Body.stkCallback.CallbackMetadata.Item;
-                for (var i = 0; i < items.length; i++) {
-                    if (items[i].Name === 'MpesaReceiptNumber') receipt = items[i].Value;
-                    if (items[i].Name === 'Amount') amount = items[i].Value;
-                    if (items[i].Name === 'PhoneNumber') phoneNumber = items[i].Value;
-                }
-            }
-
-            var transaction = null;
-            for (var i = 0; i < transactions.length; i++) {
-                if (transactions[i].checkoutId === checkoutId) { transaction = transactions[i]; break; }
-            }
-            if (!transaction) {
-                for (var i = 0; i < transactions.length; i++) {
-                    if (transactions[i].mpesaResponse && transactions[i].mpesaResponse.CheckoutRequestID === checkoutId) { transaction = transactions[i]; break; }
-                }
-            }
-            if (!transaction) {
-                return sendJson(res, 200, { ResultCode: 1, ResultDesc: 'Transaction not found' });
-            }
-
-            if (resultCode === 0) {
-                transaction.status = 'completed';
-                transaction.mpesaCode = receipt || 'MPESA' + Date.now();
-                transaction.completedAt = new Date().toISOString();
-                if (amount) transaction.amount = amount;
-                if (phoneNumber) transaction.phoneNumber = phoneNumber;
-                transaction.errorCode = null;
-                transaction.errorDescription = null;
-                transaction.mikrotikUsername = 'user_' + (transaction.mpesaCode || transaction.id).substring(0, 12);
-                transaction.mikrotikPassword = 'pass_' + Date.now().toString(36);
-                transaction.mikrotikCreated = true;
-                saveTransactions();
-                return sendJson(res, 200, { ResultCode: 0, ResultDesc: 'Success' });
-            } else if (resultCode === 1037) {
-                transaction.status = 'cancelled';
-                transaction.errorDescription = 'User cancelled the transaction';
-                transaction.errorCode = resultCode;
-                transaction.completedAt = new Date().toISOString();
-                saveTransactions();
-                return sendJson(res, 200, { ResultCode: resultCode, ResultDesc: 'User cancelled' });
-            } else if (resultCode === 2001) {
-                transaction.status = 'failed';
-                transaction.errorDescription = 'Insufficient M-Pesa balance';
-                transaction.errorCode = resultCode;
-                transaction.completedAt = new Date().toISOString();
-                saveTransactions();
-                return sendJson(res, 200, { ResultCode: resultCode, ResultDesc: 'Insufficient balance' });
-            } else {
-                transaction.status = 'failed';
-                transaction.errorDescription = resultDesc || 'Payment failed';
-                transaction.errorCode = resultCode;
-                transaction.completedAt = new Date().toISOString();
-                saveTransactions();
-                return sendJson(res, 200, { ResultCode: resultCode, ResultDesc: resultDesc });
-            }
-        }
-
-        // ============================================================
-        // VOUCHER SYSTEM
-        // ============================================================
-
-        // Redeem Voucher
-        if (req.method === 'POST' && url.pathname === '/api/voucher/redeem') {
-            var body = await readBody(req);
-            var code = body.code;
-            var phoneNumber = body.phoneNumber;
-            if (!code) return sendJson(res, 400, { success: false, message: 'Voucher code required' });
-            var voucher = null;
-            for (var i = 0; i < vouchers.length; i++) {
-                if (vouchers[i].code === code && !vouchers[i].used) { voucher = vouchers[i]; break; }
-            }
-            if (!voucher) return sendJson(res, 404, { success: false, message: 'Invalid or already used voucher' });
-            if (voucher.expiresAt && new Date(voucher.expiresAt) < new Date()) {
-                return sendJson(res, 400, { success: false, message: 'Voucher has expired' });
-            }
-            voucher.used = true;
-            voucher.usedBy = phoneNumber || 'unknown';
-            voucher.usedAt = new Date().toISOString();
-            saveVouchers();
-
-            var transactionId = 'VOUCH' + Date.now() + Math.random().toString(36).substring(7);
-            var duration = voucher.duration_seconds || 3600;
-            var planName = voucher.planName || 'Voucher Plan';
-            var transaction = {
-                id: transactionId,
-                phoneNumber: phoneNumber || 'voucher_user',
-                amount: 0,
-                planId: voucher.planId || 'voucher',
-                planName: planName,
-                status: 'completed',
-                timestamp: new Date().toISOString(),
-                mpesaCode: 'VOUCHER_' + voucher.code,
-                completedAt: new Date().toISOString(),
-                expiresAt: new Date(Date.now() + duration * 1000).toISOString(),
-                mikrotikUsername: 'vuser_' + transactionId.substring(0, 8),
-                mikrotikPassword: 'vpass_' + Date.now().toString(36),
-                mikrotikCreated: true,
-                isVoucher: true,
-                voucherCode: voucher.code,
-                sharedUsers: voucher.devices || 1
-            };
-            transactions.push(transaction);
-            saveTransactions();
-
+            
             return sendJson(res, 200, {
                 success: true,
-                message: 'Voucher redeemed successfully!',
                 data: {
-                    transactionId: transactionId,
-                    planName: planName,
-                    expiresAt: transaction.expiresAt,
-                    username: transaction.mikrotikUsername,
-                    password: transaction.mikrotikPassword
+                    id: org.id,
+                    businessName: org.businessName,
+                    logo: org.logo || '',
+                    primaryColor: org.primaryColor,
+                    secondaryColor: org.secondaryColor,
+                    accentColor: org.accentColor,
+                    supportPhone: org.supportPhone,
+                    supportEmail: org.supportEmail,
+                    website: org.website,
+                    businessTagline: org.businessTagline,
+                    mpesaTill: org.mpesaTill || '',
+                    mpesaPhoneNumber: org.mpesaPhoneNumber || org.phone,
+                    businessAddress: org.businessAddress || '',
+                    plans: org.plans || [],
+                    status: org.status,
+                    aggregatorProvider: org.aggregatorProvider,
+                    aggregatorMode: org.aggregatorMode
                 }
             });
         }
 
         // ============================================================
-        // ADMIN VOUCHERS - GENERATE (FIXED)
+        // UPDATE ORGANIZATION
+        // ============================================================
+        if (req.method === 'PUT' && url.pathname.startsWith('/api/master/organizations/')) {
+            if (!isMasterAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
+            
+            var orgId = url.pathname.split('/').pop();
+            var body = await readBody(req);
+            var index = organizations.findIndex(o => o.id === orgId);
+            
+            if (index === -1) {
+                return sendJson(res, 404, { success: false, message: 'Organization not found' });
+            }
+            
+            // Merge all fields
+            organizations[index] = {
+                ...organizations[index],
+                businessName: body.businessName !== undefined ? body.businessName : organizations[index].businessName,
+                businessTagline: body.businessTagline !== undefined ? body.businessTagline : organizations[index].businessTagline,
+                supportPhone: body.supportPhone !== undefined ? body.supportPhone : organizations[index].supportPhone,
+                supportEmail: body.supportEmail !== undefined ? body.supportEmail : organizations[index].supportEmail,
+                website: body.website !== undefined ? body.website : organizations[index].website,
+                logo: body.logo !== undefined ? body.logo : organizations[index].logo,
+                mpesaTill: body.mpesaTill !== undefined ? body.mpesaTill : organizations[index].mpesaTill,
+                mpesaPhoneNumber: body.mpesaPhoneNumber !== undefined ? body.mpesaPhoneNumber : organizations[index].mpesaPhoneNumber,
+                businessAddress: body.businessAddress !== undefined ? body.businessAddress : organizations[index].businessAddress,
+                primaryColor: body.primaryColor !== undefined ? body.primaryColor : organizations[index].primaryColor,
+                secondaryColor: body.secondaryColor !== undefined ? body.secondaryColor : organizations[index].secondaryColor,
+                accentColor: body.accentColor !== undefined ? body.accentColor : organizations[index].accentColor,
+                plans: body.plans !== undefined ? body.plans : organizations[index].plans,
+                aggregatorProvider: body.aggregatorProvider !== undefined ? body.aggregatorProvider : organizations[index].aggregatorProvider,
+                aggregatorMode: body.aggregatorMode !== undefined ? body.aggregatorMode : organizations[index].aggregatorMode,
+                updatedAt: new Date().toISOString()
+            };
+            saveOrganizations();
+            
+            return sendJson(res, 200, {
+                success: true,
+                message: 'Organization updated',
+                data: organizations[index]
+            });
+        }
+
+        // ============================================================
+        // AGGREGATOR PAYMENT INITIATE
+        // ============================================================
+        if (req.method === 'POST' && url.pathname === '/api/aggregator/initiate') {
+            var body = await readBody(req);
+            
+            var organizationId = body.organizationId;
+            var planId = body.planId;
+            var customerPhone = body.phoneNumber;
+            var provider = body.provider;
+            var mode = body.mode;
+            
+            var org = getOrganizationByClientId(organizationId);
+            if (!org) {
+                return sendJson(res, 404, { success: false, message: 'Organization not found' });
+            }
+            
+            var plan = (org.plans || []).find(p => p.id === planId);
+            if (!plan) {
+                return sendJson(res, 404, { success: false, message: 'Plan not found' });
+            }
+            
+            try {
+                var result = await initiateAggregatorPayment(org, plan, customerPhone, provider, mode);
+                
+                // Store transaction for test mode
+                if (result.isTest) {
+                    var testTx = {
+                        id: result.transactionId,
+                        organizationId: org.id,
+                        planId: plan.id,
+                        planName: plan.name,
+                        customerPhone: customerPhone,
+                        amount: result.amount,
+                        baseAmount: result.baseAmount,
+                        fee: result.fee,
+                        feePercent: result.feePercent,
+                        status: 'completed',
+                        provider: provider || AGGREGATOR_CONFIG.defaultProvider,
+                        mode: 'test',
+                        isTest: true,
+                        timestamp: new Date().toISOString(),
+                        expiresAt: result.expiresAt,
+                        mikrotikUsername: result.username,
+                        mikrotikPassword: result.password
+                    };
+                    transactions.push(testTx);
+                    saveTransactions();
+                }
+                
+                return sendJson(res, 200, {
+                    success: true,
+                    data: {
+                        transactionId: result.transactionId,
+                        paymentUrl: result.paymentUrl,
+                        isTest: result.isTest || false,
+                        mode: result.mode || AGGREGATOR_CONFIG.defaultMode,
+                        amount: result.amount,
+                        fee: result.fee,
+                        feePercent: result.feePercent,
+                        baseAmount: result.baseAmount,
+                        username: result.username,
+                        password: result.password,
+                        expiresAt: result.expiresAt,
+                        message: result.message || 'Payment initiated successfully'
+                    }
+                });
+            } catch (error) {
+                console.error('Payment error:', error);
+                return sendJson(res, 500, { success: false, message: error.message });
+            }
+        }
+
+        // ============================================================
+        // GET TRANSACTION
+        // ============================================================
+        if (req.method === 'GET' && url.pathname.startsWith('/api/transaction/')) {
+            var id = url.pathname.split('/').pop();
+            var tx = transactions.find(t => t.id === id);
+            if (!tx) {
+                return sendJson(res, 404, { success: false, message: 'Transaction not found' });
+            }
+            
+            return sendJson(res, 200, {
+                success: true,
+                data: {
+                    id: tx.id,
+                    status: tx.status,
+                    amount: tx.amount,
+                    planName: tx.planName,
+                    expiresAt: tx.expiresAt,
+                    mikrotikUsername: tx.mikrotikUsername,
+                    mikrotikPassword: tx.mikrotikPassword,
+                    isTest: tx.isTest || false
+                }
+            });
+        }
+
+        // ============================================================
+        // GET CREDENTIALS
+        // ============================================================
+        if (req.method === 'GET' && url.pathname.startsWith('/api/get-credentials/')) {
+            var id = url.pathname.split('/').pop();
+            var tx = transactions.find(t => t.id === id);
+            if (!tx) {
+                return sendJson(res, 404, { success: false, message: 'Transaction not found' });
+            }
+            
+            if (tx.status !== 'completed') {
+                return sendJson(res, 400, { success: false, message: 'Payment not completed' });
+            }
+            
+            return sendJson(res, 200, {
+                success: true,
+                username: tx.mikrotikUsername || 'user_' + id.substring(0, 8),
+                password: tx.mikrotikPassword || 'pass_' + Date.now().toString(36),
+                plan: tx.planName,
+                expiresAt: tx.expiresAt || new Date(Date.now() + 7200000).toISOString()
+            });
+        }
+
+        // ============================================================
+        // VOUCHER SYSTEM
+        // ============================================================
+        if (req.method === 'POST' && url.pathname === '/api/voucher/redeem') {
+            var body = await readBody(req);
+            var code = body.code;
+            var phoneNumber = body.phoneNumber;
+            
+            if (!code) {
+                return sendJson(res, 400, { success: false, message: 'Voucher code required' });
+            }
+            
+            var voucher = vouchers.find(v => v.code === code && !v.used);
+            if (!voucher) {
+                return sendJson(res, 404, { success: false, message: 'Invalid or already used voucher' });
+            }
+            
+            voucher.used = true;
+            voucher.usedBy = phoneNumber || 'unknown';
+            voucher.usedAt = new Date().toISOString();
+            saveVouchers();
+            
+            var transactionId = 'VOUCH_' + Date.now();
+            var duration = voucher.duration_seconds || 3600;
+            
+            var tx = {
+                id: transactionId,
+                phoneNumber: phoneNumber || 'voucher_user',
+                amount: 0,
+                planId: voucher.planId || 'voucher',
+                planName: voucher.planName || 'Voucher Plan',
+                status: 'completed',
+                timestamp: new Date().toISOString(),
+                expiresAt: new Date(Date.now() + duration * 1000).toISOString(),
+                mikrotikUsername: 'vuser_' + transactionId.substring(0, 8),
+                mikrotikPassword: 'vpass_' + Date.now().toString(36),
+                isVoucher: true,
+                voucherCode: voucher.code
+            };
+            transactions.push(tx);
+            saveTransactions();
+            
+            return sendJson(res, 200, {
+                success: true,
+                message: 'Voucher redeemed successfully!',
+                data: {
+                    transactionId: transactionId,
+                    planName: voucher.planName,
+                    expiresAt: tx.expiresAt,
+                    username: tx.mikrotikUsername,
+                    password: tx.mikrotikPassword
+                }
+            });
+        }
+
+        // ============================================================
+        // ADMIN VOUCHERS - GENERATE
         // ============================================================
         if (req.method === 'POST' && url.pathname === '/api/admin/voucher/generate') {
             if (!isAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
-            var body = await readBody(req);
-            console.log('📥 Voucher generation request:', body);
             
-            var planId = body.planId || body.plan_id;
+            var body = await readBody(req);
+            var planId = body.planId;
             var count = Math.min(body.count || 1, 100);
             
             if (!planId) {
-                return sendJson(res, 400, { success: false, message: 'Plan ID is required' });
+                return sendJson(res, 400, { success: false, message: 'Plan ID required' });
             }
             
-            // Try to find the plan in the global plans array first
-            var plan = null;
-            for (var i = 0; i < plans.length; i++) { 
-                if (plans[i].id === planId) { 
-                    plan = plans[i]; 
-                    break; 
-                }
-            }
-            
-            // If not found in global plans, try to find in organization plans
+            var plan = plans.find(p => p.id === planId);
             if (!plan) {
-                for (var i = 0; i < organizations.length; i++) {
-                    var orgPlans = organizations[i].plans || [];
-                    for (var j = 0; j < orgPlans.length; j++) {
-                        if (orgPlans[j].id === planId) {
-                            plan = orgPlans[j];
-                            break;
-                        }
-                    }
-                    if (plan) break;
-                }
-            }
-            
-            if (!plan) {
-                return sendJson(res, 400, { success: false, message: 'Invalid plan ID: ' + planId });
+                return sendJson(res, 400, { success: false, message: 'Invalid plan ID' });
             }
             
             var generated = [];
             for (var i = 0; i < count; i++) {
                 var code = generateVoucherCode();
-                vouchers.push({ 
-                    code: code, 
-                    planId: plan.id, 
-                    planName: plan.name, 
-                    duration_seconds: body.duration_seconds || plan.duration_seconds || 3600, 
-                    devices: plan.devices || 1, 
-                    used: false, 
-                    usedBy: null, 
-                    usedAt: null, 
-                    expiresAt: null, 
-                    createdAt: new Date().toISOString() 
+                vouchers.push({
+                    code: code,
+                    planId: plan.id,
+                    planName: plan.name,
+                    duration_seconds: plan.duration_seconds || 3600,
+                    devices: plan.devices || 1,
+                    used: false,
+                    usedBy: null,
+                    usedAt: null,
+                    createdAt: new Date().toISOString()
                 });
                 generated.push(code);
             }
             saveVouchers();
-            console.log('✅ Generated ' + generated.length + ' vouchers for plan: ' + plan.name);
-            return sendJson(res, 200, { 
-                success: true, 
-                message: 'Generated ' + generated.length + ' vouchers', 
-                vouchers: generated, 
-                count: generated.length 
+            
+            return sendJson(res, 200, {
+                success: true,
+                message: 'Generated ' + generated.length + ' vouchers',
+                vouchers: generated,
+                count: generated.length
             });
         }
 
@@ -1334,22 +1695,20 @@ var server = http.createServer(async function(req, res) {
         // ============================================================
         if (req.method === 'GET' && url.pathname === '/api/admin/vouchers') {
             if (!isAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
-            var used = 0;
-            for (var i = 0; i < vouchers.length; i++) { if (vouchers[i].used) used++; }
-            return sendJson(res, 200, { 
-                success: true, 
-                data: vouchers, 
-                count: vouchers.length, 
-                used: used, 
-                unused: vouchers.length - used 
+            
+            var used = vouchers.filter(v => v.used).length;
+            return sendJson(res, 200, {
+                success: true,
+                data: vouchers,
+                count: vouchers.length,
+                used: used,
+                unused: vouchers.length - used
             });
         }
 
         // ============================================================
-        // ADMIN ENDPOINTS (abbreviated for space)
+        // ADMIN VERIFY
         // ============================================================
-
-        // Admin Verify
         if (req.method === 'POST' && url.pathname === '/api/admin/verify') {
             var body = await readBody(req);
             if (body.pin === ADMIN_PASSWORD) {
@@ -1360,237 +1719,9 @@ var server = http.createServer(async function(req, res) {
             }
         }
 
-        // Admin Clients
-        if (req.method === 'GET' && url.pathname === '/api/admin/clients') {
-            if (!isAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
-            return sendJson(res, 200, { success: true, data: clients, count: clients.length });
-        }
-
-        if (req.method === 'POST' && url.pathname === '/api/admin/clients') {
-            if (!isAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
-            var body = await readBody(req);
-            if (!body.name || !body.phone) return sendJson(res, 400, { success: false, message: 'Name and phone required' });
-            var newClient = { id: generateClientId(), name: body.name, phone: body.phone, email: body.email || '', businessName: body.businessName || '', mpesaTill: body.mpesaTill || '', status: 'active', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
-            clients.push(newClient);
-            saveClients();
-            return sendJson(res, 200, { success: true, message: 'Client created', data: newClient });
-        }
-
-        if (req.method === 'PUT' && url.pathname.startsWith('/api/admin/clients/')) {
-            if (!isAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
-            var clientId = url.pathname.split('/').pop();
-            var body = await readBody(req);
-            var index = -1;
-            for (var i = 0; i < clients.length; i++) { if (clients[i].id === clientId) { index = i; break; } }
-            if (index === -1) return sendJson(res, 404, { success: false, message: 'Client not found' });
-            clients[index] = { id: clients[index].id, name: body.name || clients[index].name, phone: body.phone || clients[index].phone, email: body.email || clients[index].email, businessName: body.businessName || clients[index].businessName, mpesaTill: body.mpesaTill || clients[index].mpesaTill, status: body.status || clients[index].status, createdAt: clients[index].createdAt, updatedAt: new Date().toISOString() };
-            saveClients();
-            return sendJson(res, 200, { success: true, message: 'Client updated', data: clients[index] });
-        }
-
-        if (req.method === 'DELETE' && url.pathname.startsWith('/api/admin/clients/')) {
-            if (!isAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
-            var clientId = url.pathname.split('/').pop();
-            var index = -1;
-            for (var i = 0; i < clients.length; i++) { if (clients[i].id === clientId) { index = i; break; } }
-            if (index === -1) return sendJson(res, 404, { success: false, message: 'Client not found' });
-            clients.splice(index, 1);
-            saveClients();
-            return sendJson(res, 200, { success: true, message: 'Client deleted' });
-        }
-
-        // Admin Products
-        if (req.method === 'GET' && url.pathname === '/api/admin/products') {
-            if (!isAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
-            return sendJson(res, 200, { success: true, data: products, count: products.length });
-        }
-
-        if (req.method === 'POST' && url.pathname === '/api/admin/products') {
-            if (!isAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
-            var body = await readBody(req);
-            if (!body.name || body.price === undefined) return sendJson(res, 400, { success: false, message: 'Name and price required' });
-            var newProduct = { id: generateProductId(), name: body.name, description: body.description || '', price: Number(body.price), imageUrl: body.imageUrl || '', category: body.category || 'general', status: 'active', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() };
-            products.push(newProduct);
-            saveProducts();
-            return sendJson(res, 200, { success: true, message: 'Product created', data: newProduct });
-        }
-
-        if (req.method === 'PUT' && url.pathname.startsWith('/api/admin/products/')) {
-            if (!isAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
-            var productId = url.pathname.split('/').pop();
-            var body = await readBody(req);
-            var index = -1;
-            for (var i = 0; i < products.length; i++) { if (products[i].id === productId) { index = i; break; } }
-            if (index === -1) return sendJson(res, 404, { success: false, message: 'Product not found' });
-            products[index] = { id: products[index].id, name: body.name || products[index].name, description: body.description || products[index].description, price: body.price !== undefined ? Number(body.price) : products[index].price, imageUrl: body.imageUrl || products[index].imageUrl, category: body.category || products[index].category, status: body.status || products[index].status, createdAt: products[index].createdAt, updatedAt: new Date().toISOString() };
-            saveProducts();
-            return sendJson(res, 200, { success: true, message: 'Product updated', data: products[index] });
-        }
-
-        if (req.method === 'DELETE' && url.pathname.startsWith('/api/admin/products/')) {
-            if (!isAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
-            var productId = url.pathname.split('/').pop();
-            var index = -1;
-            for (var i = 0; i < products.length; i++) { if (products[i].id === productId) { index = i; break; } }
-            if (index === -1) return sendJson(res, 404, { success: false, message: 'Product not found' });
-            products.splice(index, 1);
-            saveProducts();
-            return sendJson(res, 200, { success: true, message: 'Product deleted' });
-        }
-
-        // Admin Plans
-        if (req.method === 'GET' && url.pathname === '/api/admin/plans') {
-            if (!isAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
-            return sendJson(res, 200, { success: true, data: plans });
-        }
-
-        if (req.method === 'POST' && url.pathname === '/api/admin/plans') {
-            if (!isAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
-            var body = await readBody(req);
-            if (!body.id || !body.name || body.price === undefined) return sendJson(res, 400, { success: false, message: 'ID, name, and price required' });
-            for (var i = 0; i < plans.length; i++) { if (plans[i].id === body.id) { return sendJson(res, 400, { success: false, message: 'Plan ID already exists' }); } }
-            plans.push({ id: body.id, name: body.name, price: Number(body.price), devices: body.devices || 1, shared_users: body.shared_users || 1, duration_seconds: body.duration_seconds || 3600 });
-            savePlans();
-            return sendJson(res, 200, { success: true, message: 'Plan created', data: plans[plans.length - 1] });
-        }
-
-        if (req.method === 'PUT' && url.pathname.startsWith('/api/admin/plans/')) {
-            if (!isAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
-            var planId = url.pathname.split('/').pop();
-            var body = await readBody(req);
-            var plan = null;
-            for (var i = 0; i < plans.length; i++) { if (plans[i].id === planId) { plan = plans[i]; break; } }
-            if (!plan) return sendJson(res, 404, { success: false, message: 'Plan not found' });
-            if (body.name) plan.name = body.name;
-            if (body.price !== undefined) plan.price = Number(body.price);
-            if (body.devices !== undefined) plan.devices = Number(body.devices);
-            if (body.shared_users !== undefined) plan.shared_users = Number(body.shared_users);
-            if (body.duration_seconds !== undefined) plan.duration_seconds = Number(body.duration_seconds);
-            savePlans();
-            return sendJson(res, 200, { success: true, message: 'Plan updated', data: plan });
-        }
-
-        if (req.method === 'DELETE' && url.pathname.startsWith('/api/admin/plans/')) {
-            if (!isAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
-            var planId = url.pathname.split('/').pop();
-            var index = -1;
-            for (var i = 0; i < plans.length; i++) { if (plans[i].id === planId) { index = i; break; } }
-            if (index === -1) return sendJson(res, 404, { success: false, message: 'Plan not found' });
-            plans.splice(index, 1);
-            savePlans();
-            return sendJson(res, 200, { success: true, message: 'Plan deleted' });
-        }
-
-        // Admin Transactions
-        if (req.method === 'GET' && url.pathname === '/api/admin/transactions') {
-            if (!isAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
-            var completed = 0, pending = 0, cancelled = 0, failed = 0, totalRevenue = 0;
-            for (var i = 0; i < transactions.length; i++) {
-                var t = transactions[i];
-                if (t.status === 'completed') { completed++; totalRevenue += (t.amount || 0); }
-                else if (t.status === 'pending') pending++;
-                else if (t.status === 'cancelled') cancelled++;
-                else if (t.status === 'failed') failed++;
-            }
-            return sendJson(res, 200, {
-                success: true,
-                data: transactions,
-                count: transactions.length,
-                summary: {
-                    total: transactions.length,
-                    completed: completed,
-                    pending: pending,
-                    cancelled: cancelled,
-                    failed: failed,
-                    totalRevenue: totalRevenue
-                }
-            });
-        }
-
-        // Admin Settings
-        if (req.method === 'GET' && url.pathname === '/api/admin/settings') {
-            if (!isAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
-            return sendJson(res, 200, { success: true, data: settings });
-        }
-
-        if (req.method === 'POST' && url.pathname === '/api/admin/settings') {
-            if (!isAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
-            var body = await readBody(req);
-            if (body.theme) {
-                var theme = null;
-                for (var i = 0; i < themes.length; i++) { if (themes[i].id === body.theme) { theme = themes[i]; break; } }
-                if (theme) {
-                    settings.theme = theme.id;
-                    settings.primaryColor = theme.colors.primary;
-                    settings.secondaryColor = theme.colors.secondary;
-                    settings.accentColor = theme.colors.accent;
-                    settings.textColor = theme.colors.text;
-                    settings.headerTextColor = theme.colors.headerText;
-                    settings.buttonTextColor = theme.colors.buttonText;
-                    settings.bgGradient = theme.gradient;
-                }
-            }
-            if (body.primaryColor !== undefined) settings.primaryColor = body.primaryColor;
-            if (body.secondaryColor !== undefined) settings.secondaryColor = body.secondaryColor;
-            if (body.accentColor !== undefined) settings.accentColor = body.accentColor;
-            if (body.businessName !== undefined) settings.businessName = body.businessName;
-            if (body.businessTagline !== undefined) settings.businessTagline = body.businessTagline;
-            if (body.supportPhone !== undefined) settings.supportPhone = body.supportPhone;
-            if (body.supportEmail !== undefined) settings.supportEmail = body.supportEmail;
-            if (body.website !== undefined) settings.website = body.website;
-            if (body.logo !== undefined) settings.logo = body.logo;
-            saveSettings();
-            return sendJson(res, 200, { success: true, message: 'Settings updated', data: settings });
-        }
-
-        // Admin Themes
-        if (req.method === 'GET' && url.pathname === '/api/admin/themes') {
-            if (!isAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
-            return sendJson(res, 200, { success: true, data: themes });
-        }
-
-        if (req.method === 'POST' && url.pathname === '/api/admin/themes') {
-            if (!isAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
-            var body = await readBody(req);
-            var newTheme = { id: body.id || 'theme_' + Date.now(), name: body.name || 'Custom Theme', preview: body.preview || '🎨', colors: body.colors || { primary: '#00c853', secondary: '#00e676', accent: '#0f2027', text: '#ffffff', headerText: '#ffffff', buttonText: '#000000' }, gradient: body.gradient || 'linear-gradient(135deg, #0f2027, #203a43, #2c5364)' };
-            themes.push(newTheme);
-            saveThemes();
-            return sendJson(res, 200, { success: true, message: 'Theme added', data: newTheme });
-        }
-
-        if (req.method === 'DELETE' && url.pathname.startsWith('/api/admin/themes/')) {
-            if (!isAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
-            var themeId = url.pathname.split('/').pop();
-            if (themeId === 'default') return sendJson(res, 400, { success: false, message: 'Cannot delete default theme' });
-            var index = -1;
-            for (var i = 0; i < themes.length; i++) { if (themes[i].id === themeId) { index = i; break; } }
-            if (index === -1) return sendJson(res, 404, { success: false, message: 'Theme not found' });
-            themes.splice(index, 1);
-            saveThemes();
-            return sendJson(res, 200, { success: true, message: 'Theme deleted' });
-        }
-
-        // Get Credentials
-        if (req.method === 'GET' && url.pathname.startsWith('/api/get-credentials/')) {
-            var transactionId = url.pathname.split('/').pop();
-            var transaction = null;
-            for (var i = 0; i < transactions.length; i++) { if (transactions[i].id === transactionId) { transaction = transactions[i]; break; } }
-            if (!transaction) return sendJson(res, 404, { success: false, message: 'Transaction not found' });
-            if (transaction.status !== 'completed') return sendJson(res, 400, { success: false, message: 'Payment not completed' });
-            return sendJson(res, 200, {
-                success: true,
-                username: transaction.mikrotikUsername || 'user_' + (transaction.mpesaCode || transaction.id).substring(0, 12),
-                password: transaction.mikrotikPassword || 'pass_' + Date.now().toString(36),
-                plan: transaction.planName,
-                expiresAt: transaction.expiresAt || new Date(Date.now() + 7200000).toISOString()
-            });
-        }
-
         // ============================================================
-        // MULTI-TENANT ENDPOINTS
+        // MASTER ADMIN VERIFY
         // ============================================================
-
-        // Master Admin Verify
         if (req.method === 'POST' && url.pathname === '/api/master/verify') {
             var body = await readBody(req);
             if (body.pin === MASTER_PASSWORD) {
@@ -1601,259 +1732,53 @@ var server = http.createServer(async function(req, res) {
             }
         }
 
-        // Get All Organizations
+        // ============================================================
+        // GET ALL ORGANIZATIONS (Master)
+        // ============================================================
         if (req.method === 'GET' && url.pathname === '/api/master/organizations') {
             if (!isMasterAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
             return sendJson(res, 200, { success: true, data: organizations, count: organizations.length });
         }
 
-        // Create Organization (Master)
-        if (req.method === 'POST' && url.pathname === '/api/master/organizations') {
-            if (!isMasterAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
-            var body = await readBody(req);
-            if (!body.name || !body.businessName || !body.email || !body.phone) {
-                return sendJson(res, 400, { success: false, message: 'Name, Business Name, Email, and Phone are required' });
-            }
-            var clientId = generateOrgId();
-            var newOrganization = {
-                id: clientId,
-                name: body.name,
-                businessName: body.businessName,
-                email: body.email,
-                phone: body.phone,
-                logo: body.logo || '',
-                primaryColor: body.primaryColor || masterSettings.defaultPrimaryColor || '#00c853',
-                secondaryColor: body.secondaryColor || '#00e676',
-                accentColor: body.accentColor || '#0f2027',
-                textColor: '#ffffff',
-                headerTextColor: '#ffffff',
-                buttonTextColor: '#000000',
-                bgGradient: body.bgGradient || masterSettings.defaultBgGradient || 'linear-gradient(135deg, #0f2027, #203a43, #2c5364)',
-                supportPhone: body.supportPhone || body.phone,
-                supportEmail: body.supportEmail || body.email,
-                website: body.website || '',
-                businessTagline: body.businessTagline || 'Fast • Secure • Reliable',
-                mpesaTill: body.mpesaTill || '',
-                businessAddress: body.businessAddress || '',
-                mpesaShortcode: SHORTCODE,
-                status: 'active',
-                createdAt: new Date().toISOString(),
-                updatedAt: new Date().toISOString(),
-                plans: body.plans || [
-                    { id: '2_Hours', name: '2 Hours', price: 10, devices: 1, shared_users: 1, duration_seconds: 7200 },
-                    { id: '5_Hours', name: '5 Hours', price: 20, devices: 1, shared_users: 1, duration_seconds: 18000 },
-                    { id: '24_Hours', name: '24 Hours', price: 80, devices: 1, shared_users: 1, duration_seconds: 86400 }
-                ]
-            };
-            organizations.push(newOrganization);
-            saveOrganizations();
-
-            clients.push({ id: clientId, name: body.name, phone: body.phone, email: body.email, businessName: body.businessName, mpesaTill: body.mpesaTill || '', status: 'active', createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(), isOrganization: true, organizationId: clientId });
-            saveClients();
-
-            return sendJson(res, 200, {
-                success: true,
-                message: 'Organization created!',
-                data: newOrganization,
-                clientId: clientId,
-                clientPageUrl: '/' + clientId + '/client-page.html'
-            });
-        }
-
-        // Get Organization by ID
-        if (req.method === 'GET' && url.pathname.startsWith('/api/organization/')) {
-            var orgId = url.pathname.split('/').pop();
-            if (!orgId || orgId === 'organizations') {
-                return sendJson(res, 400, { success: false, message: 'Invalid organization ID' });
-            }
-            var organization = getOrganizationByClientId(orgId);
-            if (!organization) return sendJson(res, 404, { success: false, message: 'Organization not found' });
-            return sendJson(res, 200, {
-                success: true,
-                data: {
-                    id: organization.id,
-                    businessName: organization.businessName,
-                    logo: organization.logo || '',
-                    primaryColor: organization.primaryColor,
-                    secondaryColor: organization.secondaryColor,
-                    accentColor: organization.accentColor,
-                    textColor: organization.textColor,
-                    headerTextColor: organization.headerTextColor,
-                    buttonTextColor: organization.buttonTextColor,
-                    bgGradient: organization.bgGradient,
-                    supportPhone: organization.supportPhone,
-                    supportEmail: organization.supportEmail,
-                    website: organization.website,
-                    businessTagline: organization.businessTagline,
-                    mpesaTill: organization.mpesaTill || '',
-                    businessAddress: organization.businessAddress || '',
-                    plans: organization.plans || [],
-                    status: organization.status
-                }
-            });
-        }
-
         // ============================================================
-        // UPDATE ORGANIZATION - Properly merges all fields
+        // GENERATE FULL HTML
         // ============================================================
-        if (req.method === 'PUT' && url.pathname.startsWith('/api/master/organizations/')) {
-            if (!isMasterAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
-            var orgId = url.pathname.split('/').pop();
-            var body = await readBody(req);
-            var index = -1;
-            for (var i = 0; i < organizations.length; i++) { if (organizations[i].id === orgId) { index = i; break; } }
-            if (index === -1) return sendJson(res, 404, { success: false, message: 'Organization not found' });
-            
-            organizations[index] = {
-                ...organizations[index],
-                name: body.name !== undefined ? body.name : organizations[index].name,
-                businessName: body.businessName !== undefined ? body.businessName : organizations[index].businessName,
-                email: body.email !== undefined ? body.email : organizations[index].email,
-                phone: body.phone !== undefined ? body.phone : organizations[index].phone,
-                logo: body.logo !== undefined ? body.logo : organizations[index].logo,
-                primaryColor: body.primaryColor !== undefined ? body.primaryColor : organizations[index].primaryColor,
-                secondaryColor: body.secondaryColor !== undefined ? body.secondaryColor : organizations[index].secondaryColor,
-                accentColor: body.accentColor !== undefined ? body.accentColor : organizations[index].accentColor,
-                textColor: body.textColor !== undefined ? body.textColor : organizations[index].textColor,
-                headerTextColor: body.headerTextColor !== undefined ? body.headerTextColor : organizations[index].headerTextColor,
-                buttonTextColor: body.buttonTextColor !== undefined ? body.buttonTextColor : organizations[index].buttonTextColor,
-                bgGradient: body.bgGradient !== undefined ? body.bgGradient : organizations[index].bgGradient,
-                supportPhone: body.supportPhone !== undefined ? body.supportPhone : organizations[index].supportPhone,
-                supportEmail: body.supportEmail !== undefined ? body.supportEmail : organizations[index].supportEmail,
-                website: body.website !== undefined ? body.website : organizations[index].website,
-                businessTagline: body.businessTagline !== undefined ? body.businessTagline : organizations[index].businessTagline,
-                mpesaTill: body.mpesaTill !== undefined ? body.mpesaTill : organizations[index].mpesaTill,
-                businessAddress: body.businessAddress !== undefined ? body.businessAddress : organizations[index].businessAddress,
-                status: body.status !== undefined ? body.status : organizations[index].status,
-                plans: body.plans !== undefined ? body.plans : organizations[index].plans,
-                updatedAt: new Date().toISOString()
-            };
-            saveOrganizations();
-
-            var clientIndex = -1;
-            for (var i = 0; i < clients.length; i++) { if (clients[i].id === orgId) { clientIndex = i; break; } }
-            if (clientIndex !== -1) {
-                clients[clientIndex] = {
-                    ...clients[clientIndex],
-                    name: body.name !== undefined ? body.name : clients[clientIndex].name,
-                    phone: body.phone !== undefined ? body.phone : clients[clientIndex].phone,
-                    email: body.email !== undefined ? body.email : clients[clientIndex].email,
-                    businessName: body.businessName !== undefined ? body.businessName : clients[clientIndex].businessName,
-                    mpesaTill: body.mpesaTill !== undefined ? body.mpesaTill : clients[clientIndex].mpesaTill,
-                    status: body.status !== undefined ? body.status : clients[clientIndex].status,
-                    updatedAt: new Date().toISOString()
-                };
-                saveClients();
-            }
-            return sendJson(res, 200, { success: true, message: 'Organization updated', data: organizations[index] });
-        }
-
-        // Delete Organization
-        if (req.method === 'DELETE' && url.pathname.startsWith('/api/master/organizations/')) {
-            if (!isMasterAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
-            var orgId = url.pathname.split('/').pop();
-            var index = -1;
-            for (var i = 0; i < organizations.length; i++) { if (organizations[i].id === orgId) { index = i; break; } }
-            if (index === -1) return sendJson(res, 404, { success: false, message: 'Organization not found' });
-            organizations.splice(index, 1);
-            saveOrganizations();
-
-            var clientIndex = -1;
-            for (var i = 0; i < clients.length; i++) { if (clients[i].id === orgId) { clientIndex = i; break; } }
-            if (clientIndex !== -1) { clients.splice(clientIndex, 1);
-                saveClients(); }
-            return sendJson(res, 200, { success: true, message: 'Organization deleted' });
-        }
-
-        // Master Settings
-        if (req.method === 'GET' && url.pathname === '/api/master/settings') {
-            if (!isMasterAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
-            return sendJson(res, 200, { success: true, data: masterSettings });
-        }
-
-        if (req.method === 'POST' && url.pathname === '/api/master/settings') {
-            if (!isMasterAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
-            var body = await readBody(req);
-            masterSettings = {
-                id: masterSettings.id || 'master_settings',
-                masterBusinessName: body.masterBusinessName || masterSettings.masterBusinessName,
-                masterEmail: body.masterEmail || masterSettings.masterEmail,
-                masterPhone: body.masterPhone || masterSettings.masterPhone,
-                defaultPrimaryColor: body.defaultPrimaryColor || masterSettings.defaultPrimaryColor,
-                defaultBgGradient: body.defaultBgGradient || masterSettings.defaultBgGradient,
-                commissionRate: body.commissionRate !== undefined ? Number(body.commissionRate) : masterSettings.commissionRate,
-                createdAt: masterSettings.createdAt || new Date().toISOString(),
-                updatedAt: new Date().toISOString()
-            };
-            saveMasterSettings();
-            return sendJson(res, 200, { success: true, message: 'Master settings updated', data: masterSettings });
-        }
-
-        // Generate Full HTML Client Page
         if (req.method === 'GET' && url.pathname.startsWith('/api/master/generate-full-html/')) {
             if (!isMasterAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
+            
             var orgId = url.pathname.split('/').pop();
-            var organization = getOrganizationByClientId(orgId);
-            if (!organization) return sendJson(res, 404, { success: false, message: 'Organization not found' });
-            var html = generateFullBillingHtml(organization);
+            var org = getOrganizationByClientId(orgId);
+            if (!org) {
+                return sendJson(res, 404, { success: false, message: 'Organization not found' });
+            }
+            
+            var html = generateBillingHtml(org);
             return sendJson(res, 200, {
                 success: true,
                 html: html,
                 filename: orgId + '_billing.html',
-                message: 'Full billing page generated successfully!'
+                message: 'Billing page generated successfully'
             });
         }
 
-        // Generate Client Skeleton (legacy)
-        if (req.method === 'GET' && url.pathname.startsWith('/api/master/generate-client-page/')) {
-            if (!isMasterAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
-            var orgId = url.pathname.split('/').pop();
-            var organization = getOrganizationByClientId(orgId);
-            if (!organization) return sendJson(res, 404, { success: false, message: 'Organization not found' });
-            var html = generateFullBillingHtml(organization);
-            return sendJson(res, 200, {
-                success: true,
-                html: html,
-                filename: orgId + '_billing.html',
-                instructions: 'Full working billing system with M-Pesa integration!'
-            });
-        }
-
-        // Serve Client Page - Direct access to billing page
-        if (req.method === 'GET' && url.pathname.match(/^\/CLIENT_[A-Z0-9]+\/billing\.html$/)) {
-            var pathParts = url.pathname.split('/');
-            var orgId = pathParts[1];
-            var organization = getOrganizationByClientId(orgId);
-            if (!organization) { return sendHtml(res, 404, '<h1>❌ Organization Not Found</h1><p>ID: ' + orgId + '</p>'); }
-            var html = generateFullBillingHtml(organization);
-            return sendHtml(res, 200, html);
-        }
-
+        // ============================================================
+        // SERVE CLIENT PAGE
+        // ============================================================
         if (req.method === 'GET' && url.pathname.match(/^\/CLIENT_[A-Z0-9]+\/?$/)) {
             var orgId = url.pathname.replace('/', '');
-            var organization = getOrganizationByClientId(orgId);
-            if (!organization) { return sendHtml(res, 404, '<h1>❌ Organization Not Found</h1><p>ID: ' + orgId + '</p>'); }
-            var html = generateFullBillingHtml(organization);
-            return sendHtml(res, 200, html);
-        }
-
-        if (req.method === 'GET' && url.pathname === '/billing.html' && url.searchParams.has('org')) {
-            var orgId = url.searchParams.get('org');
-            var organization = getOrganizationByClientId(orgId);
-            if (!organization) { return sendHtml(res, 404, '<h1>❌ Organization Not Found</h1><p>ID: ' + orgId + '</p>'); }
-            var html = generateFullBillingHtml(organization);
+            var org = getOrganizationByClientId(orgId);
+            if (!org) {
+                return sendHtml(res, 404, '<h1>❌ Organization Not Found</h1><p>ID: ' + orgId + '</p>');
+            }
+            var html = generateBillingHtml(org);
             return sendHtml(res, 200, html);
         }
 
         // ============================================================
         // API INFO
         // ============================================================
-
         if (req.method === 'GET' && url.pathname === '/api') {
-            var totalRevenue = 0;
-            for (var i = 0; i < transactions.length; i++) {
-                if (transactions[i].status === 'completed') totalRevenue += (transactions[i].amount || 0);
-            }
+            var totalRevenue = transactions.filter(t => t.status === 'completed').reduce((sum, t) => sum + (t.amount || 0), 0);
             return sendJson(res, 200, {
                 name: 'GICH WiFi API',
                 version: '3.0.0',
@@ -1861,9 +1786,7 @@ var server = http.createServer(async function(req, res) {
                 statistics: {
                     totalTransactions: transactions.length,
                     totalRevenue: totalRevenue,
-                    activeVouchers: vouchers.filter(function(v) { return !v.used; }).length,
-                    totalClients: clients.length,
-                    totalProducts: products.length,
+                    activeVouchers: vouchers.filter(v => !v.used).length,
                     totalOrganizations: organizations.length
                 }
             });
@@ -1889,11 +1812,13 @@ server.listen(PORT, '0.0.0.0', function() {
     console.log('========================================');
     console.log('✅ Server running on port: ' + PORT);
     console.log('📍 http://localhost:' + PORT + '/');
-    console.log('📍 http://localhost:' + PORT + '/api/health');
     console.log('========================================');
     console.log('🛡️ Admin PIN: ' + (ADMIN_PASSWORD ? '✅ Set' : '⚠️ NOT SET'));
     console.log('👑 Master PIN: ' + (MASTER_PASSWORD ? '✅ Set' : '⚠️ NOT SET'));
     console.log('🏢 Organizations: ' + organizations.length);
+    console.log('🎟️ Vouchers: ' + vouchers.length);
+    console.log('💳 Transactions: ' + transactions.length);
+    console.log('📋 Subscriptions: ' + subscriptions.length);
     console.log('========================================\n');
 });
 
