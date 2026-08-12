@@ -631,7 +631,7 @@ function generateRedirectHtml(organization) {
 }
 
 // ============================================================
-// GENERATE CUSTOMER BILLING PAGE - COMPLETELY FIXED
+// GENERATE CUSTOMER BILLING PAGE - COMPLETELY WORKING
 // ============================================================
 
 function generateCustomerBillingPage(organization) {
@@ -653,6 +653,7 @@ function generateCustomerBillingPage(organization) {
     var orgEmail = escapeHtml(organization.email || '');
     var plans = organization.plans || [];
 
+    // Build plans HTML
     var plansHtml = '';
     for (var i = 0; i < plans.length; i++) {
         var p = plans[i];
@@ -863,7 +864,7 @@ function generateCustomerBillingPage(organization) {
     html += '    <span id="toastMessage">Success!</span>\n';
     html += '</div>\n';
 
-    // JavaScript - NO variable references to plan or planType
+    // JavaScript - ALL FUNCTIONS PROPERLY DEFINED
     html += '<script>\n';
     html += '    (function() {\n';
     html += '        var ORG_ID = "' + orgId + '";\n';
@@ -1169,7 +1170,7 @@ function generateCustomerBillingPage(organization) {
     html += '                });\n';
     html += '        }\n';
     html += '\n';
-    html += '        function subscribeToPlan(planName) {\n';
+    html += '        function subscribeToPlan(planType) {\n';
     html += '            var phone = getEl("phoneInput").value.trim();\n';
     html += '            if (!phone || phone.length < 10) {\n';
     html += '                showToast("📱 Please enter your phone number to pay", "error");\n';
@@ -1177,7 +1178,7 @@ function generateCustomerBillingPage(organization) {
     html += '                return;\n';
     html += '            }\n';
     html += '            var prices = { starter: 500, pro: 1000, business: 2000 };\n';
-    html += '            var amount = prices[planName] || 500;\n';
+    html += '            var amount = prices[planType] || 500;\n';
     html += '            var btn = document.querySelector(".upgrade-section .plan-options .btn");\n';
     html += '            if (btn) { btn.disabled = true; btn.innerHTML = "<span class=\\"spinner\\"></span>"; }\n';
     html += '            var resultEl = getEl("subscribeResult");\n';
@@ -1189,10 +1190,10 @@ function generateCustomerBillingPage(organization) {
     html += '                body: JSON.stringify({\n';
     html += '                    phoneNumber: phone,\n';
     html += '                    amount: amount,\n';
-    html += '                    planId: "subscription_" + planName,\n';
+    html += '                    planId: "subscription_" + planType,\n';
     html += '                    organizationId: ORG_ID,\n';
     html += '                    isSubscription: true,\n';
-    html += '                    subscriptionPlan: planName\n';
+    html += '                    subscriptionPlan: planType\n';
     html += '                })\n';
     html += '            })\n';
     html += '            .then(function(r) { return r.json(); })\n';
@@ -1201,12 +1202,12 @@ function generateCustomerBillingPage(organization) {
     html += '                    resultEl.textContent = "✅ M-Pesa prompt sent! Check your phone.";\n';
     html += '                    resultEl.style.color = "#00c853";\n';
     html += '                    showToast("📱 M-Pesa prompt sent!", "success");\n';
-    html += '                    pollSubscriptionPayment(data.transactionId, planName);\n';
+    html += '                    pollSubscriptionPayment(data.transactionId, planType);\n';
     html += '                } else {\n';
     html += '                    resultEl.textContent = "❌ " + (data.message || "Payment failed");\n';
     html += '                    resultEl.style.color = "#ff4444";\n';
     html += '                    showToast("❌ Payment failed", "error");\n';
-    html += '                    if (btn) { btn.disabled = false; btn.innerHTML = planName.charAt(0).toUpperCase() + planName.slice(1) + "<br><small>KSh " + amount + "</small>"; }\n';
+    html += '                    if (btn) { btn.disabled = false; btn.innerHTML = planType.charAt(0).toUpperCase() + planType.slice(1) + "<br><small>KSh " + amount + "</small>"; }\n';
     html += '                }\n';
     html += '            })\n';
     html += '            .catch(function(err) {\n';
@@ -1214,11 +1215,11 @@ function generateCustomerBillingPage(organization) {
     html += '                resultEl.textContent = "❌ Network error";\n';
     html += '                resultEl.style.color = "#ff4444";\n';
     html += '                showToast("❌ Network error", "error");\n';
-    html += '                if (btn) { btn.disabled = false; btn.innerHTML = planName.charAt(0).toUpperCase() + planName.slice(1) + "<br><small>KSh " + amount + "</small>"; }\n';
+    html += '                if (btn) { btn.disabled = false; btn.innerHTML = planType.charAt(0).toUpperCase() + planType.slice(1) + "<br><small>KSh " + amount + "</small>"; }\n';
     html += '            });\n';
     html += '        }\n';
     html += '\n';
-    html += '        function pollSubscriptionPayment(transactionId, planName) {\n';
+    html += '        function pollSubscriptionPayment(transactionId, planType) {\n';
     html += '            var attempts = 0;\n';
     html += '            var maxAttempts = 30;\n';
     html += '            var interval = setInterval(function() {\n';
@@ -1240,7 +1241,7 @@ function generateCustomerBillingPage(organization) {
     html += '                                showToast("✅ Subscription payment successful!", "success");\n';
     html += '                                getEl("subscribeResult").textContent = "✅ Payment successful! Activating subscription...";\n';
     html += '                                getEl("subscribeResult").style.color = "#00c853";\n';
-    html += '                                activateSubscription(planName);\n';
+    html += '                                activateSubscription(planType);\n';
     html += '                            } else if (tx.status === "cancelled" || tx.status === "failed") {\n';
     html += '                                clearInterval(interval);\n';
     html += '                                showToast("❌ Payment " + tx.status, "error");\n';
@@ -1258,13 +1259,13 @@ function generateCustomerBillingPage(organization) {
     html += '            }, 3000);\n';
     html += '        }\n';
     html += '\n';
-    html += '        function activateSubscription(planName) {\n';
+    html += '        function activateSubscription(planType) {\n';
     html += '            fetch(API_URL + "/client/subscribe", {\n';
     html += '                method: "POST",\n';
     html += '                headers: { "Content-Type": "application/json" },\n';
     html += '                body: JSON.stringify({\n';
     html += '                    clientId: ORG_ID,\n';
-    html += '                    plan: planName\n';
+    html += '                    plan: planType\n';
     html += '                })\n';
     html += '            })\n';
     html += '            .then(function(r) { return r.json(); })\n';
