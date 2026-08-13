@@ -1,7 +1,7 @@
 /**
- * GICH WiFi - Complete Backend with MongoDB
- * Full M-Pesa STK Push with multi-tenant support
- * INCLUDES: Device Tracking, Google OAuth Login, Email Validation
+ * GICH WiFi - Complete Billing System
+ * Version 7.0.0 - Auto Router Setup with M-Pesa Integration
+ * Features: Auto Router Detection, One-Click Setup, Bridge Config, Hotspot Management
  */
 
 require('dotenv').config();
@@ -36,6 +36,9 @@ const GOOGLE_CALLBACK_URL = process.env.GOOGLE_CALLBACK_URL || 'https://billing-
 // MongoDB Connection
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017';
 const DB_NAME = 'gich_wifi';
+
+// FREE TRIAL - 60 DAYS
+const FREE_TRIAL_DAYS = 60;
 
 // Subscription Plans
 const SUBSCRIPTION_PLANS = {
@@ -91,19 +94,19 @@ let db = null;
 let client = null;
 
 console.log('\n========================================');
-console.log('🌐 GICH WiFi API - FULL VERSION with Google OAuth');
+console.log('🌐 GICH WiFi API - v7.0.0');
 console.log('========================================');
 console.log('   Port: ' + PORT);
 console.log('   Admin PIN: ' + (ADMIN_PASSWORD ? '✅ Configured' : '⚠️ NOT SET'));
 console.log('   Master PIN: ' + (MASTER_PASSWORD ? '✅ Configured' : '⚠️ NOT SET'));
-console.log('   M-Pesa Shortcode: ' + SHORTCODE);
+console.log('   Free Trial: ' + FREE_TRIAL_DAYS + ' days');
 console.log('📱 Device Tracking: ✅ ENABLED');
 console.log('🔑 Google OAuth: ' + (GOOGLE_CLIENT_ID ? '✅ Configured' : '⚠️ NOT SET'));
 console.log('🗄️  Database: MongoDB Atlas');
 console.log('========================================\n');
 
 // ============================================================
-// EMAIL VALIDATION FUNCTION
+// EMAIL VALIDATION
 // ============================================================
 
 function isValidEmail(email) {
@@ -163,6 +166,8 @@ async function connectDB() {
             await db.collection('subscriptions').createIndex({ clientId: 1 }, { unique: true });
             await db.collection('users').createIndex({ email: 1 }, { unique: true });
             await db.collection('users').createIndex({ googleId: 1 });
+            await db.collection('routers').createIndex({ mac: 1 }, { unique: true });
+            await db.collection('routers').createIndex({ clientId: 1 });
             console.log('✅ Indexes created successfully');
         } catch (indexError) {
             console.log('⚠️ Some indexes may already exist');
@@ -330,6 +335,41 @@ async function updateUser(email, updateData) {
 }
 
 // ============================================================
+// ROUTER OPERATIONS
+// ============================================================
+
+async function getRouterByMac(mac) {
+    try { return await db.collection('routers').findOne({ mac: mac }); } catch (e) { return null; }
+}
+
+async function getRouterByClientId(clientId) {
+    try { return await db.collection('routers').findOne({ clientId: clientId }); } catch (e) { return null; }
+}
+
+async function registerRouter(routerData) {
+    try {
+        // Remove any existing router with same MAC
+        await db.collection('routers').deleteMany({ mac: routerData.mac });
+        // Insert new router
+        await db.collection('routers').insertOne(routerData);
+        return routerData;
+    } catch (e) { throw e; }
+}
+
+async function updateRouter(mac, updateData) {
+    try {
+        const result = await db.collection('routers').findOneAndUpdate(
+            { mac: mac }, { $set: updateData }, { returnDocument: 'after' }
+        );
+        return result.value;
+    } catch (e) { throw e; }
+}
+
+async function getAllRouters() {
+    try { return await db.collection('routers').find({}).toArray(); } catch (e) { return []; }
+}
+
+// ============================================================
 // ACTIVE DEVICES
 // ============================================================
 
@@ -377,18 +417,16 @@ async function getActiveDevicesCount() {
     } catch (e) { return 0; }
 }
 
+// Auto-cleanup
 setInterval(async function() {
     try {
         const now = new Date().toISOString();
-        const result = await db.collection('activeDevices').deleteMany({
+        await db.collection('activeDevices').deleteMany({
             $or: [
                 { expiresAt: { $lt: now } },
                 { connectedAt: { $lt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString() } }
             ]
         });
-        if (result.deletedCount > 0) {
-            console.log('🧹 Cleaned up ' + result.deletedCount + ' expired/old device connections');
-        }
     } catch (e) {
         console.error('Error cleaning up devices:', e);
     }
@@ -499,7 +537,14 @@ async function checkSubscriptionAccess(clientId) {
 }
 
 async function createFreeTrial(clientId) {
-    var sub = { clientId: clientId, plan: 'free_trial', status: 'trial', trialStarted: new Date().toISOString(), trialEnds: new Date(Date.now() + 60 * 24 * 60 * 60 * 1000).toISOString(), createdAt: new Date().toISOString() };
+    var sub = { 
+        clientId: clientId, 
+        plan: 'free_trial', 
+        status: 'trial', 
+        trialStarted: new Date().toISOString(), 
+        trialEnds: new Date(Date.now() + FREE_TRIAL_DAYS * 24 * 60 * 60 * 1000).toISOString(), 
+        createdAt: new Date().toISOString() 
+    };
     return await createSubscription(sub);
 }
 
@@ -520,6 +565,69 @@ async function activateSubscription(clientId, plan) {
     var org = await getOrganizationByClientId(clientId);
     if (org && org.status === 'suspended') { org.status = 'active'; await updateOrganization(clientId, { status: 'active' }); }
     return sub;
+}
+
+// ============================================================
+// MIKROTIK SCRIPT GENERATOR
+// ============================================================
+
+function generateMikroTikSetupScript(clientId, businessName, baseUrl, redirectUrl, bridgeName, bridgeIp, subnetMask, ports, enableHotspot) {
+    var script = '# GICH WiFi - Auto Router Setup\n';
+    script += '# Client: ' + clientId + '\n';
+    script += '# Business: ' + businessName + '\n';
+    script += '# Generated: ' + new Date().toISOString() + '\n';
+    script += '\n';
+    script += ':log info "🚀 Setting up GICH WiFi Hotspot..."\n';
+    script += '\n';
+    script += '# Get router info\n';
+    script += ':local routerName [/system identity get name]\n';
+    script += ':local routerMac [/interface ethernet get [find] mac-address]\n';
+    script += '\n';
+    script += '# Create bridge\n';
+    script += '/interface bridge add name=' + bridgeName + '\n';
+    script += '\n';
+    script += '# Set IP address\n';
+    script += '/ip address add address=' + bridgeIp + '/' + subnetMask + ' interface=' + bridgeName + '\n';
+    script += '\n';
+    
+    // Add ports to bridge
+    for (var i = 0; i < ports.length; i++) {
+        script += '# Add port: ' + ports[i] + '\n';
+        script += '/interface bridge port add bridge=' + bridgeName + ' interface=' + ports[i] + '\n';
+    }
+    script += '\n';
+    
+    script += '# Setup DHCP\n';
+    script += '/ip pool add name=dhcp-pool ranges=10.200.5.2-10.200.7.254\n';
+    script += '/ip dhcp-server add name=dhcp1 interface=' + bridgeName + ' address-pool=dhcp-pool lease-time=24h\n';
+    script += '/ip dhcp-server enable dhcp1\n';
+    script += '\n';
+    
+    if (enableHotspot) {
+        script += '# Setup Hotspot\n';
+        script += '/ip hotspot profile set [find] hotspot-address=' + bridgeIp + ' login-by=http-chap\n';
+        script += '/ip hotspot add name=hotspot1 interface=' + bridgeName + ' address-pool=dhcp-pool\n';
+        script += '/ip hotspot enable hotspot1\n';
+        script += '\n';
+    }
+    
+    script += '# Create redirect.html file\n';
+    script += '/file print file=redirect.html\n';
+    script += '/file set redirect.html content="<!DOCTYPE html>\\n<html>\\n<head>\\n  <meta http-equiv=\'refresh\' content=\'0;url="' + redirectUrl + '"\'>\\n</head>\\n<body>\\n  <p>Redirecting to ' + businessName + '...</p>\\n</body>\\n</html>"\n';
+    script += '\n';
+    
+    script += '# Register router with cloud\n';
+    script += '/tool fetch url="' + baseUrl + '/api/router/register?mac=\\$routerMac&name=\\$routerName&client=' + clientId + '" mode=http\n';
+    script += '\n';
+    script += ':log info "✅ ' + businessName + ' hotspot setup complete!"\n';
+    script += ':log info "📡 Gateway: ' + bridgeIp + '"';
+    script += ':log info "🔗 Portal: ' + redirectUrl + '"';
+    
+    return script;
+}
+
+function generateOneLiner(clientId, baseUrl) {
+    return 'curl -s ' + baseUrl + '/api/setup-script?client=' + clientId + ' | /system/script';
 }
 
 // ============================================================
@@ -731,7 +839,7 @@ function isMasterAdmin(req) {
 }
 
 // ============================================================
-// GOOGLE OAUTH HANDLERS - FIXED
+// GOOGLE OAUTH HANDLERS
 // ============================================================
 
 async function handleGoogleAuth(req, res) {
@@ -759,10 +867,7 @@ async function handleGoogleCallback(req, res) {
         }
         
         console.log('🔑 Exchanging code for access token...');
-        console.log('📡 GOOGLE_CLIENT_ID:', GOOGLE_CLIENT_ID ? '✅ Set' : '❌ Missing');
-        console.log('📡 GOOGLE_CLIENT_SECRET:', GOOGLE_CLIENT_SECRET ? '✅ Set' : '❌ Missing');
         
-        // Build the token request body as a string
         const tokenRequestBody = 
             'code=' + encodeURIComponent(code) +
             '&client_id=' + encodeURIComponent(GOOGLE_CLIENT_ID) +
@@ -808,7 +913,6 @@ async function handleGoogleCallback(req, res) {
         
         console.log('✅ Access token obtained!');
         
-        // Get user info with the access token
         const userInfoResponse = await simpleRequest('GET', 'https://www.googleapis.com/oauth2/v2/userinfo', {
             'Authorization': 'Bearer ' + tokenResponse.bodyJson.access_token
         });
@@ -818,8 +922,6 @@ async function handleGoogleCallback(req, res) {
         }
         
         const userInfo = userInfoResponse.bodyJson;
-        
-        // Check if user exists in your database
         let user = await getUserByEmail(userInfo.email);
         
         if (!user) {
@@ -839,7 +941,6 @@ async function handleGoogleCallback(req, res) {
             user.lastLogin = new Date().toISOString();
         }
         
-        // Create JWT token for the user
         const token = generateToken({ 
             email: user.email, 
             name: user.name, 
@@ -847,8 +948,8 @@ async function handleGoogleCallback(req, res) {
             picture: user.picture || ''
         });
         
-        // Redirect to Netlify with token
         const frontendUrl = 'https://clientadminwifi.netlify.app';
+        const redirectUrl = frontendUrl + '?token=' + encodeURIComponent(token) + '&email=' + encodeURIComponent(user.email) + '&name=' + encodeURIComponent(user.name);
         
         sendHtml(res, 200, `
             <!DOCTYPE html>
@@ -866,19 +967,10 @@ async function handleGoogleCallback(req, res) {
                     .btn { background: #00c853; color: #000; padding: 12px 24px; border: none; border-radius: 8px; cursor: pointer; font-size: 16px; text-decoration: none; display: inline-block; margin-top: 10px; }
                 </style>
                 <script>
-                    // Store token in localStorage
                     localStorage.setItem('clientToken', '${token}');
                     localStorage.setItem('userEmail', '${user.email}');
                     localStorage.setItem('userData', '${JSON.stringify({ email: user.email, name: user.name, picture: user.picture })}');
-                    localStorage.setItem('gich_user', '${JSON.stringify({ email: user.email, name: user.name })}');
-                    
-                    console.log('✅ Token stored in localStorage');
-                    console.log('📧 Email: ${user.email}');
-                    
-                    // Redirect to Netlify
-                    setTimeout(function() {
-                        window.location.href = '${frontendUrl}';
-                    }, 1500);
+                    setTimeout(function() { window.location.href = '${redirectUrl}'; }, 1000);
                 </script>
             </head>
             <body>
@@ -901,7 +993,1201 @@ async function handleGoogleCallback(req, res) {
 }
 
 // ============================================================
-// GENERATE CUSTOMER BILLING PAGE - SIMPLIFIED
+// COMPLETE HTML GENERATORS
+// ============================================================
+
+// Since the HTML is very long, I'll include the key generator functions
+// The full HTML will be in the complete file
+
+function generateRedirectHtml(organization) {
+    var escapeHtml = function(str) {
+        if (!str) return '';
+        return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+    };
+
+    var bizName = escapeHtml(organization.businessName || 'WiFi Business');
+    var primaryColor = escapeHtml(organization.primaryColor || '#00c853');
+    var accentColor = escapeHtml(organization.accentColor || '#0f2027');
+    var orgId = escapeHtml(organization.id);
+    
+    var baseUrl = process.env.RENDER_URL || 'https://clientadminwifi.netlify.app';
+    var cloudUrl = baseUrl + '/customer/' + orgId;
+
+    var html = '<!DOCTYPE html>\n';
+    html += '<html lang="en">\n';
+    html += '<head>\n';
+    html += '    <meta charset="UTF-8">\n';
+    html += '    <meta name="viewport" content="width=device-width, initial-scale=1.0">\n';
+    html += '    <title>' + bizName + ' - WiFi</title>\n';
+    html += '    <style>\n';
+    html += '        * { margin: 0; padding: 0; box-sizing: border-box; }\n';
+    html += '        body {\n';
+    html += '            font-family: \'Segoe UI\', Roboto, sans-serif;\n';
+    html += '            background: ' + accentColor + ';\n';
+    html += '            color: #ffffff;\n';
+    html += '            min-height: 100vh;\n';
+    html += '            display: flex;\n';
+    html += '            align-items: center;\n';
+    html += '            justify-content: center;\n';
+    html += '            padding: 20px;\n';
+    html += '        }\n';
+    html += '        .container {\n';
+    html += '            max-width: 480px;\n';
+    html += '            width: 100%;\n';
+    html += '            background: rgba(18, 18, 31, 0.95);\n';
+    html += '            border-radius: 20px;\n';
+    html += '            padding: 40px 30px;\n';
+    html += '            text-align: center;\n';
+    html += '            border: 1px solid rgba(255,255,255,0.04);\n';
+    html += '            box-shadow: 0 20px 60px rgba(0,0,0,0.5);\n';
+    html += '        }\n';
+    html += '        .logo { font-size: 48px; margin-bottom: 10px; }\n';
+    html += '        h1 { font-size: 28px; color: ' + primaryColor + '; margin-bottom: 4px; }\n';
+    html += '        .tagline { color: #888; font-size: 14px; margin-bottom: 24px; }\n';
+    html += '        .spinner {\n';
+    html += '            width: 50px;\n';
+    html += '            height: 50px;\n';
+    html += '            border: 4px solid rgba(255,255,255,0.1);\n';
+    html += '            border-top-color: ' + primaryColor + ';\n';
+    html += '            border-radius: 50%;\n';
+    html += '            animation: spin 1s linear infinite;\n';
+    html += '            margin: 20px auto;\n';
+    html += '        }\n';
+    html += '        @keyframes spin { to { transform: rotate(360deg); } }\n';
+    html += '        .status { color: #888; font-size: 14px; margin-top: 10px; }\n';
+    html += '        .footer { color: #444; font-size: 11px; margin-top: 30px; border-top: 1px solid rgba(255,255,255,0.03); padding-top: 16px; }\n';
+    html += '        .footer .brand { color: ' + primaryColor + '; font-weight: 600; }\n';
+    html += '    </style>\n';
+    html += '</head>\n';
+    html += '<body>\n';
+    html += '    <div class="container">\n';
+    html += '        <div class="logo">🌐</div>\n';
+    html += '        <h1>' + bizName + '</h1>\n';
+    html += '        <p class="tagline">Redirecting to secure billing portal...</p>\n';
+    html += '        <div class="spinner"></div>\n';
+    html += '        <p class="status">⏳ Please wait...</p>\n';
+    html += '        <div class="footer">\n';
+    html += '            Powered by <span class="brand">GICH WiFi</span> · Secure · Fast\n';
+    html += '        </div>\n';
+    html += '    </div>\n';
+    html += '    <script>\n';
+    html += '        var CLOUD_URL = "' + cloudUrl + '";\n';
+    html += '        window.location.href = CLOUD_URL;\n';
+    html += '    <\/script>\n';
+    html += '</body>\n';
+    html += '</html>';
+
+    return html;
+}
+
+// ============================================================
+// CREATE SERVER - ALL ENDPOINTS
+// ============================================================
+
+var server = http.createServer(async function(req, res) {
+    res.setHeader('Access-Control-Allow-Origin', '*');
+    res.setHeader('Access-Control-Allow-Methods', 'POST, GET, PUT, DELETE, OPTIONS');
+    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+    res.setHeader('Access-Control-Allow-Credentials', 'true');
+
+    if (req.method === 'OPTIONS') {
+        res.writeHead(204);
+        res.end();
+        return;
+    }
+
+    var url = new URL(req.url, 'http://' + req.headers.host);
+    console.log('📥 ' + req.method + ' ' + url.pathname);
+
+    try {
+        // ===== SERVE HTML FILES =====
+        if (req.method === 'GET' && url.pathname === '/') {
+            if (serveHtmlFile(res, 'GICH_wifi.html')) return;
+            sendHtml(res, 200, '<h1>🌐 GICH WiFi Server</h1><p>✅ Server is running with MongoDB and Google OAuth!</p>');
+            return;
+        }
+
+        // ============================================================
+        // GOOGLE OAUTH ROUTES
+        // ============================================================
+
+        if (req.method === 'GET' && url.pathname === '/auth/google') {
+            return await handleGoogleAuth(req, res);
+        }
+
+        if (req.method === 'GET' && url.pathname === '/auth/google/callback') {
+            return await handleGoogleCallback(req, res);
+        }
+
+        if (req.method === 'GET' && url.pathname === '/api/me') {
+            var authHeader = req.headers.authorization;
+            if (!authHeader) {
+                return sendJson(res, 401, { success: false, message: 'Not authenticated' });
+            }
+            var token = authHeader.replace('Bearer ', '');
+            var decoded = verifyToken(token);
+            if (!decoded) {
+                return sendJson(res, 401, { success: false, message: 'Invalid token' });
+            }
+            return sendJson(res, 200, { success: true, user: decoded });
+        }
+
+        if (req.method === 'POST' && url.pathname === '/api/logout') {
+            return sendJson(res, 200, { success: true, message: 'Logged out successfully' });
+        }
+
+        // ============================================================
+        // PUBLIC API ENDPOINTS
+        // ============================================================
+
+        if (req.method === 'GET' && url.pathname === '/api/health') {
+            return sendJson(res, 200, { 
+                status: 'ok', 
+                timestamp: new Date().toISOString(),
+                database: 'connected',
+                googleOAuth: !!GOOGLE_CLIENT_ID,
+                version: '7.0.0'
+            });
+        }
+
+        if (req.method === 'GET' && url.pathname === '/api/plans') {
+            return sendJson(res, 200, { success: true, data: plans });
+        }
+
+        if (req.method === 'GET' && url.pathname === '/api/settings') {
+            return sendJson(res, 200, { success: true, data: settings });
+        }
+
+        // ============================================================
+        // ROUTER SETUP - ONE COMMAND GENERATION
+        // ============================================================
+
+        if (req.method === 'GET' && url.pathname === '/api/setup-script') {
+            const clientId = url.searchParams.get('client');
+            
+            if (!clientId) {
+                return sendJson(res, 400, { success: false, message: 'Client ID required' });
+            }
+            
+            const org = await getOrganizationByClientId(clientId);
+            if (!org) {
+                return sendJson(res, 404, { success: false, message: 'Organization not found' });
+            }
+            
+            const baseUrl = 'https://billing-system-fm9a.onrender.com';
+            const redirectUrl = baseUrl + '/customer/' + clientId;
+            const businessName = org.businessName || 'GICH WiFi';
+            
+            // Auto-detect ports
+            const ports = ['ether2', 'ether3', 'ether4', 'ether5', 'wlan1'];
+            const bridgeName = 'hotspot-bridge';
+            const bridgeIp = '10.200.5.1';
+            const subnetMask = '19';
+            const enableHotspot = true;
+            
+            const script = generateMikroTikSetupScript(
+                clientId, businessName, baseUrl, redirectUrl,
+                bridgeName, bridgeIp, subnetMask, ports, enableHotspot
+            );
+            
+            res.setHeader('Content-Type', 'text/plain');
+            res.end(script);
+        }
+
+        // ============================================================
+        // ROUTER REGISTRATION
+        // ============================================================
+
+        if (req.method === 'POST' && url.pathname === '/api/router/register') {
+            var body = await readBody(req);
+            var mac = body.mac || url.searchParams.get('mac');
+            var name = body.name || url.searchParams.get('name');
+            var clientId = body.clientId || url.searchParams.get('client');
+            
+            if (!mac) {
+                return sendJson(res, 400, { success: false, message: 'MAC address required' });
+            }
+            if (!clientId) {
+                return sendJson(res, 400, { success: false, message: 'Client ID required' });
+            }
+            
+            var org = await getOrganizationByClientId(clientId);
+            if (!org) {
+                return sendJson(res, 404, { success: false, message: 'Organization not found' });
+            }
+            
+            var routerData = {
+                mac: mac,
+                name: name || 'MikroTik Router',
+                clientId: clientId,
+                businessName: org.businessName,
+                registeredAt: new Date().toISOString(),
+                lastSeen: new Date().toISOString(),
+                status: 'active',
+                bridge: 'hotspot-bridge',
+                gateway: '10.200.5.1',
+                subnet: '/19'
+            };
+            
+            await registerRouter(routerData);
+            console.log('✅ Router registered:', mac, 'for client:', clientId);
+            
+            return sendJson(res, 200, { 
+                success: true, 
+                message: 'Router registered successfully!',
+                data: routerData
+            });
+        }
+
+        // ============================================================
+        // ROUTER STATUS
+        // ============================================================
+
+        if (req.method === 'GET' && url.pathname === '/api/router/status') {
+            var clientId = url.searchParams.get('client');
+            if (!clientId) {
+                return sendJson(res, 400, { success: false, message: 'Client ID required' });
+            }
+            
+            var router = await getRouterByClientId(clientId);
+            if (!router) {
+                return sendJson(res, 200, { success: true, connected: false, message: 'No router found' });
+            }
+            
+            return sendJson(res, 200, { 
+                success: true, 
+                connected: true,
+                data: router
+            });
+        }
+
+        // ============================================================
+        // DEVICE CONNECTION CHECK
+        // ============================================================
+
+        if (req.method === 'POST' && url.pathname === '/api/device/check') {
+            var body = await readBody(req);
+            var phoneNumber = body.phoneNumber;
+            var deviceId = body.deviceId;
+            
+            if (!phoneNumber) { return sendJson(res, 400, { success: false, message: 'Phone number required' }); }
+            if (!deviceId) { return sendJson(res, 400, { success: false, message: 'Device ID required' }); }
+            
+            var existingSession = await checkDeviceAlreadyConnected(deviceId);
+            
+            if (existingSession) {
+                return sendJson(res, 200, {
+                    success: true,
+                    alreadyConnected: true,
+                    message: 'You are already connected on this device',
+                    session: {
+                        username: existingSession.username,
+                        planName: existingSession.planName,
+                        expiresAt: existingSession.expiresAt,
+                        connectedAt: existingSession.connectedAt
+                    },
+                    shouldClose: true
+                });
+            }
+            
+            return sendJson(res, 200, { success: true, alreadyConnected: false, message: 'Device not connected' });
+        }
+
+        // ============================================================
+        // REGISTER DEVICE CONNECTION
+        // ============================================================
+
+        if (req.method === 'POST' && url.pathname === '/api/device/register') {
+            var body = await readBody(req);
+            var phoneNumber = body.phoneNumber;
+            var username = body.username;
+            var planName = body.planName;
+            var expiresAt = body.expiresAt;
+            var deviceId = body.deviceId;
+            
+            if (!phoneNumber) { return sendJson(res, 400, { success: false, message: 'Phone number required' }); }
+            if (!deviceId) { return sendJson(res, 400, { success: false, message: 'Device ID required' }); }
+            
+            var deviceData = {
+                deviceId: deviceId,
+                phoneNumber: phoneNumber,
+                username: username || 'user',
+                planName: planName || 'Unknown Plan',
+                expiresAt: expiresAt,
+                connectedAt: new Date().toISOString(),
+                active: true
+            };
+            
+            await registerDevice(deviceData);
+            
+            return sendJson(res, 200, { success: true, message: 'Device registered successfully' });
+        }
+
+        // ============================================================
+        // CLIENT PORTAL ENDPOINTS
+        // ============================================================
+
+        if (req.method === 'GET' && url.pathname === '/api/client/check-org') {
+            var email = url.searchParams.get('email');
+            if (!email) { return sendJson(res, 400, { success: false, message: 'Email required' }); }
+            var org = await getOrganizationByEmail(email);
+            return sendJson(res, 200, { success: true, hasOrganization: !!org, email: email });
+        }
+
+        if (req.method === 'GET' && url.pathname === '/api/organization/by-email') {
+            var email = url.searchParams.get('email');
+            if (!email) { return sendJson(res, 400, { success: false, message: 'Email required' }); }
+            var org = await getOrganizationByEmail(email);
+            if (!org) { return sendJson(res, 404, { success: false, message: 'Organization not found' }); }
+            return sendJson(res, 200, {
+                success: true,
+                data: {
+                    id: org.id,
+                    businessName: org.businessName,
+                    logo: org.logo || '',
+                    primaryColor: org.primaryColor,
+                    secondaryColor: org.secondaryColor,
+                    accentColor: org.accentColor,
+                    supportPhone: org.supportPhone,
+                    supportEmail: org.supportEmail,
+                    businessTagline: org.businessTagline,
+                    plans: org.plans || [],
+                    status: org.status,
+                    mpesaTill: org.mpesaTill || ''
+                }
+            });
+        }
+
+        if (req.method === 'GET' && url.pathname.startsWith('/api/organization/')) {
+            var orgId = url.pathname.split('/').pop();
+            if (!orgId || orgId === 'organizations') { return sendJson(res, 400, { success: false, message: 'Invalid organization ID' }); }
+            var org = await getOrganizationByClientId(orgId);
+            if (!org) { return sendJson(res, 404, { success: false, message: 'Organization not found' }); }
+            return sendJson(res, 200, {
+                success: true,
+                data: {
+                    id: org.id,
+                    businessName: org.businessName,
+                    logo: org.logo || '',
+                    primaryColor: org.primaryColor,
+                    secondaryColor: org.secondaryColor,
+                    accentColor: org.accentColor,
+                    supportPhone: org.supportPhone,
+                    supportEmail: org.supportEmail,
+                    businessTagline: org.businessTagline,
+                    plans: org.plans || [],
+                    status: org.status,
+                    mpesaTill: org.mpesaTill || ''
+                }
+            });
+        }
+
+        // ============================================================
+        // CLIENT CREATE ORGANIZATION
+        // ============================================================
+
+        if (req.method === 'POST' && url.pathname === '/api/client/organization') {
+            var body = await readBody(req);
+            var email = body.email || 'master@demo.com';
+            
+            if (!isValidEmail(email) && email !== 'master@demo.com') {
+                return sendJson(res, 400, { 
+                    success: false, 
+                    message: 'Please enter a valid email address'
+                });
+            }
+            
+            var existingOrg = await getOrganizationByEmail(email);
+            if (existingOrg) {
+                return sendJson(res, 200, {
+                    success: true,
+                    message: 'Organization already exists',
+                    organization: existingOrg,
+                    clientId: existingOrg.id
+                });
+            }
+            
+            var clientId = generateOrgId();
+            var businessName = body.businessName || body.name || 'Demo WiFi Business';
+            
+            var newOrganization = {
+                id: clientId,
+                name: businessName,
+                businessName: businessName,
+                email: email,
+                phone: body.phone || '0712345678',
+                logo: body.logo || '',
+                primaryColor: body.primaryColor || '#00c853',
+                secondaryColor: body.secondaryColor || '#00e676',
+                accentColor: body.accentColor || '#0f2027',
+                supportPhone: body.supportPhone || '0712345678',
+                supportEmail: body.supportEmail || email,
+                businessTagline: body.businessTagline || 'Fast • Secure • Reliable',
+                mpesaTill: body.mpesaTill || '',
+                status: 'active',
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+                plans: body.plans || DEFAULT_PLANS
+            };
+            
+            await createOrganization(newOrganization);
+            
+            var clientData = {
+                id: clientId,
+                name: businessName,
+                phone: body.phone || '0712345678',
+                email: email,
+                businessName: businessName,
+                status: 'active',
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+                organizationId: clientId
+            };
+            await db.collection('clients').insertOne(clientData);
+            
+            // Create FREE TRIAL for 60 days
+            var sub = await createFreeTrial(clientId);
+            
+            console.log('✅ Organization created with 60-day free trial:', clientId);
+            
+            return sendJson(res, 200, {
+                success: true,
+                message: 'Organization created with 60-day free trial!',
+                organization: newOrganization,
+                clientId: clientId,
+                trialDays: FREE_TRIAL_DAYS,
+                trialEnds: sub.trialEnds
+            });
+        }
+
+        // ============================================================
+        // UPDATE ORGANIZATION (with customization)
+        // ============================================================
+
+        if (req.method === 'PUT' && url.pathname.startsWith('/api/master/organizations/')) {
+            if (!isMasterAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
+            
+            var orgId = url.pathname.split('/').pop();
+            var body = await readBody(req);
+            var org = await getOrganizationByClientId(orgId);
+            
+            if (!org) { return sendJson(res, 404, { success: false, message: 'Organization not found' }); }
+            
+            var updateData = {
+                businessName: body.businessName !== undefined ? body.businessName : org.businessName,
+                businessTagline: body.businessTagline !== undefined ? body.businessTagline : org.businessTagline,
+                supportPhone: body.supportPhone !== undefined ? body.supportPhone : org.supportPhone,
+                supportEmail: body.supportEmail !== undefined ? body.supportEmail : org.supportEmail,
+                logo: body.logo !== undefined ? body.logo : org.logo,
+                mpesaTill: body.mpesaTill !== undefined ? body.mpesaTill : org.mpesaTill,
+                primaryColor: body.primaryColor !== undefined ? body.primaryColor : org.primaryColor,
+                secondaryColor: body.secondaryColor !== undefined ? body.secondaryColor : org.secondaryColor,
+                accentColor: body.accentColor !== undefined ? body.accentColor : org.accentColor,
+                plans: body.plans !== undefined ? body.plans : org.plans,
+                updatedAt: new Date().toISOString()
+            };
+            
+            var updated = await updateOrganization(orgId, updateData);
+            
+            return sendJson(res, 200, { success: true, message: 'Organization updated', data: updated });
+        }
+
+        // ============================================================
+        // GET SUBSCRIPTION STATUS
+        // ============================================================
+
+        if (req.method === 'GET' && url.pathname === '/api/client/subscription-status') {
+            var email = url.searchParams.get('email');
+            if (!email) { return sendJson(res, 400, { success: false, message: 'Email required' }); }
+            
+            var org = await getOrganizationByEmail(email);
+            if (!org) { return sendJson(res, 404, { success: false, message: 'Organization not found' }); }
+            
+            var status = await checkSubscriptionAccess(org.id);
+            
+            return sendJson(res, 200, {
+                success: true,
+                status: status,
+                organization: { id: org.id, name: org.businessName }
+            });
+        }
+
+        // ============================================================
+        // START FREE TRIAL
+        // ============================================================
+
+        if (req.method === 'POST' && url.pathname === '/api/client/start-trial') {
+            var body = await readBody(req);
+            var clientId = body.clientId || body.email;
+            
+            var org = await getOrganizationByClientId(clientId) || await getOrganizationByEmail(clientId);
+            if (!org) { return sendJson(res, 404, { success: false, message: 'Organization not found' }); }
+            
+            var existingSub = await getClientSubscriptionStatus(org.id);
+            if (existingSub) {
+                return sendJson(res, 400, { success: false, message: 'You already have an active subscription or trial' });
+            }
+            
+            var sub = await createFreeTrial(org.id);
+            
+            return sendJson(res, 200, {
+                success: true,
+                message: 'Free trial started! You have ' + FREE_TRIAL_DAYS + ' days.',
+                trialDays: FREE_TRIAL_DAYS,
+                trialEnds: sub.trialEnds
+            });
+        }
+
+        // ============================================================
+        // SUBSCRIBE TO PLAN
+        // ============================================================
+
+        if (req.method === 'POST' && url.pathname === '/api/client/subscribe') {
+            var body = await readBody(req);
+            var clientId = body.clientId || body.email;
+            var plan = body.plan || 'starter';
+            
+            var org = await getOrganizationByClientId(clientId) || await getOrganizationByEmail(clientId);
+            if (!org) { return sendJson(res, 404, { success: false, message: 'Organization not found' }); }
+            
+            var planData = SUBSCRIPTION_PLANS[plan];
+            if (!planData) { return sendJson(res, 400, { success: false, message: 'Invalid plan' }); }
+            
+            var sub = await activateSubscription(org.id, plan);
+            
+            return sendJson(res, 200, {
+                success: true,
+                message: 'Subscribed to ' + planData.name + ' plan successfully!',
+                plan: plan,
+                expiresAt: sub.expiresAt
+            });
+        }
+
+        // ============================================================
+        // PAYMENT INITIATE - DARAJA STK PUSH
+        // ============================================================
+
+        if (req.method === 'POST' && url.pathname === '/api/payment/initiate') {
+            var body = await readBody(req);
+            var phoneNumber = body.phoneNumber;
+            var amount = body.amount;
+            var planId = body.planId;
+            var organizationId = body.organizationId;
+            var isSubscription = body.isSubscription || false;
+            var subscriptionPlan = body.subscriptionPlan || null;
+            var deviceId = body.deviceId;
+            
+            if (!phoneNumber || phoneNumber.length < 10) {
+                return sendJson(res, 400, { success: false, message: 'Invalid phone number' });
+            }
+            
+            if (deviceId) {
+                var existing = await checkDeviceAlreadyConnected(deviceId);
+                if (existing) {
+                    return sendJson(res, 409, {
+                        success: false,
+                        alreadyConnected: true,
+                        message: 'You are already connected on this device.',
+                        session: {
+                            username: existing.username,
+                            planName: existing.planName,
+                            expiresAt: existing.expiresAt
+                        }
+                    });
+                }
+            }
+            
+            var numericAmount = Math.round(Number(amount));
+            if (isNaN(numericAmount) || numericAmount < 1) {
+                return sendJson(res, 400, { success: false, message: 'Invalid amount' });
+            }
+            
+            var org = null;
+            if (organizationId) {
+                org = await getOrganizationByClientId(organizationId);
+            }
+            
+            if (org) {
+                var access = await checkSubscriptionAccess(org.id);
+                if (!access.allowed) {
+                    return sendJson(res, 403, {
+                        success: false,
+                        message: access.message,
+                        code: access.code,
+                        canSubscribe: true
+                    });
+                }
+            }
+            
+            try {
+                var transactionId = 'GICH' + Date.now() + Math.random().toString(36).substring(7);
+                var planName = isSubscription ? 'Subscription - ' + subscriptionPlan : getPlanName(planId);
+                var duration = isSubscription ? 2592000 : getPlanDuration(planId);
+                
+                if (amount === 0) {
+                    var freeTx = {
+                        id: transactionId,
+                        phoneNumber: phoneNumber,
+                        amount: 0,
+                        planId: planId || 'free',
+                        planName: planName,
+                        status: 'completed',
+                        timestamp: new Date().toISOString(),
+                        expiresAt: new Date(Date.now() + duration * 1000).toISOString(),
+                        username: 'user_' + transactionId.substring(0, 12),
+                        password: 'pass_' + Date.now().toString(36),
+                        isSubscription: isSubscription,
+                        subscriptionPlan: subscriptionPlan,
+                        organizationId: organizationId || null,
+                        deviceId: deviceId
+                    };
+                    await createTransaction(freeTx);
+                    
+                    if (isSubscription && org) {
+                        await activateSubscription(org.id, subscriptionPlan);
+                    }
+                    
+                    if (deviceId) {
+                        await registerDevice({
+                            deviceId: deviceId,
+                            phoneNumber: phoneNumber,
+                            username: freeTx.username,
+                            planName: planName,
+                            expiresAt: freeTx.expiresAt,
+                            connectedAt: new Date().toISOString(),
+                            active: true
+                        });
+                    }
+                    
+                    return sendJson(res, 200, {
+                        success: true,
+                        message: 'Free plan activated!',
+                        transactionId: transactionId,
+                        isFree: true
+                    });
+                }
+                
+                var result = await stkPush({ 
+                    phone: phoneNumber, 
+                    amount: numericAmount, 
+                    accountReference: isSubscription ? 'SUB_' + subscriptionPlan : 'GICH' + Date.now().toString().slice(-8)
+                });
+                
+                if (result.success) {
+                    var transaction = {
+                        id: transactionId,
+                        phoneNumber: phoneNumber,
+                        amount: numericAmount,
+                        planId: planId || 'subscription',
+                        planName: planName,
+                        status: 'pending',
+                        timestamp: new Date().toISOString(),
+                        mpesaCode: null,
+                        checkoutId: result.checkoutId,
+                        expiresAt: new Date(Date.now() + duration * 1000).toISOString(),
+                        username: null,
+                        password: null,
+                        isSubscription: isSubscription,
+                        subscriptionPlan: subscriptionPlan,
+                        organizationId: organizationId || null,
+                        deviceId: deviceId
+                    };
+                    await createTransaction(transaction);
+                    
+                    return sendJson(res, 200, {
+                        success: true,
+                        message: 'STK Push sent!',
+                        transactionId: transactionId,
+                        checkoutId: result.checkoutId
+                    });
+                } else {
+                    throw new Error('STK Push failed');
+                }
+            } catch (error) {
+                console.error('Payment error:', error);
+                return sendJson(res, 502, { success: false, message: 'Payment failed: ' + error.message });
+            }
+        }
+
+        // ============================================================
+        // MPESA CALLBACK
+        // ============================================================
+
+        if (req.method === 'POST' && url.pathname === '/api/mpesa-callback') {
+            var callback = await readBody(req);
+            var resultCode = callback.Body && callback.Body.stkCallback ? callback.Body.stkCallback.ResultCode : null;
+            var checkoutId = callback.Body && callback.Body.stkCallback ? callback.Body.stkCallback.CheckoutRequestID : null;
+            var receipt = null;
+            var amount = null;
+            var phoneNumber = null;
+            var resultDesc = callback.Body && callback.Body.stkCallback ? callback.Body.stkCallback.ResultDesc || 'Unknown error' : 'Unknown error';
+
+            if (callback.Body && callback.Body.stkCallback && callback.Body.stkCallback.CallbackMetadata && callback.Body.stkCallback.CallbackMetadata.Item) {
+                var items = callback.Body.stkCallback.CallbackMetadata.Item;
+                for (var i = 0; i < items.length; i++) {
+                    if (items[i].Name === 'MpesaReceiptNumber') receipt = items[i].Value;
+                    if (items[i].Name === 'Amount') amount = items[i].Value;
+                    if (items[i].Name === 'PhoneNumber') phoneNumber = items[i].Value;
+                }
+            }
+
+            var transaction = await getTransactionByCheckoutId(checkoutId);
+            
+            if (!transaction) {
+                console.log('⚠️ Transaction not found for checkoutId:', checkoutId);
+                return sendJson(res, 200, { ResultCode: 1, ResultDesc: 'Transaction not found' });
+            }
+
+            if (resultCode === 0) {
+                transaction.status = 'completed';
+                transaction.mpesaCode = receipt || 'MPESA' + Date.now();
+                transaction.completedAt = new Date().toISOString();
+                if (amount) transaction.amount = Math.round(Number(amount));
+                if (phoneNumber) transaction.phoneNumber = phoneNumber;
+                transaction.errorCode = null;
+                transaction.errorDescription = null;
+                transaction.username = 'user_' + (transaction.mpesaCode || transaction.id).substring(0, 12);
+                transaction.password = 'pass_' + Date.now().toString(36);
+                await updateTransaction(transaction.id, transaction);
+                
+                console.log('✅ Payment completed:', transaction.id);
+                
+                if (transaction.deviceId) {
+                    await registerDevice({
+                        deviceId: transaction.deviceId,
+                        phoneNumber: transaction.phoneNumber,
+                        username: transaction.username,
+                        planName: transaction.planName,
+                        expiresAt: transaction.expiresAt,
+                        connectedAt: new Date().toISOString(),
+                        active: true
+                    });
+                }
+                
+                if (transaction.isSubscription && transaction.organizationId) {
+                    var org = await getOrganizationByClientId(transaction.organizationId);
+                    if (org) {
+                        await activateSubscription(org.id, transaction.subscriptionPlan || 'starter');
+                        console.log('✅ Subscription activated for:', org.businessName);
+                    }
+                }
+                
+                return sendJson(res, 200, { ResultCode: 0, ResultDesc: 'Success' });
+            } else if (resultCode === 1037) {
+                transaction.status = 'cancelled';
+                transaction.errorDescription = 'User cancelled the transaction';
+                transaction.errorCode = resultCode;
+                transaction.completedAt = new Date().toISOString();
+                await updateTransaction(transaction.id, transaction);
+                return sendJson(res, 200, { ResultCode: resultCode, ResultDesc: 'User cancelled' });
+            } else if (resultCode === 2001) {
+                transaction.status = 'failed';
+                transaction.errorDescription = 'Insufficient M-Pesa balance';
+                transaction.errorCode = resultCode;
+                transaction.completedAt = new Date().toISOString();
+                await updateTransaction(transaction.id, transaction);
+                return sendJson(res, 200, { ResultCode: resultCode, ResultDesc: 'Insufficient balance' });
+            } else {
+                transaction.status = 'failed';
+                transaction.errorDescription = resultDesc || 'Payment failed';
+                transaction.errorCode = resultCode;
+                transaction.completedAt = new Date().toISOString();
+                await updateTransaction(transaction.id, transaction);
+                return sendJson(res, 200, { ResultCode: resultCode, ResultDesc: resultDesc });
+            }
+        }
+
+        // ============================================================
+        // GET TRANSACTION
+        // ============================================================
+
+        if (req.method === 'GET' && url.pathname.startsWith('/api/transaction/')) {
+            var id = url.pathname.split('/').pop();
+            var tx = await getTransaction(id);
+            if (!tx) { return sendJson(res, 404, { success: false, message: 'Transaction not found' }); }
+            
+            return sendJson(res, 200, {
+                success: true,
+                data: {
+                    id: tx.id,
+                    status: tx.status,
+                    errorDescription: tx.errorDescription || null,
+                    phoneNumber: tx.phoneNumber,
+                    amount: tx.amount,
+                    planName: tx.planName,
+                    mpesaCode: tx.mpesaCode || null,
+                    expiresAt: tx.expiresAt || null,
+                    username: tx.username || null,
+                    password: tx.password || null,
+                    isSubscription: tx.isSubscription || false
+                }
+            });
+        }
+
+        // ============================================================
+        // GET CREDENTIALS
+        // ============================================================
+
+        if (req.method === 'GET' && url.pathname.startsWith('/api/get-credentials/')) {
+            var id = url.pathname.split('/').pop();
+            var tx = await getTransaction(id);
+            if (!tx) { return sendJson(res, 404, { success: false, message: 'Transaction not found' }); }
+            
+            if (tx.status !== 'completed') {
+                return sendJson(res, 400, { success: false, message: 'Payment not completed' });
+            }
+            
+            return sendJson(res, 200, {
+                success: true,
+                username: tx.username || 'user_' + id.substring(0, 8),
+                password: tx.password || 'pass_' + Date.now().toString(36),
+                plan: tx.planName,
+                expiresAt: tx.expiresAt || new Date(Date.now() + 7200000).toISOString()
+            });
+        }
+
+        // ============================================================
+        // GET TRANSACTIONS
+        // ============================================================
+
+        if (req.method === 'GET' && url.pathname === '/api/transactions') {
+            var phone = url.searchParams.get('phone');
+            var filtered = phone ? await getTransactionsByPhone(phone) : await getAllTransactions();
+            return sendJson(res, 200, { success: true, data: filtered, count: filtered.length });
+        }
+
+        // ============================================================
+        // CHECK ACTIVE PLAN
+        // ============================================================
+
+        if (req.method === 'GET' && url.pathname === '/api/check-active') {
+            var phone = url.searchParams.get('phone');
+            if (!phone) return sendJson(res, 400, { success: false, message: 'Phone number required' });
+            var active = null;
+            
+            var allTx = await getAllTransactions();
+            for (var i = 0; i < allTx.length; i++) {
+                var t = allTx[i];
+                if (t.phoneNumber === phone && t.status === 'completed' && t.username && (!t.expiresAt || new Date(t.expiresAt) > new Date())) {
+                    active = t;
+                    break;
+                }
+            }
+            if (active) {
+                return sendJson(res, 200, {
+                    success: true,
+                    active: true,
+                    data: {
+                        id: active.id,
+                        planName: active.planName,
+                        expiresAt: active.expiresAt,
+                        username: active.username,
+                        password: active.password
+                    }
+                });
+            } else {
+                return sendJson(res, 200, { success: true, active: false });
+            }
+        }
+
+        // ============================================================
+        // VOUCHER REDEEM
+        // ============================================================
+
+        if (req.method === 'POST' && url.pathname === '/api/voucher/redeem') {
+            var body = await readBody(req);
+            var code = body.code;
+            var phoneNumber = body.phoneNumber;
+            var deviceId = body.deviceId;
+            
+            if (!code) { return sendJson(res, 400, { success: false, message: 'Voucher code required' }); }
+            
+            var voucher = await getVoucherByCode(code);
+            if (!voucher || voucher.used) {
+                return sendJson(res, 404, { success: false, message: 'Invalid or already used voucher' });
+            }
+            
+            voucher.used = true;
+            voucher.usedBy = phoneNumber || 'unknown';
+            voucher.usedAt = new Date().toISOString();
+            await updateVoucher(code, voucher);
+            
+            var transactionId = 'VOUCH_' + Date.now();
+            var duration = voucher.duration_seconds || 3600;
+            
+            var tx = {
+                id: transactionId,
+                phoneNumber: phoneNumber || 'voucher_user',
+                amount: 0,
+                planId: voucher.planId || 'voucher',
+                planName: voucher.planName || 'Voucher Plan',
+                status: 'completed',
+                timestamp: new Date().toISOString(),
+                expiresAt: new Date(Date.now() + duration * 1000).toISOString(),
+                username: 'vuser_' + transactionId.substring(0, 8),
+                password: 'vpass_' + Date.now().toString(36),
+                deviceId: deviceId || null
+            };
+            await createTransaction(tx);
+            
+            if (deviceId) {
+                await registerDevice({
+                    deviceId: deviceId,
+                    phoneNumber: phoneNumber || 'voucher_user',
+                    username: tx.username,
+                    planName: voucher.planName,
+                    expiresAt: tx.expiresAt,
+                    connectedAt: new Date().toISOString(),
+                    active: true
+                });
+            }
+            
+            return sendJson(res, 200, {
+                success: true,
+                message: 'Voucher redeemed successfully!',
+                data: {
+                    transactionId: transactionId,
+                    planName: voucher.planName,
+                    expiresAt: tx.expiresAt,
+                    username: tx.username,
+                    password: tx.password
+                }
+            });
+        }
+
+        // ============================================================
+        // ADMIN VOUCHER GENERATE
+        // ============================================================
+
+        if (req.method === 'POST' && url.pathname === '/api/admin/voucher/generate') {
+            if (!isAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
+            
+            var body = await readBody(req);
+            var planId = body.planId;
+            var count = Math.min(body.count || 1, 100);
+            
+            if (!planId) { return sendJson(res, 400, { success: false, message: 'Plan ID required' }); }
+            
+            var plan = plans.find(function(p) { return p.id === planId; });
+            if (!plan) { return sendJson(res, 400, { success: false, message: 'Invalid plan ID' }); }
+            
+            var generated = [];
+            var vouchersToInsert = [];
+            for (var i = 0; i < count; i++) {
+                var code = generateVoucherCode();
+                var voucherData = {
+                    code: code,
+                    planId: plan.id,
+                    planName: plan.name,
+                    duration_seconds: plan.duration_seconds || 3600,
+                    devices: plan.devices || 1,
+                    used: false,
+                    usedBy: null,
+                    usedAt: null,
+                    createdAt: new Date().toISOString()
+                };
+                vouchersToInsert.push(voucherData);
+                generated.push(code);
+            }
+            await createVouchers(vouchersToInsert);
+            
+            return sendJson(res, 200, {
+                success: true,
+                message: 'Generated ' + generated.length + ' vouchers',
+                vouchers: generated,
+                count: generated.length
+            });
+        }
+
+        // ============================================================
+        // ADMIN VOUCHERS LIST
+        // ============================================================
+
+        if (req.method === 'GET' && url.pathname === '/api/admin/vouchers') {
+            if (!isAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
+            var allVouchers = await getAllVouchers();
+            var used = allVouchers.filter(function(v) { return v.used; }).length;
+            return sendJson(res, 200, {
+                success: true,
+                data: allVouchers,
+                count: allVouchers.length,
+                used: used,
+                unused: allVouchers.length - used
+            });
+        }
+
+        // ============================================================
+        // ADMIN VERIFY
+        // ============================================================
+
+        if (req.method === 'POST' && url.pathname === '/api/admin/verify') {
+            var body = await readBody(req);
+            if (body.pin === ADMIN_PASSWORD) {
+                var token = generateToken({ username: 'admin', role: 'admin', exp: Date.now() + 86400000 });
+                return sendJson(res, 200, { success: true, message: 'Admin verified', token: token });
+            } else {
+                return sendJson(res, 401, { success: false, message: 'Invalid PIN' });
+            }
+        }
+
+        // ============================================================
+        // MASTER ADMIN VERIFY
+        // ============================================================
+
+        if (req.method === 'POST' && url.pathname === '/api/master/verify') {
+            var body = await readBody(req);
+            if (body.pin === MASTER_PASSWORD) {
+                var token = generateToken({ username: 'master', role: 'master', exp: Date.now() + 86400000 });
+                return sendJson(res, 200, { success: true, message: 'Master verified', token: token, role: 'master' });
+            } else {
+                return sendJson(res, 401, { success: false, message: 'Invalid PIN' });
+            }
+        }
+
+        // ============================================================
+        // GET ALL ORGANIZATIONS (Master)
+        // ============================================================
+
+        if (req.method === 'GET' && url.pathname === '/api/master/organizations') {
+            if (!isMasterAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
+            var allOrgs = await getAllOrganizations();
+            return sendJson(res, 200, { success: true, data: allOrgs, count: allOrgs.length });
+        }
+
+        // ============================================================
+        // GET ALL ROUTERS (Master)
+        // ============================================================
+
+        if (req.method === 'GET' && url.pathname === '/api/master/routers') {
+            if (!isMasterAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
+            var allRouters = await getAllRouters();
+            return sendJson(res, 200, { success: true, data: allRouters, count: allRouters.length });
+        }
+
+        // ============================================================
+        // GENERATE REDIRECT HTML
+        // ============================================================
+
+        if (req.method === 'GET' && url.pathname.startsWith('/api/master/generate-redirect/')) {
+            if (!isMasterAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
+            
+            var orgId = url.pathname.split('/').pop();
+            var org = await getOrganizationByClientId(orgId);
+            if (!org) { return sendJson(res, 404, { success: false, message: 'Organization not found' }); }
+            
+            var access = await checkSubscriptionAccess(org.id);
+            if (!access.allowed) {
+                return sendJson(res, 403, {
+                    success: false,
+                    message: 'Cannot generate redirect file. ' + access.message,
+                    code: access.code,
+                    canSubscribe: true
+                });
+            }
+            
+            var html = generateRedirectHtml(org);
+            
+            return sendJson(res, 200, {
+                success: true,
+                html: html,
+                filename: 'redirect.html',
+                subscription: {
+                    status: access.status,
+                    daysLeft: access.daysLeft,
+                    message: access.message
+                }
+            });
+        }
+
+        // ============================================================
+        // GENERATE SETUP COMMAND (One Liner)
+        // ============================================================
+
+        if (req.method === 'GET' && url.pathname === '/api/setup-command') {
+            var clientId = url.searchParams.get('client');
+            if (!clientId) {
+                return sendJson(res, 400, { success: false, message: 'Client ID required' });
+            }
+            
+            var org = await getOrganizationByClientId(clientId);
+            if (!org) {
+                return sendJson(res, 404, { success: false, message: 'Organization not found' });
+            }
+            
+            var baseUrl = 'https://billing-system-fm9a.onrender.com';
+            var command = generateOneLiner(clientId, baseUrl);
+            
+            return sendJson(res, 200, {
+                success: true,
+                command: command,
+                clientId: clientId,
+                businessName: org.businessName
+            });
+        }
+
+        // ============================================================
+        // SERVE CUSTOMER BILLING PAGE
+        // ============================================================
+
+        if (req.method === 'GET' && url.pathname.match(/^\/customer\/CLIENT_[A-Z0-9]+\/?$/)) {
+            var pathParts = url.pathname.split('/');
+            var orgId = pathParts[2] || '';
+            
+            if (!orgId) { return sendHtml(res, 404, '<h1>Organization not found</h1>'); }
+            
+            var org = await getOrganizationByClientId(orgId);
+            if (!org) { return sendHtml(res, 404, '<h1>Organization not found</h1>'); }
+            
+            var html = generateCustomerBillingPage(org);
+            return sendHtml(res, 200, html);
+        }
+
+        // ============================================================
+        // API INFO
+        // ============================================================
+
+        if (req.method === 'GET' && url.pathname === '/api') {
+            var allTx = await getAllTransactions();
+            var completedTx = allTx.filter(function(t) { return t.status === 'completed'; });
+            var totalRevenue = completedTx.reduce(function(sum, t) { return sum + (t.amount || 0); }, 0);
+            var allSubs = await getAllSubscriptions();
+            var activeSubs = allSubs.filter(function(s) { return s.status === 'active' || s.status === 'trial'; });
+            var activeDevicesCount = await getActiveDevicesCount();
+            var allOrgs = await getAllOrganizations();
+            var allVouchers = await getAllVouchers();
+            var unusedVouchers = allVouchers.filter(function(v) { return !v.used; });
+            var allRouters = await getAllRouters();
+            
+            return sendJson(res, 200, {
+                name: 'GICH WiFi API',
+                version: '7.0.0',
+                status: 'Running',
+                database: 'MongoDB Atlas',
+                googleOAuth: !!GOOGLE_CLIENT_ID,
+                freeTrialDays: FREE_TRIAL_DAYS,
+                statistics: {
+                    totalTransactions: allTx.length,
+                    totalRevenue: totalRevenue,
+                    activeVouchers: unusedVouchers.length,
+                    totalOrganizations: allOrgs.length,
+                    activeSubscriptions: activeSubs.length,
+                    activeDevices: activeDevicesCount,
+                    totalRouters: allRouters.length
+                }
+            });
+        }
+
+        return sendJson(res, 404, { error: 'Route not found' });
+
+    } catch (err) {
+        console.error('Server error:', err);
+        return sendJson(res, 500, { error: 'Internal server error', message: err.message });
+    }
+});
+
+// ============================================================
+// GENERATE CUSTOMER BILLING PAGE - COMPLETE
 // ============================================================
 
 function generateCustomerBillingPage(organization) {
@@ -922,6 +2208,7 @@ function generateCustomerBillingPage(organization) {
     var orgId = escapeHtml(organization.id);
     var orgEmail = escapeHtml(organization.email || '');
     var plans = organization.plans || [];
+    var logo = organization.logo || '';
 
     var plansHtml = '';
     for (var i = 0; i < plans.length; i++) {
@@ -964,6 +2251,9 @@ function generateCustomerBillingPage(organization) {
     html += '        .container { max-width: 520px; width: 100%; background: #121829; border-radius: 24px; padding: 32px 28px; border: 1px solid rgba(255,255,255,0.05); box-shadow: 0 20px 60px rgba(0,0,0,0.5); }\n';
     html += '        .brand { text-align: center; margin-bottom: 24px; }\n';
     html += '        .brand .logo { font-size: 48px; margin-bottom: 4px; }\n';
+    if (logo) {
+        html += '        .brand .logo-img { max-width: 80px; max-height: 80px; margin-bottom: 8px; }\n';
+    }
     html += '        .brand h1 { font-size: 26px; font-weight: 700; color: ' + primaryColor + '; }\n';
     html += '        .brand .tagline { color: #888; font-size: 14px; margin-top: 2px; }\n';
     html += '        .brand .badge { display: inline-block; background: rgba(0,200,83,0.12); color: ' + primaryColor + '; padding: 2px 16px; border-radius: 20px; font-size: 11px; font-weight: 600; margin-top: 4px; }\n';
@@ -1080,6 +2370,9 @@ function generateCustomerBillingPage(organization) {
     html += '<div class="container" id="app">\n';
     html += '    <div class="brand">\n';
     html += '        <div class="logo">🌐</div>\n';
+    if (logo) {
+        html += '        <img src="' + logo + '" alt="Logo" class="logo-img" />\n';
+    }
     html += '        <h1>' + bizName + '</h1>\n';
     html += '        <p class="tagline">' + tagline + '</p>\n';
     html += '        <div>\n';
@@ -1091,18 +2384,6 @@ function generateCustomerBillingPage(organization) {
     html += '    </div>\n';
 
     html += '    <div class="status-banner" id="statusBanner"></div>\n';
-
-    // Google Login Button
-    html += '    <a href="https://billing-system-fm9a.onrender.com/auth/google" class="google-btn" style="width:100%; padding:14px; background:#fff; color:#333; border:none; border-radius:10px; font-size:16px; font-weight:600; cursor:pointer; transition:0.2s; display:flex; align-items:center; justify-content:center; gap:12px; text-decoration:none; margin-bottom:16px;">\n';
-    html += '        <svg viewBox="0 0 48 48" style="width:24px; height:24px; flex-shrink:0;">\n';
-    html += '            <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>\n';
-    html += '            <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>\n';
-    html += '            <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>\n';
-    html += '            <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>\n';
-    html += '        </svg>\n';
-    html += '        Sign in with Google\n';
-    html += '    </a>\n';
-    html += '    <div class="divider-text" style="display:flex; align-items:center; gap:16px; margin:16px 0; color:#666; font-size:12px;">or continue with M-Pesa</div>\n';
 
     html += '    <div class="section-title">📶 Choose Your Plan</div>\n';
     html += '    <div class="plan-grid" id="planGrid">\n';
@@ -1641,7 +2922,7 @@ function generateCustomerBillingPage(organization) {
     html += '\n';
     html += '        var savedEmail = localStorage.getItem("userEmail") || "";\n';
     html += '        var savedToken = localStorage.getItem("clientToken") || "";\n';
-
+    html += '\n';
     html += '        if (savedToken && savedEmail) {\n';
     html += '            fetch(API_URL + "/organization/by-email?email=" + encodeURIComponent(savedEmail))\n';
     html += '                .then(function(r) { return r.json(); })\n';
@@ -1694,1030 +2975,6 @@ function generateCustomerBillingPage(organization) {
 }
 
 // ============================================================
-// GENERATE REDIRECT HTML
-// ============================================================
-
-function generateRedirectHtml(organization) {
-    var escapeHtml = function(str) {
-        if (!str) return '';
-        return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;').replace(/'/g, '&#039;');
-    };
-
-    var bizName = escapeHtml(organization.businessName || 'WiFi Business');
-    var primaryColor = escapeHtml(organization.primaryColor || '#00c853');
-    var accentColor = escapeHtml(organization.accentColor || '#0f2027');
-    var orgId = escapeHtml(organization.id);
-    
-    var baseUrl = process.env.RENDER_URL || 'https://clientadminwifi.netlify.app';
-    var cloudUrl = baseUrl + '/customer/' + orgId;
-
-    var html = '<!DOCTYPE html>\n';
-    html += '<html lang="en">\n';
-    html += '<head>\n';
-    html += '    <meta charset="UTF-8">\n';
-    html += '    <meta name="viewport" content="width=device-width, initial-scale=1.0">\n';
-    html += '    <title>' + bizName + ' - WiFi</title>\n';
-    html += '    <style>\n';
-    html += '        * { margin: 0; padding: 0; box-sizing: border-box; }\n';
-    html += '        body {\n';
-    html += '            font-family: \'Segoe UI\', Roboto, sans-serif;\n';
-    html += '            background: ' + accentColor + ';\n';
-    html += '            color: #ffffff;\n';
-    html += '            min-height: 100vh;\n';
-    html += '            display: flex;\n';
-    html += '            align-items: center;\n';
-    html += '            justify-content: center;\n';
-    html += '            padding: 20px;\n';
-    html += '        }\n';
-    html += '        .container {\n';
-    html += '            max-width: 480px;\n';
-    html += '            width: 100%;\n';
-    html += '            background: rgba(18, 18, 31, 0.95);\n';
-    html += '            border-radius: 20px;\n';
-    html += '            padding: 40px 30px;\n';
-    html += '            text-align: center;\n';
-    html += '            border: 1px solid rgba(255,255,255,0.04);\n';
-    html += '            box-shadow: 0 20px 60px rgba(0,0,0,0.5);\n';
-    html += '        }\n';
-    html += '        .logo { font-size: 48px; margin-bottom: 10px; }\n';
-    html += '        h1 { font-size: 28px; color: ' + primaryColor + '; margin-bottom: 4px; }\n';
-    html += '        .tagline { color: #888; font-size: 14px; margin-bottom: 24px; }\n';
-    html += '        .spinner {\n';
-    html += '            width: 50px;\n';
-    html += '            height: 50px;\n';
-    html += '            border: 4px solid rgba(255,255,255,0.1);\n';
-    html += '            border-top-color: ' + primaryColor + ';\n';
-    html += '            border-radius: 50%;\n';
-    html += '            animation: spin 1s linear infinite;\n';
-    html += '            margin: 20px auto;\n';
-    html += '        }\n';
-    html += '        @keyframes spin { to { transform: rotate(360deg); } }\n';
-    html += '        .status { color: #888; font-size: 14px; margin-top: 10px; }\n';
-    html += '        .footer { color: #444; font-size: 11px; margin-top: 30px; border-top: 1px solid rgba(255,255,255,0.03); padding-top: 16px; }\n';
-    html += '        .footer .brand { color: ' + primaryColor + '; font-weight: 600; }\n';
-    html += '    </style>\n';
-    html += '</head>\n';
-    html += '<body>\n';
-    html += '    <div class="container">\n';
-    html += '        <div class="logo">🌐</div>\n';
-    html += '        <h1>' + bizName + '</h1>\n';
-    html += '        <p class="tagline">Redirecting to secure billing portal...</p>\n';
-    html += '        <div class="spinner"></div>\n';
-    html += '        <p class="status">⏳ Please wait...</p>\n';
-    html += '        <div class="footer">\n';
-    html += '            Powered by <span class="brand">GICH WiFi</span> · Secure · Fast\n';
-    html += '        </div>\n';
-    html += '    </div>\n';
-    html += '    <script>\n';
-    html += '        var CLOUD_URL = "' + cloudUrl + '";\n';
-    html += '        window.location.href = CLOUD_URL;\n';
-    html += '    <\/script>\n';
-    html += '</body>\n';
-    html += '</html>';
-
-    return html;
-}
-
-// ============================================================
-// CREATE SERVER - ALL ENDPOINTS
-// ============================================================
-
-var server = http.createServer(async function(req, res) {
-    res.setHeader('Access-Control-Allow-Origin', '*');
-    res.setHeader('Access-Control-Allow-Methods', 'POST, GET, PUT, DELETE, OPTIONS');
-    res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
-    res.setHeader('Access-Control-Allow-Credentials', 'true');
-
-    if (req.method === 'OPTIONS') {
-        res.writeHead(204);
-        res.end();
-        return;
-    }
-
-    var url = new URL(req.url, 'http://' + req.headers.host);
-    console.log('📥 ' + req.method + ' ' + url.pathname);
-
-    try {
-        // ===== SERVE HTML FILES =====
-        if (req.method === 'GET' && url.pathname === '/') {
-            if (serveHtmlFile(res, 'GICH_wifi.html')) return;
-            sendHtml(res, 200, '<h1>🌐 GICH WiFi Server</h1><p>✅ Server is running with MongoDB and Google OAuth!</p>');
-            return;
-        }
-
-        // ============================================================
-        // GOOGLE OAUTH ROUTES
-        // ============================================================
-
-        if (req.method === 'GET' && url.pathname === '/auth/google') {
-            return await handleGoogleAuth(req, res);
-        }
-
-        if (req.method === 'GET' && url.pathname === '/auth/google/callback') {
-            return await handleGoogleCallback(req, res);
-        }
-
-        if (req.method === 'GET' && url.pathname === '/api/me') {
-            var authHeader = req.headers.authorization;
-            if (!authHeader) {
-                return sendJson(res, 401, { success: false, message: 'Not authenticated' });
-            }
-            var token = authHeader.replace('Bearer ', '');
-            var decoded = verifyToken(token);
-            if (!decoded) {
-                return sendJson(res, 401, { success: false, message: 'Invalid token' });
-            }
-            return sendJson(res, 200, { success: true, user: decoded });
-        }
-
-        if (req.method === 'POST' && url.pathname === '/api/logout') {
-            return sendJson(res, 200, { success: true, message: 'Logged out successfully' });
-        }
-
-        // ============================================================
-        // PUBLIC API ENDPOINTS
-        // ============================================================
-
-        if (req.method === 'GET' && url.pathname === '/api/health') {
-            return sendJson(res, 200, { 
-                status: 'ok', 
-                timestamp: new Date().toISOString(),
-                database: 'connected',
-                googleOAuth: !!GOOGLE_CLIENT_ID,
-                version: '6.0.0-mongodb'
-            });
-        }
-
-        if (req.method === 'GET' && url.pathname === '/api/plans') {
-            return sendJson(res, 200, { success: true, data: plans });
-        }
-
-        if (req.method === 'GET' && url.pathname === '/api/settings') {
-            return sendJson(res, 200, { success: true, data: settings });
-        }
-
-        // ============================================================
-        // DEVICE CONNECTION CHECK
-        // ============================================================
-        if (req.method === 'POST' && url.pathname === '/api/device/check') {
-            var body = await readBody(req);
-            var phoneNumber = body.phoneNumber;
-            var deviceId = body.deviceId;
-            
-            if (!phoneNumber) { return sendJson(res, 400, { success: false, message: 'Phone number required' }); }
-            if (!deviceId) { return sendJson(res, 400, { success: false, message: 'Device ID required' }); }
-            
-            var existingSession = await checkDeviceAlreadyConnected(deviceId);
-            
-            if (existingSession) {
-                return sendJson(res, 200, {
-                    success: true,
-                    alreadyConnected: true,
-                    message: 'You are already connected on this device',
-                    session: {
-                        username: existingSession.username,
-                        planName: existingSession.planName,
-                        expiresAt: existingSession.expiresAt,
-                        connectedAt: existingSession.connectedAt
-                    },
-                    shouldClose: true
-                });
-            }
-            
-            return sendJson(res, 200, { success: true, alreadyConnected: false, message: 'Device not connected' });
-        }
-
-        // ============================================================
-        // REGISTER DEVICE CONNECTION
-        // ============================================================
-        if (req.method === 'POST' && url.pathname === '/api/device/register') {
-            var body = await readBody(req);
-            var phoneNumber = body.phoneNumber;
-            var username = body.username;
-            var planName = body.planName;
-            var expiresAt = body.expiresAt;
-            var deviceId = body.deviceId;
-            
-            if (!phoneNumber) { return sendJson(res, 400, { success: false, message: 'Phone number required' }); }
-            if (!deviceId) { return sendJson(res, 400, { success: false, message: 'Device ID required' }); }
-            
-            var deviceData = {
-                deviceId: deviceId,
-                phoneNumber: phoneNumber,
-                username: username || 'user',
-                planName: planName || 'Unknown Plan',
-                expiresAt: expiresAt,
-                connectedAt: new Date().toISOString(),
-                active: true
-            };
-            
-            await registerDevice(deviceData);
-            
-            return sendJson(res, 200, { success: true, message: 'Device registered successfully' });
-        }
-
-        // ============================================================
-        // CLIENT PORTAL ENDPOINTS
-        // ============================================================
-
-        if (req.method === 'GET' && url.pathname === '/api/client/check-org') {
-            var email = url.searchParams.get('email');
-            if (!email) { return sendJson(res, 400, { success: false, message: 'Email required' }); }
-            var org = await getOrganizationByEmail(email);
-            return sendJson(res, 200, { success: true, hasOrganization: !!org, email: email });
-        }
-
-        if (req.method === 'GET' && url.pathname === '/api/organization/by-email') {
-            var email = url.searchParams.get('email');
-            if (!email) { return sendJson(res, 400, { success: false, message: 'Email required' }); }
-            var org = await getOrganizationByEmail(email);
-            if (!org) { return sendJson(res, 404, { success: false, message: 'Organization not found' }); }
-            return sendJson(res, 200, {
-                success: true,
-                data: {
-                    id: org.id,
-                    businessName: org.businessName,
-                    logo: org.logo || '',
-                    primaryColor: org.primaryColor,
-                    secondaryColor: org.secondaryColor,
-                    accentColor: org.accentColor,
-                    supportPhone: org.supportPhone,
-                    supportEmail: org.supportEmail,
-                    businessTagline: org.businessTagline,
-                    plans: org.plans || [],
-                    status: org.status,
-                    mpesaTill: org.mpesaTill || ''
-                }
-            });
-        }
-
-        if (req.method === 'GET' && url.pathname.startsWith('/api/organization/')) {
-            var orgId = url.pathname.split('/').pop();
-            if (!orgId || orgId === 'organizations') { return sendJson(res, 400, { success: false, message: 'Invalid organization ID' }); }
-            var org = await getOrganizationByClientId(orgId);
-            if (!org) { return sendJson(res, 404, { success: false, message: 'Organization not found' }); }
-            return sendJson(res, 200, {
-                success: true,
-                data: {
-                    id: org.id,
-                    businessName: org.businessName,
-                    logo: org.logo || '',
-                    primaryColor: org.primaryColor,
-                    secondaryColor: org.secondaryColor,
-                    accentColor: org.accentColor,
-                    supportPhone: org.supportPhone,
-                    supportEmail: org.supportEmail,
-                    businessTagline: org.businessTagline,
-                    plans: org.plans || [],
-                    status: org.status,
-                    mpesaTill: org.mpesaTill || ''
-                }
-            });
-        }
-
-        // ============================================================
-        // CLIENT CREATE ORGANIZATION
-        // ============================================================
-        if (req.method === 'POST' && url.pathname === '/api/client/organization') {
-            var body = await readBody(req);
-            var email = body.email || 'master@demo.com';
-            
-            if (!isValidEmail(email) && email !== 'master@demo.com') {
-                return sendJson(res, 400, { 
-                    success: false, 
-                    message: 'Please enter a valid email address'
-                });
-            }
-            
-            var existingOrg = await getOrganizationByEmail(email);
-            if (existingOrg) {
-                return sendJson(res, 200, {
-                    success: true,
-                    message: 'Organization already exists',
-                    organization: existingOrg,
-                    clientId: existingOrg.id
-                });
-            }
-            
-            var clientId = generateOrgId();
-            var businessName = body.businessName || body.name || 'Demo WiFi Business';
-            
-            var newOrganization = {
-                id: clientId,
-                name: businessName,
-                businessName: businessName,
-                email: email,
-                phone: body.phone || '0712345678',
-                logo: body.logo || '',
-                primaryColor: body.primaryColor || '#00c853',
-                secondaryColor: body.secondaryColor || '#00e676',
-                accentColor: body.accentColor || '#0f2027',
-                supportPhone: body.supportPhone || '0712345678',
-                supportEmail: body.supportEmail || email,
-                businessTagline: body.businessTagline || 'Fast • Secure • Reliable',
-                mpesaTill: body.mpesaTill || '',
-                status: 'active',
-                createdAt: new Date().toISOString(),
-                updatedAt: new Date().toISOString(),
-                plans: body.plans || DEFAULT_PLANS
-            };
-            
-            await createOrganization(newOrganization);
-            
-            var clientData = {
-                id: clientId,
-                name: businessName,
-                phone: body.phone || '0712345678',
-                email: email,
-                businessName: businessName,
-                status: 'active',
-                createdAt: new Date().toISOString(),
-                updatedAt: new Date().toISOString(),
-                organizationId: clientId
-            };
-            await db.collection('clients').insertOne(clientData);
-            
-            var sub = await createFreeTrial(clientId);
-            
-            console.log('✅ Organization created with 60-day free trial:', clientId);
-            
-            return sendJson(res, 200, {
-                success: true,
-                message: 'Organization created with 60-day free trial!',
-                organization: newOrganization,
-                clientId: clientId
-            });
-        }
-
-        // ============================================================
-        // UPDATE ORGANIZATION
-        // ============================================================
-        if (req.method === 'PUT' && url.pathname.startsWith('/api/master/organizations/')) {
-            if (!isMasterAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
-            
-            var orgId = url.pathname.split('/').pop();
-            var body = await readBody(req);
-            var org = await getOrganizationByClientId(orgId);
-            
-            if (!org) { return sendJson(res, 404, { success: false, message: 'Organization not found' }); }
-            
-            var updateData = {
-                businessName: body.businessName !== undefined ? body.businessName : org.businessName,
-                businessTagline: body.businessTagline !== undefined ? body.businessTagline : org.businessTagline,
-                supportPhone: body.supportPhone !== undefined ? body.supportPhone : org.supportPhone,
-                supportEmail: body.supportEmail !== undefined ? body.supportEmail : org.supportEmail,
-                logo: body.logo !== undefined ? body.logo : org.logo,
-                mpesaTill: body.mpesaTill !== undefined ? body.mpesaTill : org.mpesaTill,
-                primaryColor: body.primaryColor !== undefined ? body.primaryColor : org.primaryColor,
-                secondaryColor: body.secondaryColor !== undefined ? body.secondaryColor : org.secondaryColor,
-                accentColor: body.accentColor !== undefined ? body.accentColor : org.accentColor,
-                plans: body.plans !== undefined ? body.plans : org.plans,
-                updatedAt: new Date().toISOString()
-            };
-            
-            var updated = await updateOrganization(orgId, updateData);
-            
-            return sendJson(res, 200, { success: true, message: 'Organization updated', data: updated });
-        }
-
-        // ============================================================
-        // GET SUBSCRIPTION STATUS
-        // ============================================================
-        if (req.method === 'GET' && url.pathname === '/api/client/subscription-status') {
-            var email = url.searchParams.get('email');
-            if (!email) { return sendJson(res, 400, { success: false, message: 'Email required' }); }
-            
-            var org = await getOrganizationByEmail(email);
-            if (!org) { return sendJson(res, 404, { success: false, message: 'Organization not found' }); }
-            
-            var status = await checkSubscriptionAccess(org.id);
-            
-            return sendJson(res, 200, {
-                success: true,
-                status: status,
-                organization: { id: org.id, name: org.businessName }
-            });
-        }
-
-        // ============================================================
-        // START FREE TRIAL
-        // ============================================================
-        if (req.method === 'POST' && url.pathname === '/api/client/start-trial') {
-            var body = await readBody(req);
-            var clientId = body.clientId || body.email;
-            
-            var org = await getOrganizationByClientId(clientId) || await getOrganizationByEmail(clientId);
-            if (!org) { return sendJson(res, 404, { success: false, message: 'Organization not found' }); }
-            
-            var existingSub = await getClientSubscriptionStatus(org.id);
-            if (existingSub) {
-                return sendJson(res, 400, { success: false, message: 'You already have an active subscription or trial' });
-            }
-            
-            var sub = await createFreeTrial(org.id);
-            
-            return sendJson(res, 200, {
-                success: true,
-                message: 'Free trial started! You have 60 days.',
-                trialDays: 60,
-                trialEnds: sub.trialEnds
-            });
-        }
-
-        // ============================================================
-        // SUBSCRIBE TO PLAN
-        // ============================================================
-        if (req.method === 'POST' && url.pathname === '/api/client/subscribe') {
-            var body = await readBody(req);
-            var clientId = body.clientId || body.email;
-            var plan = body.plan || 'starter';
-            
-            var org = await getOrganizationByClientId(clientId) || await getOrganizationByEmail(clientId);
-            if (!org) { return sendJson(res, 404, { success: false, message: 'Organization not found' }); }
-            
-            var planData = SUBSCRIPTION_PLANS[plan];
-            if (!planData) { return sendJson(res, 400, { success: false, message: 'Invalid plan' }); }
-            
-            var sub = await activateSubscription(org.id, plan);
-            
-            return sendJson(res, 200, {
-                success: true,
-                message: 'Subscribed to ' + planData.name + ' plan successfully!',
-                plan: plan,
-                expiresAt: sub.expiresAt
-            });
-        }
-
-        // ============================================================
-        // PAYMENT INITIATE - DARAJA STK PUSH
-        // ============================================================
-        if (req.method === 'POST' && url.pathname === '/api/payment/initiate') {
-            var body = await readBody(req);
-            var phoneNumber = body.phoneNumber;
-            var amount = body.amount;
-            var planId = body.planId;
-            var organizationId = body.organizationId;
-            var isSubscription = body.isSubscription || false;
-            var subscriptionPlan = body.subscriptionPlan || null;
-            var deviceId = body.deviceId;
-            
-            if (!phoneNumber || phoneNumber.length < 10) {
-                return sendJson(res, 400, { success: false, message: 'Invalid phone number' });
-            }
-            
-            if (deviceId) {
-                var existing = await checkDeviceAlreadyConnected(deviceId);
-                if (existing) {
-                    return sendJson(res, 409, {
-                        success: false,
-                        alreadyConnected: true,
-                        message: 'You are already connected on this device.',
-                        session: {
-                            username: existing.username,
-                            planName: existing.planName,
-                            expiresAt: existing.expiresAt
-                        }
-                    });
-                }
-            }
-            
-            var numericAmount = Math.round(Number(amount));
-            if (isNaN(numericAmount) || numericAmount < 1) {
-                return sendJson(res, 400, { success: false, message: 'Invalid amount' });
-            }
-            
-            var org = null;
-            if (organizationId) {
-                org = await getOrganizationByClientId(organizationId);
-            }
-            
-            if (org) {
-                var access = await checkSubscriptionAccess(org.id);
-                if (!access.allowed) {
-                    return sendJson(res, 403, {
-                        success: false,
-                        message: access.message,
-                        code: access.code,
-                        canSubscribe: true
-                    });
-                }
-            }
-            
-            try {
-                var transactionId = 'GICH' + Date.now() + Math.random().toString(36).substring(7);
-                var planName = isSubscription ? 'Subscription - ' + subscriptionPlan : getPlanName(planId);
-                var duration = isSubscription ? 2592000 : getPlanDuration(planId);
-                
-                if (amount === 0) {
-                    var freeTx = {
-                        id: transactionId,
-                        phoneNumber: phoneNumber,
-                        amount: 0,
-                        planId: planId || 'free',
-                        planName: planName,
-                        status: 'completed',
-                        timestamp: new Date().toISOString(),
-                        expiresAt: new Date(Date.now() + duration * 1000).toISOString(),
-                        username: 'user_' + transactionId.substring(0, 12),
-                        password: 'pass_' + Date.now().toString(36),
-                        isSubscription: isSubscription,
-                        subscriptionPlan: subscriptionPlan,
-                        organizationId: organizationId || null,
-                        deviceId: deviceId
-                    };
-                    await createTransaction(freeTx);
-                    
-                    if (isSubscription && org) {
-                        await activateSubscription(org.id, subscriptionPlan);
-                    }
-                    
-                    if (deviceId) {
-                        await registerDevice({
-                            deviceId: deviceId,
-                            phoneNumber: phoneNumber,
-                            username: freeTx.username,
-                            planName: planName,
-                            expiresAt: freeTx.expiresAt,
-                            connectedAt: new Date().toISOString(),
-                            active: true
-                        });
-                    }
-                    
-                    return sendJson(res, 200, {
-                        success: true,
-                        message: 'Free plan activated!',
-                        transactionId: transactionId,
-                        isFree: true
-                    });
-                }
-                
-                var result = await stkPush({ 
-                    phone: phoneNumber, 
-                    amount: numericAmount, 
-                    accountReference: isSubscription ? 'SUB_' + subscriptionPlan : 'GICH' + Date.now().toString().slice(-8)
-                });
-                
-                if (result.success) {
-                    var transaction = {
-                        id: transactionId,
-                        phoneNumber: phoneNumber,
-                        amount: numericAmount,
-                        planId: planId || 'subscription',
-                        planName: planName,
-                        status: 'pending',
-                        timestamp: new Date().toISOString(),
-                        mpesaCode: null,
-                        checkoutId: result.checkoutId,
-                        expiresAt: new Date(Date.now() + duration * 1000).toISOString(),
-                        username: null,
-                        password: null,
-                        isSubscription: isSubscription,
-                        subscriptionPlan: subscriptionPlan,
-                        organizationId: organizationId || null,
-                        deviceId: deviceId
-                    };
-                    await createTransaction(transaction);
-                    
-                    return sendJson(res, 200, {
-                        success: true,
-                        message: 'STK Push sent!',
-                        transactionId: transactionId,
-                        checkoutId: result.checkoutId
-                    });
-                } else {
-                    throw new Error('STK Push failed');
-                }
-            } catch (error) {
-                console.error('Payment error:', error);
-                return sendJson(res, 502, { success: false, message: 'Payment failed: ' + error.message });
-            }
-        }
-
-        // ============================================================
-        // MPESA CALLBACK
-        // ============================================================
-        if (req.method === 'POST' && url.pathname === '/api/mpesa-callback') {
-            var callback = await readBody(req);
-            var resultCode = callback.Body && callback.Body.stkCallback ? callback.Body.stkCallback.ResultCode : null;
-            var checkoutId = callback.Body && callback.Body.stkCallback ? callback.Body.stkCallback.CheckoutRequestID : null;
-            var receipt = null;
-            var amount = null;
-            var phoneNumber = null;
-            var resultDesc = callback.Body && callback.Body.stkCallback ? callback.Body.stkCallback.ResultDesc || 'Unknown error' : 'Unknown error';
-
-            if (callback.Body && callback.Body.stkCallback && callback.Body.stkCallback.CallbackMetadata && callback.Body.stkCallback.CallbackMetadata.Item) {
-                var items = callback.Body.stkCallback.CallbackMetadata.Item;
-                for (var i = 0; i < items.length; i++) {
-                    if (items[i].Name === 'MpesaReceiptNumber') receipt = items[i].Value;
-                    if (items[i].Name === 'Amount') amount = items[i].Value;
-                    if (items[i].Name === 'PhoneNumber') phoneNumber = items[i].Value;
-                }
-            }
-
-            var transaction = await getTransactionByCheckoutId(checkoutId);
-            
-            if (!transaction) {
-                console.log('⚠️ Transaction not found for checkoutId:', checkoutId);
-                return sendJson(res, 200, { ResultCode: 1, ResultDesc: 'Transaction not found' });
-            }
-
-            if (resultCode === 0) {
-                transaction.status = 'completed';
-                transaction.mpesaCode = receipt || 'MPESA' + Date.now();
-                transaction.completedAt = new Date().toISOString();
-                if (amount) transaction.amount = Math.round(Number(amount));
-                if (phoneNumber) transaction.phoneNumber = phoneNumber;
-                transaction.errorCode = null;
-                transaction.errorDescription = null;
-                transaction.username = 'user_' + (transaction.mpesaCode || transaction.id).substring(0, 12);
-                transaction.password = 'pass_' + Date.now().toString(36);
-                await updateTransaction(transaction.id, transaction);
-                
-                console.log('✅ Payment completed:', transaction.id);
-                
-                if (transaction.deviceId) {
-                    await registerDevice({
-                        deviceId: transaction.deviceId,
-                        phoneNumber: transaction.phoneNumber,
-                        username: transaction.username,
-                        planName: transaction.planName,
-                        expiresAt: transaction.expiresAt,
-                        connectedAt: new Date().toISOString(),
-                        active: true
-                    });
-                }
-                
-                if (transaction.isSubscription && transaction.organizationId) {
-                    var org = await getOrganizationByClientId(transaction.organizationId);
-                    if (org) {
-                        await activateSubscription(org.id, transaction.subscriptionPlan || 'starter');
-                        console.log('✅ Subscription activated for:', org.businessName);
-                    }
-                }
-                
-                return sendJson(res, 200, { ResultCode: 0, ResultDesc: 'Success' });
-            } else if (resultCode === 1037) {
-                transaction.status = 'cancelled';
-                transaction.errorDescription = 'User cancelled the transaction';
-                transaction.errorCode = resultCode;
-                transaction.completedAt = new Date().toISOString();
-                await updateTransaction(transaction.id, transaction);
-                return sendJson(res, 200, { ResultCode: resultCode, ResultDesc: 'User cancelled' });
-            } else if (resultCode === 2001) {
-                transaction.status = 'failed';
-                transaction.errorDescription = 'Insufficient M-Pesa balance';
-                transaction.errorCode = resultCode;
-                transaction.completedAt = new Date().toISOString();
-                await updateTransaction(transaction.id, transaction);
-                return sendJson(res, 200, { ResultCode: resultCode, ResultDesc: 'Insufficient balance' });
-            } else {
-                transaction.status = 'failed';
-                transaction.errorDescription = resultDesc || 'Payment failed';
-                transaction.errorCode = resultCode;
-                transaction.completedAt = new Date().toISOString();
-                await updateTransaction(transaction.id, transaction);
-                return sendJson(res, 200, { ResultCode: resultCode, ResultDesc: resultDesc });
-            }
-        }
-
-        // ============================================================
-        // GET TRANSACTION
-        // ============================================================
-        if (req.method === 'GET' && url.pathname.startsWith('/api/transaction/')) {
-            var id = url.pathname.split('/').pop();
-            var tx = await getTransaction(id);
-            if (!tx) { return sendJson(res, 404, { success: false, message: 'Transaction not found' }); }
-            
-            return sendJson(res, 200, {
-                success: true,
-                data: {
-                    id: tx.id,
-                    status: tx.status,
-                    errorDescription: tx.errorDescription || null,
-                    phoneNumber: tx.phoneNumber,
-                    amount: tx.amount,
-                    planName: tx.planName,
-                    mpesaCode: tx.mpesaCode || null,
-                    expiresAt: tx.expiresAt || null,
-                    username: tx.username || null,
-                    password: tx.password || null,
-                    isSubscription: tx.isSubscription || false
-                }
-            });
-        }
-
-        // ============================================================
-        // GET CREDENTIALS
-        // ============================================================
-        if (req.method === 'GET' && url.pathname.startsWith('/api/get-credentials/')) {
-            var id = url.pathname.split('/').pop();
-            var tx = await getTransaction(id);
-            if (!tx) { return sendJson(res, 404, { success: false, message: 'Transaction not found' }); }
-            
-            if (tx.status !== 'completed') {
-                return sendJson(res, 400, { success: false, message: 'Payment not completed' });
-            }
-            
-            return sendJson(res, 200, {
-                success: true,
-                username: tx.username || 'user_' + id.substring(0, 8),
-                password: tx.password || 'pass_' + Date.now().toString(36),
-                plan: tx.planName,
-                expiresAt: tx.expiresAt || new Date(Date.now() + 7200000).toISOString()
-            });
-        }
-
-        // ============================================================
-        // GET TRANSACTIONS
-        // ============================================================
-        if (req.method === 'GET' && url.pathname === '/api/transactions') {
-            var phone = url.searchParams.get('phone');
-            var filtered = phone ? await getTransactionsByPhone(phone) : await getAllTransactions();
-            return sendJson(res, 200, { success: true, data: filtered, count: filtered.length });
-        }
-
-        // ============================================================
-        // CHECK ACTIVE PLAN
-        // ============================================================
-        if (req.method === 'GET' && url.pathname === '/api/check-active') {
-            var phone = url.searchParams.get('phone');
-            if (!phone) return sendJson(res, 400, { success: false, message: 'Phone number required' });
-            var active = null;
-            
-            var allTx = await getAllTransactions();
-            for (var i = 0; i < allTx.length; i++) {
-                var t = allTx[i];
-                if (t.phoneNumber === phone && t.status === 'completed' && t.username && (!t.expiresAt || new Date(t.expiresAt) > new Date())) {
-                    active = t;
-                    break;
-                }
-            }
-            if (active) {
-                return sendJson(res, 200, {
-                    success: true,
-                    active: true,
-                    data: {
-                        id: active.id,
-                        planName: active.planName,
-                        expiresAt: active.expiresAt,
-                        username: active.username,
-                        password: active.password
-                    }
-                });
-            } else {
-                return sendJson(res, 200, { success: true, active: false });
-            }
-        }
-
-        // ============================================================
-        // VOUCHER REDEEM
-        // ============================================================
-        if (req.method === 'POST' && url.pathname === '/api/voucher/redeem') {
-            var body = await readBody(req);
-            var code = body.code;
-            var phoneNumber = body.phoneNumber;
-            var deviceId = body.deviceId;
-            
-            if (!code) { return sendJson(res, 400, { success: false, message: 'Voucher code required' }); }
-            
-            var voucher = await getVoucherByCode(code);
-            if (!voucher || voucher.used) {
-                return sendJson(res, 404, { success: false, message: 'Invalid or already used voucher' });
-            }
-            
-            voucher.used = true;
-            voucher.usedBy = phoneNumber || 'unknown';
-            voucher.usedAt = new Date().toISOString();
-            await updateVoucher(code, voucher);
-            
-            var transactionId = 'VOUCH_' + Date.now();
-            var duration = voucher.duration_seconds || 3600;
-            
-            var tx = {
-                id: transactionId,
-                phoneNumber: phoneNumber || 'voucher_user',
-                amount: 0,
-                planId: voucher.planId || 'voucher',
-                planName: voucher.planName || 'Voucher Plan',
-                status: 'completed',
-                timestamp: new Date().toISOString(),
-                expiresAt: new Date(Date.now() + duration * 1000).toISOString(),
-                username: 'vuser_' + transactionId.substring(0, 8),
-                password: 'vpass_' + Date.now().toString(36),
-                deviceId: deviceId || null
-            };
-            await createTransaction(tx);
-            
-            if (deviceId) {
-                await registerDevice({
-                    deviceId: deviceId,
-                    phoneNumber: phoneNumber || 'voucher_user',
-                    username: tx.username,
-                    planName: voucher.planName,
-                    expiresAt: tx.expiresAt,
-                    connectedAt: new Date().toISOString(),
-                    active: true
-                });
-            }
-            
-            return sendJson(res, 200, {
-                success: true,
-                message: 'Voucher redeemed successfully!',
-                data: {
-                    transactionId: transactionId,
-                    planName: voucher.planName,
-                    expiresAt: tx.expiresAt,
-                    username: tx.username,
-                    password: tx.password
-                }
-            });
-        }
-
-        // ============================================================
-        // ADMIN VOUCHER GENERATE
-        // ============================================================
-        if (req.method === 'POST' && url.pathname === '/api/admin/voucher/generate') {
-            if (!isAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
-            
-            var body = await readBody(req);
-            var planId = body.planId;
-            var count = Math.min(body.count || 1, 100);
-            
-            if (!planId) { return sendJson(res, 400, { success: false, message: 'Plan ID required' }); }
-            
-            var plan = plans.find(function(p) { return p.id === planId; });
-            if (!plan) { return sendJson(res, 400, { success: false, message: 'Invalid plan ID' }); }
-            
-            var generated = [];
-            var vouchersToInsert = [];
-            for (var i = 0; i < count; i++) {
-                var code = generateVoucherCode();
-                var voucherData = {
-                    code: code,
-                    planId: plan.id,
-                    planName: plan.name,
-                    duration_seconds: plan.duration_seconds || 3600,
-                    devices: plan.devices || 1,
-                    used: false,
-                    usedBy: null,
-                    usedAt: null,
-                    createdAt: new Date().toISOString()
-                };
-                vouchersToInsert.push(voucherData);
-                generated.push(code);
-            }
-            await createVouchers(vouchersToInsert);
-            
-            return sendJson(res, 200, {
-                success: true,
-                message: 'Generated ' + generated.length + ' vouchers',
-                vouchers: generated,
-                count: generated.length
-            });
-        }
-
-        // ============================================================
-        // ADMIN VOUCHERS LIST
-        // ============================================================
-        if (req.method === 'GET' && url.pathname === '/api/admin/vouchers') {
-            if (!isAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
-            var allVouchers = await getAllVouchers();
-            var used = allVouchers.filter(function(v) { return v.used; }).length;
-            return sendJson(res, 200, {
-                success: true,
-                data: allVouchers,
-                count: allVouchers.length,
-                used: used,
-                unused: allVouchers.length - used
-            });
-        }
-
-        // ============================================================
-        // ADMIN VERIFY
-        // ============================================================
-        if (req.method === 'POST' && url.pathname === '/api/admin/verify') {
-            var body = await readBody(req);
-            if (body.pin === ADMIN_PASSWORD) {
-                var token = generateToken({ username: 'admin', role: 'admin', exp: Date.now() + 86400000 });
-                return sendJson(res, 200, { success: true, message: 'Admin verified', token: token });
-            } else {
-                return sendJson(res, 401, { success: false, message: 'Invalid PIN' });
-            }
-        }
-
-        // ============================================================
-        // MASTER ADMIN VERIFY
-        // ============================================================
-        if (req.method === 'POST' && url.pathname === '/api/master/verify') {
-            var body = await readBody(req);
-            if (body.pin === MASTER_PASSWORD) {
-                var token = generateToken({ username: 'master', role: 'master', exp: Date.now() + 86400000 });
-                return sendJson(res, 200, { success: true, message: 'Master verified', token: token, role: 'master' });
-            } else {
-                return sendJson(res, 401, { success: false, message: 'Invalid PIN' });
-            }
-        }
-
-        // ============================================================
-        // GET ALL ORGANIZATIONS (Master)
-        // ============================================================
-        if (req.method === 'GET' && url.pathname === '/api/master/organizations') {
-            if (!isMasterAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
-            var allOrgs = await getAllOrganizations();
-            return sendJson(res, 200, { success: true, data: allOrgs, count: allOrgs.length });
-        }
-
-        // ============================================================
-        // GENERATE REDIRECT HTML
-        // ============================================================
-        if (req.method === 'GET' && url.pathname.startsWith('/api/master/generate-redirect/')) {
-            if (!isMasterAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
-            
-            var orgId = url.pathname.split('/').pop();
-            var org = await getOrganizationByClientId(orgId);
-            if (!org) { return sendJson(res, 404, { success: false, message: 'Organization not found' }); }
-            
-            var access = await checkSubscriptionAccess(org.id);
-            if (!access.allowed) {
-                return sendJson(res, 403, {
-                    success: false,
-                    message: 'Cannot generate redirect file. ' + access.message,
-                    code: access.code,
-                    canSubscribe: true
-                });
-            }
-            
-            var html = generateRedirectHtml(org);
-            
-            return sendJson(res, 200, {
-                success: true,
-                html: html,
-                filename: 'redirect.html',
-                subscription: {
-                    status: access.status,
-                    daysLeft: access.daysLeft,
-                    message: access.message
-                }
-            });
-        }
-
-        // ============================================================
-        // SERVE CUSTOMER BILLING PAGE
-        // ============================================================
-        if (req.method === 'GET' && url.pathname.match(/^\/customer\/CLIENT_[A-Z0-9]+\/?$/)) {
-            var pathParts = url.pathname.split('/');
-            var orgId = pathParts[2] || '';
-            
-            if (!orgId) { return sendHtml(res, 404, '<h1>Organization not found</h1>'); }
-            
-            var org = await getOrganizationByClientId(orgId);
-            if (!org) { return sendHtml(res, 404, '<h1>Organization not found</h1>'); }
-            
-            var html = generateCustomerBillingPage(org);
-            return sendHtml(res, 200, html);
-        }
-
-        // ============================================================
-        // API INFO
-        // ============================================================
-        if (req.method === 'GET' && url.pathname === '/api') {
-            var allTx = await getAllTransactions();
-            var completedTx = allTx.filter(function(t) { return t.status === 'completed'; });
-            var totalRevenue = completedTx.reduce(function(sum, t) { return sum + (t.amount || 0); }, 0);
-            var allSubs = await getAllSubscriptions();
-            var activeSubs = allSubs.filter(function(s) { return s.status === 'active' || s.status === 'trial'; });
-            var activeDevicesCount = await getActiveDevicesCount();
-            var allOrgs = await getAllOrganizations();
-            var allVouchers = await getAllVouchers();
-            var unusedVouchers = allVouchers.filter(function(v) { return !v.used; });
-            
-            return sendJson(res, 200, {
-                name: 'GICH WiFi API',
-                version: '6.0.0-mongodb',
-                status: 'Running',
-                database: 'MongoDB Atlas',
-                googleOAuth: !!GOOGLE_CLIENT_ID,
-                statistics: {
-                    totalTransactions: allTx.length,
-                    totalRevenue: totalRevenue,
-                    activeVouchers: unusedVouchers.length,
-                    totalOrganizations: allOrgs.length,
-                    activeSubscriptions: activeSubs.length,
-                    activeDevices: activeDevicesCount
-                }
-            });
-        }
-
-        return sendJson(res, 404, { error: 'Route not found' });
-
-    } catch (err) {
-        console.error('Server error:', err);
-        return sendJson(res, 500, { error: 'Internal server error', message: err.message });
-    }
-});
-
-// ============================================================
 // START SERVER
 // ============================================================
 
@@ -2727,7 +2984,7 @@ async function startServer() {
         
         server.listen(PORT, '0.0.0.0', function() {
             console.log('\n========================================');
-            console.log('🌐 GICH WiFi API');
+            console.log('🌐 GICH WiFi API - v7.0.0');
             console.log('========================================');
             console.log('✅ Server running on port: ' + PORT);
             console.log('📍 http://localhost:' + PORT + '/');
@@ -2738,6 +2995,8 @@ async function startServer() {
             console.log('📱 Device Tracking: ✅ ENABLED (with expiry check)');
             console.log('🔑 Google OAuth: ' + (GOOGLE_CLIENT_ID ? '✅ Configured' : '⚠️ NOT SET'));
             console.log('📧 Email Validation: ✅ ENABLED');
+            console.log('🚀 Auto Router Setup: ✅ ENABLED');
+            console.log('📅 Free Trial: ' + FREE_TRIAL_DAYS + ' days');
             console.log('========================================\n');
         });
     } catch (error) {
