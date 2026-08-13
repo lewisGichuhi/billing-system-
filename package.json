@@ -1,10 +1,11 @@
 {
-  "name": "billing-system",
-  "version": "2.0.0",
-  "description": "GICH WiFi Billing System with MongoDB",
+  "name": "gich-wifi-billing",
+  "version": "7.0.0",
+  "description": "GICH WiFi Billing System - Complete Auto Router Setup with M-Pesa Integration",
   "main": "server.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node server.js",
+    "dev": "node server.js"
   },
   "engines": {
     "node": ">=20.0.0 <22.0.0"
@@ -12,5 +13,16 @@
   "dependencies": {
     "dotenv": "^16.4.5",
     "mongodb": "^5.9.0"
-  }
+  },
+  "keywords": [
+    "wifi",
+    "billing",
+    "mpesa",
+    "mikrotik",
+    "hotspot",
+    "gich",
+    "router-setup"
+  ],
+  "author": "GICH WiFi",
+  "license": "MIT"
 }
