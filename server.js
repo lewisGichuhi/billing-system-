@@ -1,7 +1,9 @@
 /**
  * GICH WiFi - Complete Backend with MongoDB
  * Full M-Pesa STK Push with multi-tenant support
- * INCLUDES: Full HTML Generation - Device Tracking - Data NEVER lost
+ * INCLUDES: Device Tracking - Remembers devices with active plans
+ * DATABASE: MongoDB Atlas - Data NEVER lost
+ * FIXED: Device tracking now checks for expired plans
  */
 
 require('dotenv').config();
@@ -92,7 +94,7 @@ console.log('   Port: ' + PORT);
 console.log('   Admin PIN: ' + (ADMIN_PASSWORD ? '✅ Configured' : '⚠️ NOT SET'));
 console.log('   Master PIN: ' + (MASTER_PASSWORD ? '✅ Configured' : '⚠️ NOT SET'));
 console.log('   M-Pesa Shortcode: ' + SHORTCODE);
-console.log('📱 Device Tracking: ✅ ENABLED');
+console.log('📱 Device Tracking: ✅ ENABLED (with expiry check)');
 console.log('🗄️  Database: MongoDB Atlas');
 console.log('========================================\n');
 
@@ -134,12 +136,14 @@ async function connectDB() {
             await db.collection('transactions').createIndex({ phoneNumber: 1 });
             await db.collection('transactions').createIndex({ status: 1 });
             await db.collection('transactions').createIndex({ checkoutId: 1 });
+            await db.collection('transactions').createIndex({ expiresAt: 1 });
             await db.collection('organizations').createIndex({ email: 1 }, { unique: true });
             await db.collection('organizations').createIndex({ id: 1 }, { unique: true });
             await db.collection('vouchers').createIndex({ code: 1 }, { unique: true });
             await db.collection('vouchers').createIndex({ used: 1 });
             await db.collection('activeDevices').createIndex({ deviceId: 1 }, { unique: true });
             await db.collection('activeDevices').createIndex({ connectedAt: 1 });
+            await db.collection('activeDevices').createIndex({ expiresAt: 1 });
             await db.collection('subscriptions').createIndex({ clientId: 1 }, { unique: true });
             console.log('✅ Indexes created successfully');
         } catch (indexError) {
@@ -281,25 +285,81 @@ async function getAllVouchers() {
     try { return await db.collection('vouchers').find({}).toArray(); } catch (e) { return []; }
 }
 
+// ============================================================
+// ACTIVE DEVICES - WITH EXPIRY CHECK
+// ============================================================
+
 async function checkDeviceAlreadyConnected(deviceId) {
     try {
+        const now = new Date();
         const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-        await db.collection('activeDevices').deleteMany({ connectedAt: { $lt: thirtyDaysAgo.toISOString() } });
-        return await db.collection('activeDevices').findOne({ deviceId: deviceId, active: true });
-    } catch (e) { return null; }
+        
+        // Clean up old devices older than 30 days
+        await db.collection('activeDevices').deleteMany({
+            connectedAt: { $lt: thirtyDaysAgo.toISOString() }
+        });
+        
+        // Clean up devices whose plan has expired
+        await db.collection('activeDevices').deleteMany({
+            expiresAt: { $lt: now.toISOString() }
+        });
+        
+        // Check if device is still connected with an ACTIVE plan
+        const device = await db.collection('activeDevices').findOne({
+            deviceId: deviceId,
+            active: true,
+            expiresAt: { $gt: now.toISOString() }  // Only return if NOT expired
+        });
+        
+        return device;
+    } catch (e) { 
+        console.error('Error checking device:', e);
+        return null; 
+    }
 }
 
 async function registerDevice(deviceData) {
     try {
+        // Remove any existing entry for this device
         await db.collection('activeDevices').deleteMany({ deviceId: deviceData.deviceId });
+        
+        // Insert new device with expiry
         await db.collection('activeDevices').insertOne(deviceData);
         return deviceData;
     } catch (e) { throw e; }
 }
 
-async function getActiveDevicesCount() {
-    try { return await db.collection('activeDevices').countDocuments({ active: true }); } catch (e) { return 0; }
+async function removeDevice(deviceId) {
+    try { await db.collection('activeDevices').deleteMany({ deviceId: deviceId }); } catch (e) { console.error('Error removing device:', e); }
 }
+
+async function getActiveDevicesCount() {
+    try { 
+        const now = new Date().toISOString();
+        return await db.collection('activeDevices').countDocuments({ 
+            active: true,
+            expiresAt: { $gt: now }
+        }); 
+    } catch (e) { return 0; }
+}
+
+// Auto-cleanup expired devices every 5 minutes
+setInterval(async function() {
+    try {
+        const now = new Date().toISOString();
+        const result = await db.collection('activeDevices').deleteMany({
+            $or: [
+                { expiresAt: { $lt: now } },
+                { connectedAt: { $lt: new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString() } }
+            ]
+        });
+        if (result.deletedCount > 0) {
+            console.log('🧹 Cleaned up ' + result.deletedCount + ' expired/old device connections');
+        }
+    } catch (e) {
+        console.error('Error cleaning up devices:', e);
+    }
+}, 5 * 60 * 1000);
 
 // ============================================================
 // JWT HELPER
@@ -706,7 +766,7 @@ function generateRedirectHtml(organization) {
 }
 
 // ============================================================
-// GENERATE CUSTOMER BILLING PAGE - FULL VERSION
+// GENERATE CUSTOMER BILLING PAGE - WITH EXPIRY AWARENESS
 // ============================================================
 
 function generateCustomerBillingPage(organization) {
@@ -857,6 +917,8 @@ function generateCustomerBillingPage(organization) {
     html += '        .already-connected-overlay .timer-box { background: rgba(255,255,255,0.03); padding: 20px 40px; border-radius: 16px; border: 1px solid rgba(255,255,255,0.04); margin: 16px 0; text-align: center; }\n';
     html += '        .already-connected-overlay .timer-box .label { color: #666; font-size: 12px; text-transform: uppercase; letter-spacing: 2px; }\n';
     html += '        .already-connected-overlay .timer-box .time { font-size: 44px; font-weight: 700; color: ' + primaryColor + '; font-family: \'Courier New\', monospace; letter-spacing: 4px; }\n';
+    html += '        .already-connected-overlay .timer-box .time.expired { color: #ff4444; }\n';
+    html += '        .already-connected-overlay .expired-message { color: #ff4444; font-size: 20px; margin-top: 10px; }\n';
     html += '        @keyframes toastIn { from { opacity: 0; transform: translateX(-50%) translateY(30px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }\n';
     html += '        @media (max-width: 480px) { .container { padding: 20px 16px; } .plan-grid { grid-template-columns: 1fr 1fr; gap: 8px; } .plan-card { padding: 12px 10px; } .plan-card .price { font-size: 18px; } .voucher-row { flex-direction: column; } .voucher-row .btn { width: 100%; } .check-row { flex-direction: column; } .check-row .btn { width: 100%; } .connected-overlay .timer-box .time { font-size: 34px; } .connected-overlay .timer-box { padding: 20px; } .upgrade-section .plan-options { grid-template-columns: 1fr 1fr; } }\n';
     html += '        @media (max-width: 380px) { .plan-grid { grid-template-columns: 1fr; } .upgrade-section .plan-options { grid-template-columns: 1fr; } }\n';
@@ -866,15 +928,16 @@ function generateCustomerBillingPage(organization) {
 
     // ALREADY CONNECTED OVERLAY
     html += '<div class="already-connected-overlay" id="alreadyConnectedOverlay">\n';
-    html += '    <div class="icon">🔌</div>\n';
-    html += '    <div class="title">Already Connected!</div>\n';
-    html += '    <div class="sub">You are already connected on this device</div>\n';
-    html += '    <div class="details" id="alreadyConnectedDetails">Plan: <span id="alreadyPlan">-</span></div>\n';
+    html += '    <div class="icon" id="alreadyIcon">🔌</div>\n';
+    html += '    <div class="title" id="alreadyTitle">Already Connected!</div>\n';
+    html += '    <div class="sub" id="alreadySub">You are already connected on this device</div>\n';
+    html += '    <div class="details" id="alreadyDetails">Plan: <span id="alreadyPlan">-</span></div>\n';
     html += '    <div class="timer-box">\n';
     html += '        <div class="label">⏱ Time Remaining</div>\n';
     html += '        <div class="time" id="alreadyTimer">--:--:--</div>\n';
     html += '    </div>\n';
-    html += '    <div class="details" style="margin-top:12px;">This page will close automatically...</div>\n';
+    html += '    <div class="expired-message" id="expiredMessage" style="display:none;">⛔ Your plan has expired. Redirecting to billing page...</div>\n';
+    html += '    <div class="details" id="alreadyCloseMsg" style="margin-top:12px;">This page will close automatically...</div>\n';
     html += '    <div class="powered" style="margin-top:20px;color:#444;font-size:12px;">Powered by <span class="brand" style="color:' + primaryColor + ';font-weight:600;">GICH WiFi</span></div>\n';
     html += '</div>\n';
 
@@ -961,7 +1024,7 @@ function generateCustomerBillingPage(organization) {
     html += '    <span id="toastMessage">Success!</span>\n';
     html += '</div>\n';
 
-    // JavaScript - FULL WITH DEVICE TRACKING
+    // JavaScript - WITH EXPIRY CHECK
     html += '<script>\n';
     html += '    var ORG_ID = "' + orgId + '";\n';
     html += '    var ORG_EMAIL = "' + orgEmail + '";\n';
@@ -973,6 +1036,7 @@ function generateCustomerBillingPage(organization) {
     html += '    var pollingInterval = null;\n';
     html += '    var subscriptionStatus = null;\n';
     html += '    var deviceId = null;\n';
+    html += '    var isExpired = false;\n';
     html += '\n';
     html += '    function getEl(id) { return document.getElementById(id); }\n';
     html += '\n';
@@ -997,18 +1061,45 @@ function generateCustomerBillingPage(organization) {
     html += '        .then(function(r) { return r.json(); })\n';
     html += '        .then(function(data) {\n';
     html += '            if (data.success && data.alreadyConnected) {\n';
-    html += '                showAlreadyConnected(data.session);\n';
-    html += '                setTimeout(function() { window.close(); }, 5000);\n';
+    html += '                // Check if the plan is expired\n';
+    html += '                if (data.session && data.session.expiresAt) {\n';
+    html += '                    var expiry = new Date(data.session.expiresAt).getTime();\n';
+    html += '                    var now = Date.now();\n';
+    html += '                    if (expiry <= now) {\n';
+    html += '                        isExpired = true;\n';
+    html += '                        showAlreadyConnected(data.session, true);\n';
+    html += '                        setTimeout(function() {\n';
+    html += '                            window.location.reload();\n';
+    html += '                        }, 3000);\n';
+    html += '                        return;\n';
+    html += '                    }\n';
+    html += '                }\n';
+    html += '                showAlreadyConnected(data.session, false);\n';
+    html += '                setTimeout(function() {\n';
+    html += '                    window.close();\n';
+    html += '                }, 5000);\n';
     html += '            }\n';
     html += '        })\n';
     html += '        .catch(function(err) { console.error("Device check error:", err); });\n';
     html += '    }\n';
     html += '\n';
-    html += '    function showAlreadyConnected(session) {\n';
+    html += '    function showAlreadyConnected(session, expired) {\n';
     html += '        document.getElementById("app").style.display = "none";\n';
     html += '        var overlay = getEl("alreadyConnectedOverlay");\n';
     html += '        overlay.classList.add("active");\n';
-    html += '        if (session) {\n';
+    html += '        \n';
+    html += '        if (expired) {\n';
+    html += '            getEl("alreadyIcon").textContent = "⛔";\n';
+    html += '            getEl("alreadyTitle").textContent = "Plan Expired!";\n';
+    html += '            getEl("alreadySub").textContent = "Your plan has expired. Redirecting...";\n';
+    html += '            getEl("alreadyTimer").textContent = "00:00:00";\n';
+    html += '            getEl("alreadyTimer").classList.add("expired");\n';
+    html += '            getEl("expiredMessage").style.display = "block";\n';
+    html += '            getEl("alreadyCloseMsg").textContent = "Redirecting to billing page...";\n';
+    html += '            if (session) {\n';
+    html += '                getEl("alreadyPlan").textContent = session.planName || "Unknown Plan" + " (EXPIRED)";\n';
+    html += '            }\n';
+    html += '        } else if (session) {\n';
     html += '            getEl("alreadyPlan").textContent = session.planName || "Unknown Plan";\n';
     html += '            if (session.expiresAt) {\n';
     html += '                startAlreadyCountdown(session.expiresAt);\n';
@@ -1026,6 +1117,14 @@ function generateCustomerBillingPage(organization) {
     html += '                timer.textContent = "00:00:00";\n';
     html += '                timer.classList.add("expired");\n';
     html += '                clearInterval(countdownInterval);\n';
+    html += '                getEl("alreadyIcon").textContent = "⛔";\n';
+    html += '                getEl("alreadyTitle").textContent = "Plan Expired!";\n';
+    html += '                getEl("alreadySub").textContent = "Your plan has expired. Please reconnect.";\n';
+    html += '                getEl("expiredMessage").style.display = "block";\n';
+    html += '                getEl("alreadyCloseMsg").textContent = "Redirecting to billing page...";\n';
+    html += '                setTimeout(function() {\n';
+    html += '                    window.location.reload();\n';
+    html += '                }, 3000);\n';
     html += '                return;\n';
     html += '            }\n';
     html += '            timer.classList.remove("expired");\n';
@@ -1145,7 +1244,7 @@ function generateCustomerBillingPage(organization) {
     html += '                showToast("🔌 Already connected!", "error");\n';
     html += '                btn.disabled = false;\n';
     html += '                btn.innerHTML = "💳 Pay KSh " + selectedPlanPrice;\n';
-    html += '                showAlreadyConnected(data.session);\n';
+    html += '                showAlreadyConnected(data.session, false);\n';
     html += '                setTimeout(function() { window.close(); }, 5000);\n';
     html += '            } else {\n';
     html += '                resultEl.className = "result-box show error";\n';
@@ -1273,6 +1372,10 @@ function generateCustomerBillingPage(organization) {
     html += '                timer.classList.add("expired");\n';
     html += '                getEl("connEnjoy").textContent = "⏰ Your plan has expired. Please reconnect.";\n';
     html += '                clearInterval(countdownInterval);\n';
+    html += '                // Redirect to billing page after 3 seconds\n';
+    html += '                setTimeout(function() {\n';
+    html += '                    window.location.reload();\n';
+    html += '                }, 3000);\n';
     html += '                return;\n';
     html += '            }\n';
     html += '            timer.classList.remove("expired");\n';
@@ -1414,7 +1517,7 @@ function generateCustomerBillingPage(organization) {
     html += '                resultEl.textContent = "🔌 You are already connected on this device!";\n';
     html += '                resultEl.style.color = "#ff4444";\n';
     html += '                showToast("🔌 Already connected!", "error");\n';
-    html += '                showAlreadyConnected(data.session);\n';
+    html += '                showAlreadyConnected(data.session, false);\n';
     html += '                setTimeout(function() { window.close(); }, 5000);\n';
     html += '            } else {\n';
     html += '                resultEl.textContent = "❌ " + (data.message || "Payment failed");\n';
@@ -1595,7 +1698,7 @@ var server = http.createServer(async function(req, res) {
         }
 
         // ============================================================
-        // DEVICE CONNECTION CHECK
+        // DEVICE CONNECTION CHECK - WITH EXPIRY
         // ============================================================
         if (req.method === 'POST' && url.pathname === '/api/device/check') {
             var body = await readBody(req);
@@ -2464,7 +2567,7 @@ async function startServer() {
             console.log('🛡️ Admin PIN: ' + (ADMIN_PASSWORD ? '✅ Set' : '⚠️ NOT SET'));
             console.log('👑 Master PIN: ' + (MASTER_PASSWORD ? '✅ Set' : '⚠️ NOT SET'));
             console.log('🗄️  Database: MongoDB Atlas - CONNECTED');
-            console.log('📱 Device Tracking: ✅ ENABLED');
+            console.log('📱 Device Tracking: ✅ ENABLED (with expiry check)');
             console.log('========================================\n');
         });
     } catch (error) {
