@@ -1,9 +1,7 @@
 /**
  * GICH WiFi - Complete Backend with MongoDB
  * Full M-Pesa STK Push with multi-tenant support
- * INCLUDES: Device Tracking - Remembers devices with active plans
- * DATABASE: MongoDB Atlas - Data NEVER lost
- * FIXED: Device tracking now checks for expired plans
+ * INCLUDES: Device Tracking, Google OAuth Login, Data NEVER lost
  */
 
 require('dotenv').config();
@@ -29,6 +27,11 @@ const PORT = process.env.PORT || 10000;
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || '126483';
 const MASTER_PASSWORD = process.env.MASTER_PASSWORD || 'master126483';
 const JWT_SECRET = process.env.JWT_SECRET || crypto.randomBytes(32).toString('hex');
+
+// Google OAuth Configuration
+const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
+const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || '';
+const GOOGLE_CALLBACK_URL = process.env.GOOGLE_CALLBACK_URL || 'https://billing-system-fm9a.onrender.com/auth/google/callback';
 
 // MongoDB Connection
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017';
@@ -88,13 +91,14 @@ let db = null;
 let client = null;
 
 console.log('\n========================================');
-console.log('🌐 GICH WiFi API - FULL VERSION');
+console.log('🌐 GICH WiFi API - FULL VERSION with Google OAuth');
 console.log('========================================');
 console.log('   Port: ' + PORT);
 console.log('   Admin PIN: ' + (ADMIN_PASSWORD ? '✅ Configured' : '⚠️ NOT SET'));
 console.log('   Master PIN: ' + (MASTER_PASSWORD ? '✅ Configured' : '⚠️ NOT SET'));
 console.log('   M-Pesa Shortcode: ' + SHORTCODE);
-console.log('📱 Device Tracking: ✅ ENABLED (with expiry check)');
+console.log('📱 Device Tracking: ✅ ENABLED');
+console.log('🔑 Google OAuth: ' + (GOOGLE_CLIENT_ID ? '✅ Configured' : '⚠️ NOT SET'));
 console.log('🗄️  Database: MongoDB Atlas');
 console.log('========================================\n');
 
@@ -145,6 +149,8 @@ async function connectDB() {
             await db.collection('activeDevices').createIndex({ connectedAt: 1 });
             await db.collection('activeDevices').createIndex({ expiresAt: 1 });
             await db.collection('subscriptions').createIndex({ clientId: 1 }, { unique: true });
+            await db.collection('users').createIndex({ email: 1 }, { unique: true });
+            await db.collection('users').createIndex({ googleId: 1 });
             console.log('✅ Indexes created successfully');
         } catch (indexError) {
             console.log('⚠️ Some indexes may already exist');
@@ -285,6 +291,28 @@ async function getAllVouchers() {
     try { return await db.collection('vouchers').find({}).toArray(); } catch (e) { return []; }
 }
 
+// Users (for Google OAuth)
+async function getUserByEmail(email) {
+    try { return await db.collection('users').findOne({ email: email }); } catch (e) { return null; }
+}
+
+async function getUserByGoogleId(googleId) {
+    try { return await db.collection('users').findOne({ googleId: googleId }); } catch (e) { return null; }
+}
+
+async function createUser(userData) {
+    try { await db.collection('users').insertOne(userData); return userData; } catch (e) { throw e; }
+}
+
+async function updateUser(email, updateData) {
+    try {
+        const result = await db.collection('users').findOneAndUpdate(
+            { email: email }, { $set: updateData }, { returnDocument: 'after' }
+        );
+        return result.value;
+    } catch (e) { throw e; }
+}
+
 // ============================================================
 // ACTIVE DEVICES - WITH EXPIRY CHECK
 // ============================================================
@@ -294,21 +322,18 @@ async function checkDeviceAlreadyConnected(deviceId) {
         const now = new Date();
         const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
         
-        // Clean up old devices older than 30 days
         await db.collection('activeDevices').deleteMany({
             connectedAt: { $lt: thirtyDaysAgo.toISOString() }
         });
         
-        // Clean up devices whose plan has expired
         await db.collection('activeDevices').deleteMany({
             expiresAt: { $lt: now.toISOString() }
         });
         
-        // Check if device is still connected with an ACTIVE plan
         const device = await db.collection('activeDevices').findOne({
             deviceId: deviceId,
             active: true,
-            expiresAt: { $gt: now.toISOString() }  // Only return if NOT expired
+            expiresAt: { $gt: now.toISOString() }
         });
         
         return device;
@@ -320,10 +345,7 @@ async function checkDeviceAlreadyConnected(deviceId) {
 
 async function registerDevice(deviceData) {
     try {
-        // Remove any existing entry for this device
         await db.collection('activeDevices').deleteMany({ deviceId: deviceData.deviceId });
-        
-        // Insert new device with expiry
         await db.collection('activeDevices').insertOne(deviceData);
         return deviceData;
     } catch (e) { throw e; }
@@ -553,15 +575,29 @@ async function stkPush(params) {
 }
 
 // ============================================================
-// REQUEST HELPER
+// REQUEST HELPER - UPDATED FOR GOOGLE OAUTH
 // ============================================================
 
-function simpleRequest(method, urlString, headers, jsonBody) {
+function simpleRequest(method, urlString, headers, jsonBody, formData) {
     headers = headers || {};
     jsonBody = jsonBody || null;
+    formData = formData || null;
     return new Promise(function(resolve, reject) {
         var url = new URL(urlString);
-        var payload = jsonBody ? JSON.stringify(jsonBody) : null;
+        var payload = null;
+        
+        if (formData) {
+            payload = Object.keys(formData).map(function(key) {
+                return encodeURIComponent(key) + '=' + encodeURIComponent(formData[key]);
+            }).join('&');
+            headers['Content-Type'] = 'application/x-www-form-urlencoded';
+            headers['Content-Length'] = Buffer.byteLength(payload);
+        } else if (jsonBody) {
+            payload = JSON.stringify(jsonBody);
+            headers['Content-Type'] = 'application/json';
+            headers['Content-Length'] = Buffer.byteLength(payload);
+        }
+        
         var options = {
             hostname: url.hostname,
             port: url.port || 443,
@@ -572,7 +608,6 @@ function simpleRequest(method, urlString, headers, jsonBody) {
             agent: agent,
             family: 4
         };
-        if (payload) { options.headers['Content-Length'] = Buffer.byteLength(payload); }
         options.headers['Connection'] = 'keep-alive';
         var req = https.request(options, function(res) {
             var chunks = [];
@@ -680,6 +715,132 @@ function isMasterAdmin(req) {
 }
 
 // ============================================================
+// GOOGLE OAUTH HANDLERS
+// ============================================================
+
+async function handleGoogleAuth(req, res) {
+    if (!GOOGLE_CLIENT_ID) {
+        return sendHtml(res, 500, '<h1>Google OAuth not configured</h1><p>Please set GOOGLE_CLIENT_ID and GOOGLE_CLIENT_SECRET environment variables.</p>');
+    }
+    
+    const redirectUri = GOOGLE_CALLBACK_URL;
+    const clientId = GOOGLE_CLIENT_ID;
+    const scope = 'https://www.googleapis.com/auth/userinfo.profile https://www.googleapis.com/auth/userinfo.email';
+    
+    const authUrl = `https://accounts.google.com/o/oauth2/v2/auth?client_id=${clientId}&redirect_uri=${redirectUri}&response_type=code&scope=${scope}&access_type=online`;
+    
+    res.writeHead(302, { Location: authUrl });
+    res.end();
+}
+
+async function handleGoogleCallback(req, res) {
+    try {
+        const url = new URL(req.url, 'http://' + req.headers.host);
+        const code = url.searchParams.get('code');
+        
+        if (!code) {
+            return sendHtml(res, 400, '<h1>Error: No authorization code received</h1>');
+        }
+        
+        // Exchange code for access token
+        const tokenResponse = await simpleRequest('POST', 'https://oauth2.googleapis.com/token', {}, null, {
+            code: code,
+            client_id: GOOGLE_CLIENT_ID,
+            client_secret: GOOGLE_CLIENT_SECRET,
+            redirect_uri: GOOGLE_CALLBACK_URL,
+            grant_type: 'authorization_code'
+        });
+        
+        if (!tokenResponse.bodyJson || !tokenResponse.bodyJson.access_token) {
+            return sendHtml(res, 400, '<h1>Error: Failed to get access token</h1><pre>' + JSON.stringify(tokenResponse.bodyJson, null, 2) + '</pre>');
+        }
+        
+        // Get user info with the access token
+        const userInfoResponse = await simpleRequest('GET', 'https://www.googleapis.com/oauth2/v2/userinfo', {
+            'Authorization': 'Bearer ' + tokenResponse.bodyJson.access_token
+        });
+        
+        if (!userInfoResponse.bodyJson || !userInfoResponse.bodyJson.email) {
+            return sendHtml(res, 400, '<h1>Error: Failed to get user info</h1>');
+        }
+        
+        const userInfo = userInfoResponse.bodyJson;
+        
+        // Check if user exists in your database
+        let user = await getUserByEmail(userInfo.email);
+        
+        if (!user) {
+            // Create new user
+            const newUser = {
+                email: userInfo.email,
+                name: userInfo.name || userInfo.email,
+                picture: userInfo.picture || '',
+                googleId: userInfo.id,
+                createdAt: new Date().toISOString(),
+                role: 'user',
+                lastLogin: new Date().toISOString()
+            };
+            await createUser(newUser);
+            user = newUser;
+        } else {
+            // Update last login
+            await updateUser(userInfo.email, { lastLogin: new Date().toISOString() });
+            user.lastLogin = new Date().toISOString();
+        }
+        
+        // Create JWT token for the user
+        const token = generateToken({ 
+            email: user.email, 
+            name: user.name, 
+            role: user.role || 'user',
+            picture: user.picture || ''
+        });
+        
+        // Redirect to homepage with token
+        const frontendUrl = process.env.RENDER_URL || 'https://billing-system-fm9a.onrender.com';
+        sendHtml(res, 200, `
+            <!DOCTYPE html>
+            <html>
+            <head>
+                <title>Login Successful</title>
+                <meta charset="UTF-8">
+                <style>
+                    body { font-family: Arial, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background: #0f2027; color: #fff; }
+                    .container { text-align: center; background: #121829; padding: 40px; border-radius: 20px; max-width: 400px; }
+                    .icon { font-size: 64px; }
+                    h1 { color: #00c853; }
+                    .spinner { border: 4px solid rgba(255,255,255,0.1); border-top-color: #00c853; border-radius: 50%; width: 40px; height: 40px; animation: spin 1s linear infinite; margin: 20px auto; }
+                    @keyframes spin { to { transform: rotate(360deg); } }
+                    .btn { background: #00c853; color: #000; padding: 12px 24px; border: none; border-radius: 8px; cursor: pointer; font-size: 16px; text-decoration: none; display: inline-block; margin-top: 10px; }
+                </style>
+                <script>
+                    localStorage.setItem('gich_auth_token', '${token}');
+                    localStorage.setItem('gich_user', '${JSON.stringify({ email: user.email, name: user.name, picture: user.picture })}');
+                    setTimeout(function() {
+                        window.location.href = '/';
+                    }, 2000);
+                </script>
+            </head>
+            <body>
+                <div class="container">
+                    <div class="icon">✅</div>
+                    <h1>Login Successful!</h1>
+                    <p>Welcome, ${user.name || user.email}!</p>
+                    <div class="spinner"></div>
+                    <p>Redirecting...</p>
+                    <a href="/" class="btn">Go to Dashboard</a>
+                </div>
+            </body>
+            </html>
+        `);
+        
+    } catch (error) {
+        console.error('Google callback error:', error);
+        sendHtml(res, 500, '<h1>❌ Authentication failed</h1><p>' + error.message + '</p>');
+    }
+}
+
+// ============================================================
 // GENERATE REDIRECT HTML
 // ============================================================
 
@@ -766,7 +927,7 @@ function generateRedirectHtml(organization) {
 }
 
 // ============================================================
-// GENERATE CUSTOMER BILLING PAGE - WITH EXPIRY AWARENESS
+// GENERATE CUSTOMER BILLING PAGE - WITH DEVICE TRACKING & GOOGLE LOGIN
 // ============================================================
 
 function generateCustomerBillingPage(organization) {
@@ -835,6 +996,11 @@ function generateCustomerBillingPage(organization) {
     if (mpesaTill) {
         html += '        .brand .paybill { display: inline-block; background: rgba(255,193,7,0.12); color: #ffc107; padding: 2px 14px; border-radius: 20px; font-size: 11px; font-weight: 600; margin-top: 4px; margin-left: 6px; }\n';
     }
+    html += '        .google-btn { display: flex; align-items: center; justify-content: center; gap: 10px; background: #fff; color: #333; padding: 12px 20px; border-radius: 8px; border: none; cursor: pointer; font-size: 16px; font-weight: 500; width: 100%; margin-bottom: 16px; text-decoration: none; transition: all 0.3s; }\n';
+    html += '        .google-btn:hover { background: #f1f1f1; transform: scale(1.01); }\n';
+    html += '        .google-btn img { width: 20px; height: 20px; }\n';
+    html += '        .divider-text { display: flex; align-items: center; gap: 16px; margin: 16px 0; color: #666; font-size: 12px; }\n';
+    html += '        .divider-text::before, .divider-text::after { content: \'\'; flex: 1; height: 1px; background: rgba(255,255,255,0.06); }\n';
     html += '        .status-banner { padding: 10px 14px; border-radius: 10px; margin-bottom: 16px; text-align: center; font-size: 13px; display: none; }\n';
     html += '        .status-banner.show { display: block; }\n';
     html += '        .status-banner.success { background: rgba(0,200,83,0.1); border: 1px solid rgba(0,200,83,0.15); color: #00c853; }\n';
@@ -918,7 +1084,7 @@ function generateCustomerBillingPage(organization) {
     html += '        .already-connected-overlay .timer-box .label { color: #666; font-size: 12px; text-transform: uppercase; letter-spacing: 2px; }\n';
     html += '        .already-connected-overlay .timer-box .time { font-size: 44px; font-weight: 700; color: ' + primaryColor + '; font-family: \'Courier New\', monospace; letter-spacing: 4px; }\n';
     html += '        .already-connected-overlay .timer-box .time.expired { color: #ff4444; }\n';
-    html += '        .already-connected-overlay .expired-message { color: #ff4444; font-size: 20px; margin-top: 10px; }\n';
+    html += '        .already-connected-overlay .expired-message { color: #ff4444; font-size: 20px; margin-top: 10px; display: none; }\n';
     html += '        @keyframes toastIn { from { opacity: 0; transform: translateX(-50%) translateY(30px); } to { opacity: 1; transform: translateX(-50%) translateY(0); } }\n';
     html += '        @media (max-width: 480px) { .container { padding: 20px 16px; } .plan-grid { grid-template-columns: 1fr 1fr; gap: 8px; } .plan-card { padding: 12px 10px; } .plan-card .price { font-size: 18px; } .voucher-row { flex-direction: column; } .voucher-row .btn { width: 100%; } .check-row { flex-direction: column; } .check-row .btn { width: 100%; } .connected-overlay .timer-box .time { font-size: 34px; } .connected-overlay .timer-box { padding: 20px; } .upgrade-section .plan-options { grid-template-columns: 1fr 1fr; } }\n';
     html += '        @media (max-width: 380px) { .plan-grid { grid-template-columns: 1fr; } .upgrade-section .plan-options { grid-template-columns: 1fr; } }\n';
@@ -936,7 +1102,7 @@ function generateCustomerBillingPage(organization) {
     html += '        <div class="label">⏱ Time Remaining</div>\n';
     html += '        <div class="time" id="alreadyTimer">--:--:--</div>\n';
     html += '    </div>\n';
-    html += '    <div class="expired-message" id="expiredMessage" style="display:none;">⛔ Your plan has expired. Redirecting to billing page...</div>\n';
+    html += '    <div class="expired-message" id="expiredMessage">⛔ Your plan has expired. Redirecting to billing page...</div>\n';
     html += '    <div class="details" id="alreadyCloseMsg" style="margin-top:12px;">This page will close automatically...</div>\n';
     html += '    <div class="powered" style="margin-top:20px;color:#444;font-size:12px;">Powered by <span class="brand" style="color:' + primaryColor + ';font-weight:600;">GICH WiFi</span></div>\n';
     html += '</div>\n';
@@ -956,6 +1122,13 @@ function generateCustomerBillingPage(organization) {
     html += '    </div>\n';
 
     html += '    <div class="status-banner" id="statusBanner"></div>\n';
+
+    // Google Login Button
+    html += '    <a href="/auth/google" class="google-btn">\n';
+    html += '        <img src="https://fonts.gstatic.com/s/i/productlogos/googleg/v6/24px.svg" alt="Google">\n';
+    html += '        Sign in with Google\n';
+    html += '    </a>\n';
+    html += '    <div class="divider-text">or continue with M-Pesa</div>\n';
 
     html += '    <div class="section-title">📶 Choose Your Plan</div>\n';
     html += '    <div class="plan-grid" id="planGrid">\n';
@@ -1024,7 +1197,7 @@ function generateCustomerBillingPage(organization) {
     html += '    <span id="toastMessage">Success!</span>\n';
     html += '</div>\n';
 
-    // JavaScript - WITH EXPIRY CHECK
+    // JavaScript
     html += '<script>\n';
     html += '    var ORG_ID = "' + orgId + '";\n';
     html += '    var ORG_EMAIL = "' + orgEmail + '";\n';
@@ -1061,23 +1234,18 @@ function generateCustomerBillingPage(organization) {
     html += '        .then(function(r) { return r.json(); })\n';
     html += '        .then(function(data) {\n';
     html += '            if (data.success && data.alreadyConnected) {\n';
-    html += '                // Check if the plan is expired\n';
     html += '                if (data.session && data.session.expiresAt) {\n';
     html += '                    var expiry = new Date(data.session.expiresAt).getTime();\n';
     html += '                    var now = Date.now();\n';
     html += '                    if (expiry <= now) {\n';
     html += '                        isExpired = true;\n';
     html += '                        showAlreadyConnected(data.session, true);\n';
-    html += '                        setTimeout(function() {\n';
-    html += '                            window.location.reload();\n';
-    html += '                        }, 3000);\n';
+    html += '                        setTimeout(function() { window.location.reload(); }, 3000);\n';
     html += '                        return;\n';
     html += '                    }\n';
     html += '                }\n';
     html += '                showAlreadyConnected(data.session, false);\n';
-    html += '                setTimeout(function() {\n';
-    html += '                    window.close();\n';
-    html += '                }, 5000);\n';
+    html += '                setTimeout(function() { window.close(); }, 5000);\n';
     html += '            }\n';
     html += '        })\n';
     html += '        .catch(function(err) { console.error("Device check error:", err); });\n';
@@ -1087,7 +1255,6 @@ function generateCustomerBillingPage(organization) {
     html += '        document.getElementById("app").style.display = "none";\n';
     html += '        var overlay = getEl("alreadyConnectedOverlay");\n';
     html += '        overlay.classList.add("active");\n';
-    html += '        \n';
     html += '        if (expired) {\n';
     html += '            getEl("alreadyIcon").textContent = "⛔";\n';
     html += '            getEl("alreadyTitle").textContent = "Plan Expired!";\n';
@@ -1122,9 +1289,7 @@ function generateCustomerBillingPage(organization) {
     html += '                getEl("alreadySub").textContent = "Your plan has expired. Please reconnect.";\n';
     html += '                getEl("expiredMessage").style.display = "block";\n';
     html += '                getEl("alreadyCloseMsg").textContent = "Redirecting to billing page...";\n';
-    html += '                setTimeout(function() {\n';
-    html += '                    window.location.reload();\n';
-    html += '                }, 3000);\n';
+    html += '                setTimeout(function() { window.location.reload(); }, 3000);\n';
     html += '                return;\n';
     html += '            }\n';
     html += '            timer.classList.remove("expired");\n';
@@ -1372,10 +1537,7 @@ function generateCustomerBillingPage(organization) {
     html += '                timer.classList.add("expired");\n';
     html += '                getEl("connEnjoy").textContent = "⏰ Your plan has expired. Please reconnect.";\n';
     html += '                clearInterval(countdownInterval);\n';
-    html += '                // Redirect to billing page after 3 seconds\n';
-    html += '                setTimeout(function() {\n';
-    html += '                    window.location.reload();\n';
-    html += '                }, 3000);\n';
+    html += '                setTimeout(function() { window.location.reload(); }, 3000);\n';
     html += '                return;\n';
     html += '            }\n';
     html += '            timer.classList.remove("expired");\n';
@@ -1672,8 +1834,41 @@ var server = http.createServer(async function(req, res) {
         // ===== SERVE HTML FILES =====
         if (req.method === 'GET' && url.pathname === '/') {
             if (serveHtmlFile(res, 'GICH_wifi.html')) return;
-            sendHtml(res, 200, '<h1>🌐 GICH WiFi Server</h1><p>✅ Server is running with MongoDB!</p>');
+            sendHtml(res, 200, '<h1>🌐 GICH WiFi Server</h1><p>✅ Server is running with MongoDB and Google OAuth!</p>');
             return;
+        }
+
+        // ============================================================
+        // GOOGLE OAUTH ROUTES
+        // ============================================================
+
+        // Login with Google - redirect to Google
+        if (req.method === 'GET' && url.pathname === '/auth/google') {
+            return await handleGoogleAuth(req, res);
+        }
+
+        // Google OAuth Callback
+        if (req.method === 'GET' && url.pathname === '/auth/google/callback') {
+            return await handleGoogleCallback(req, res);
+        }
+
+        // Get current user info (requires auth)
+        if (req.method === 'GET' && url.pathname === '/api/me') {
+            var authHeader = req.headers.authorization;
+            if (!authHeader) {
+                return sendJson(res, 401, { success: false, message: 'Not authenticated' });
+            }
+            var token = authHeader.replace('Bearer ', '');
+            var decoded = verifyToken(token);
+            if (!decoded) {
+                return sendJson(res, 401, { success: false, message: 'Invalid token' });
+            }
+            return sendJson(res, 200, { success: true, user: decoded });
+        }
+
+        // Logout
+        if (req.method === 'POST' && url.pathname === '/api/logout') {
+            return sendJson(res, 200, { success: true, message: 'Logged out successfully' });
         }
 
         // ============================================================
@@ -1685,6 +1880,7 @@ var server = http.createServer(async function(req, res) {
                 status: 'ok', 
                 timestamp: new Date().toISOString(),
                 database: 'connected',
+                googleOAuth: !!GOOGLE_CLIENT_ID,
                 version: '6.0.0-mongodb'
             });
         }
@@ -1698,7 +1894,7 @@ var server = http.createServer(async function(req, res) {
         }
 
         // ============================================================
-        // DEVICE CONNECTION CHECK - WITH EXPIRY
+        // DEVICE CONNECTION CHECK
         // ============================================================
         if (req.method === 'POST' && url.pathname === '/api/device/check') {
             var body = await readBody(req);
@@ -2530,6 +2726,7 @@ var server = http.createServer(async function(req, res) {
                 version: '6.0.0-mongodb',
                 status: 'Running',
                 database: 'MongoDB Atlas',
+                googleOAuth: !!GOOGLE_CLIENT_ID,
                 statistics: {
                     totalTransactions: allTx.length,
                     totalRevenue: totalRevenue,
@@ -2568,6 +2765,7 @@ async function startServer() {
             console.log('👑 Master PIN: ' + (MASTER_PASSWORD ? '✅ Set' : '⚠️ NOT SET'));
             console.log('🗄️  Database: MongoDB Atlas - CONNECTED');
             console.log('📱 Device Tracking: ✅ ENABLED (with expiry check)');
+            console.log('🔑 Google OAuth: ' + (GOOGLE_CLIENT_ID ? '✅ Configured' : '⚠️ NOT SET'));
             console.log('========================================\n');
         });
     } catch (error) {
