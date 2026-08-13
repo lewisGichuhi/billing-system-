@@ -586,7 +586,7 @@ async function stkPush(params) {
 }
 
 // ============================================================
-// REQUEST HELPER - FIXED
+// REQUEST HELPER
 // ============================================================
 
 function simpleRequest(method, urlString, headers, jsonBody, formData) {
@@ -770,8 +770,6 @@ async function handleGoogleCallback(req, res) {
             '&redirect_uri=' + encodeURIComponent(GOOGLE_CALLBACK_URL) +
             '&grant_type=authorization_code';
         
-        console.log('📡 Sending token request...');
-        
         const tokenOptions = {
             hostname: 'oauth2.googleapis.com',
             port: 443,
@@ -803,8 +801,6 @@ async function handleGoogleCallback(req, res) {
             req.end();
         });
         
-        console.log('📡 Token Response Status:', tokenResponse.statusCode);
-        
         if (!tokenResponse.bodyJson || !tokenResponse.bodyJson.access_token) {
             console.error('❌ Token exchange failed:', tokenResponse.bodyText);
             return sendHtml(res, 400, '<h1>Error: Failed to get access token</h1><pre>' + tokenResponse.bodyText + '</pre>');
@@ -827,7 +823,6 @@ async function handleGoogleCallback(req, res) {
         let user = await getUserByEmail(userInfo.email);
         
         if (!user) {
-            // Create new user
             const newUser = {
                 email: userInfo.email,
                 name: userInfo.name || userInfo.email,
@@ -840,7 +835,6 @@ async function handleGoogleCallback(req, res) {
             await createUser(newUser);
             user = newUser;
         } else {
-            // Update last login
             await updateUser(userInfo.email, { lastLogin: new Date().toISOString() });
             user.lastLogin = new Date().toISOString();
         }
@@ -853,8 +847,9 @@ async function handleGoogleCallback(req, res) {
             picture: user.picture || ''
         });
         
-        // Redirect to homepage with token
+        // Redirect to Netlify with token
         const frontendUrl = 'https://clientadminwifi.netlify.app';
+        
         sendHtml(res, 200, `
             <!DOCTYPE html>
             <html>
@@ -871,12 +866,19 @@ async function handleGoogleCallback(req, res) {
                     .btn { background: #00c853; color: #000; padding: 12px 24px; border: none; border-radius: 8px; cursor: pointer; font-size: 16px; text-decoration: none; display: inline-block; margin-top: 10px; }
                 </style>
                 <script>
+                    // Store token in localStorage
                     localStorage.setItem('clientToken', '${token}');
                     localStorage.setItem('userEmail', '${user.email}');
                     localStorage.setItem('userData', '${JSON.stringify({ email: user.email, name: user.name, picture: user.picture })}');
+                    localStorage.setItem('gich_user', '${JSON.stringify({ email: user.email, name: user.name })}');
+                    
+                    console.log('✅ Token stored in localStorage');
+                    console.log('📧 Email: ${user.email}');
+                    
+                    // Redirect to Netlify
                     setTimeout(function() {
                         window.location.href = '${frontendUrl}';
-                    }, 2000);
+                    }, 1500);
                 </script>
             </head>
             <body>
@@ -885,7 +887,7 @@ async function handleGoogleCallback(req, res) {
                     <h1>Login Successful!</h1>
                     <p>Welcome, ${user.name || user.email}!</p>
                     <div class="spinner"></div>
-                    <p>Redirecting...</p>
+                    <p>Redirecting to dashboard...</p>
                     <a href="${frontendUrl}" class="btn">Go to Dashboard</a>
                 </div>
             </body>
@@ -899,93 +901,7 @@ async function handleGoogleCallback(req, res) {
 }
 
 // ============================================================
-// GENERATE REDIRECT HTML
-// ============================================================
-
-function generateRedirectHtml(organization) {
-    var escapeHtml = function(str) {
-        if (!str) return '';
-        return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
-            .replace(/"/g, '&quot;').replace(/'/g, '&#039;');
-    };
-
-    var bizName = escapeHtml(organization.businessName || 'WiFi Business');
-    var primaryColor = escapeHtml(organization.primaryColor || '#00c853');
-    var accentColor = escapeHtml(organization.accentColor || '#0f2027');
-    var orgId = escapeHtml(organization.id);
-    
-    var baseUrl = process.env.RENDER_URL || 'https://clientadminwifi.netlify.app';
-    var cloudUrl = baseUrl + '/customer/' + orgId;
-
-    var html = '<!DOCTYPE html>\n';
-    html += '<html lang="en">\n';
-    html += '<head>\n';
-    html += '    <meta charset="UTF-8">\n';
-    html += '    <meta name="viewport" content="width=device-width, initial-scale=1.0">\n';
-    html += '    <title>' + bizName + ' - WiFi</title>\n';
-    html += '    <style>\n';
-    html += '        * { margin: 0; padding: 0; box-sizing: border-box; }\n';
-    html += '        body {\n';
-    html += '            font-family: \'Segoe UI\', Roboto, sans-serif;\n';
-    html += '            background: ' + accentColor + ';\n';
-    html += '            color: #ffffff;\n';
-    html += '            min-height: 100vh;\n';
-    html += '            display: flex;\n';
-    html += '            align-items: center;\n';
-    html += '            justify-content: center;\n';
-    html += '            padding: 20px;\n';
-    html += '        }\n';
-    html += '        .container {\n';
-    html += '            max-width: 480px;\n';
-    html += '            width: 100%;\n';
-    html += '            background: rgba(18, 18, 31, 0.95);\n';
-    html += '            border-radius: 20px;\n';
-    html += '            padding: 40px 30px;\n';
-    html += '            text-align: center;\n';
-    html += '            border: 1px solid rgba(255,255,255,0.04);\n';
-    html += '            box-shadow: 0 20px 60px rgba(0,0,0,0.5);\n';
-    html += '        }\n';
-    html += '        .logo { font-size: 48px; margin-bottom: 10px; }\n';
-    html += '        h1 { font-size: 28px; color: ' + primaryColor + '; margin-bottom: 4px; }\n';
-    html += '        .tagline { color: #888; font-size: 14px; margin-bottom: 24px; }\n';
-    html += '        .spinner {\n';
-    html += '            width: 50px;\n';
-    html += '            height: 50px;\n';
-    html += '            border: 4px solid rgba(255,255,255,0.1);\n';
-    html += '            border-top-color: ' + primaryColor + ';\n';
-    html += '            border-radius: 50%;\n';
-    html += '            animation: spin 1s linear infinite;\n';
-    html += '            margin: 20px auto;\n';
-    html += '        }\n';
-    html += '        @keyframes spin { to { transform: rotate(360deg); } }\n';
-    html += '        .status { color: #888; font-size: 14px; margin-top: 10px; }\n';
-    html += '        .footer { color: #444; font-size: 11px; margin-top: 30px; border-top: 1px solid rgba(255,255,255,0.03); padding-top: 16px; }\n';
-    html += '        .footer .brand { color: ' + primaryColor + '; font-weight: 600; }\n';
-    html += '    </style>\n';
-    html += '</head>\n';
-    html += '<body>\n';
-    html += '    <div class="container">\n';
-    html += '        <div class="logo">🌐</div>\n';
-    html += '        <h1>' + bizName + '</h1>\n';
-    html += '        <p class="tagline">Redirecting to secure billing portal...</p>\n';
-    html += '        <div class="spinner"></div>\n';
-    html += '        <p class="status">⏳ Please wait...</p>\n';
-    html += '        <div class="footer">\n';
-    html += '            Powered by <span class="brand">GICH WiFi</span> · Secure · Fast\n';
-    html += '        </div>\n';
-    html += '    </div>\n';
-    html += '    <script>\n';
-    html += '        var CLOUD_URL = "' + cloudUrl + '";\n';
-    html += '        window.location.href = CLOUD_URL;\n';
-    html += '    <\/script>\n';
-    html += '</body>\n';
-    html += '</html>';
-
-    return html;
-}
-
-// ============================================================
-// GENERATE CUSTOMER BILLING PAGE (Simplified to save space - same as before)
+// GENERATE CUSTOMER BILLING PAGE - SIMPLIFIED
 // ============================================================
 
 function generateCustomerBillingPage(organization) {
@@ -1145,7 +1061,7 @@ function generateCustomerBillingPage(organization) {
     html += '</head>\n';
     html += '<body>\n';
 
-    // ALREADY CONNECTED OVERLAY (simplified)
+    // ALREADY CONNECTED OVERLAY
     html += '<div class="already-connected-overlay" id="alreadyConnectedOverlay">\n';
     html += '    <div class="icon" id="alreadyIcon">🔌</div>\n';
     html += '    <div class="title" id="alreadyTitle">Already Connected!</div>\n';
@@ -1255,7 +1171,7 @@ function generateCustomerBillingPage(organization) {
     html += '    <span id="toastMessage">Success!</span>\n';
     html += '</div>\n';
 
-    // JavaScript (Full version - same as before)
+    // JavaScript
     html += '<script>\n';
     html += '    var ORG_ID = "' + orgId + '";\n';
     html += '    var ORG_EMAIL = "' + orgEmail + '";\n';
@@ -1703,25 +1619,160 @@ function generateCustomerBillingPage(organization) {
     html += '        deviceId = getDeviceId();\n';
     html += '        console.log("📱 Device ID:", deviceId);\n';
     html += '        \n';
+    html += '        var urlParams = new URLSearchParams(window.location.search);\n';
+    html += '        var tokenParam = urlParams.get("token");\n';
+    html += '        var emailParam = urlParams.get("email");\n';
+    html += '        var nameParam = urlParams.get("name");\n';
+    html += '\n';
+    html += '        if (tokenParam && emailParam) {\n';
+    html += '            localStorage.setItem("clientToken", tokenParam);\n';
+    html += '            localStorage.setItem("userEmail", emailParam);\n';
+    html += '            if (nameParam) {\n';
+    html += '                localStorage.setItem("userData", JSON.stringify({ email: emailParam, name: nameParam }));\n';
+    html += '            }\n';
+    html += '            window.history.replaceState({}, document.title, window.location.pathname);\n';
+    html += '            console.log("✅ Token loaded from URL");\n';
+    html += '        }\n';
+    html += '\n';
     html += '        getEl("phoneInput").addEventListener("keydown", function(e) { if (e.key === "Enter") initiatePayment(); });\n';
     html += '        getEl("voucherInput").addEventListener("keydown", function(e) { if (e.key === "Enter") redeemVoucher(); });\n';
     html += '        getEl("checkPhoneInput").addEventListener("keydown", function(e) { if (e.key === "Enter") checkPlan(); });\n';
     html += '        checkSubscriptionStatus();\n';
-    html += '        \n';
-    html += '        var savedPhone = localStorage.getItem("gich_last_phone");\n';
-    html += '        if (savedPhone) {\n';
-    html += '            getEl("phoneInput").value = savedPhone;\n';
-    html += '            checkDeviceConnection(savedPhone);\n';
+    html += '\n';
+    html += '        var savedEmail = localStorage.getItem("userEmail") || "";\n';
+    html += '        var savedToken = localStorage.getItem("clientToken") || "";\n';
+
+    html += '        if (savedToken && savedEmail) {\n';
+    html += '            fetch(API_URL + "/organization/by-email?email=" + encodeURIComponent(savedEmail))\n';
+    html += '                .then(function(r) { return r.json(); })\n';
+    html += '                .then(function(data) {\n';
+    html += '                    if (data.success) {\n';
+    html += '                        organization = data.data;\n';
+    html += '                        currentPlans = organization.plans || [];\n';
+    html += '                        userData = {\n';
+    html += '                            email: savedEmail,\n';
+    html += '                            name: organization.businessName || "Business Owner",\n';
+    html += '                            hasOrganization: true\n';
+    html += '                        };\n';
+    html += '                        document.getElementById("loginScreen").style.display = "none";\n';
+    html += '                        document.getElementById("mainContent").style.display = "block";\n';
+    html += '                        updateHeader();\n';
+    html += '                        loadDashboard();\n';
+    html += '                        loadCustomerPage();\n';
+    html += '                        loadBusinessSetup();\n';
+    html += '                        loadPlans();\n';
+    html += '                        loadVouchers();\n';
+    html += '                        loadSubscriptionStatus();\n';
+    html += '                        loadTransactions();\n';
+    html += '                        showToast("✅ Welcome back, " + (userData.name || "User") + "!", "success");\n';
+    html += '                    } else {\n';
+    html += '                        userData = {\n';
+    html += '                            email: savedEmail,\n';
+    html += '                            name: "User",\n';
+    html += '                            hasOrganization: false\n';
+    html += '                        };\n';
+    html += '                        document.getElementById("loginScreen").style.display = "none";\n';
+    html += '                        document.getElementById("mainContent").style.display = "block";\n';
+    html += '                        updateHeader();\n';
+    html += '                        showToast("✅ Welcome! Please create your organization.", "info");\n';
+    html += '                    }\n';
+    html += '                })\n';
+    html += '                .catch(function() {\n';
+    html += '                    document.getElementById("loginScreen").style.display = "flex";\n';
+    html += '                    document.getElementById("mainContent").style.display = "none";\n';
+    html += '                });\n';
+    html += '        } else {\n';
+    html += '            document.getElementById("loginScreen").style.display = "flex";\n';
+    html += '            document.getElementById("mainContent").style.display = "none";\n';
     html += '        }\n';
-    html += '        \n';
-    html += '        getEl("phoneInput").addEventListener("change", function() {\n';
-    html += '            var phone = this.value.trim();\n';
-    html += '            if (phone && phone.length >= 10) {\n';
-    html += '                localStorage.setItem("gich_last_phone", phone);\n';
-    html += '            }\n';
-    html += '        });\n';
     html += '    });\n';
     html += '<\/script>\n';
+    html += '</body>\n';
+    html += '</html>';
+
+    return html;
+}
+
+// ============================================================
+// GENERATE REDIRECT HTML
+// ============================================================
+
+function generateRedirectHtml(organization) {
+    var escapeHtml = function(str) {
+        if (!str) return '';
+        return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+    };
+
+    var bizName = escapeHtml(organization.businessName || 'WiFi Business');
+    var primaryColor = escapeHtml(organization.primaryColor || '#00c853');
+    var accentColor = escapeHtml(organization.accentColor || '#0f2027');
+    var orgId = escapeHtml(organization.id);
+    
+    var baseUrl = process.env.RENDER_URL || 'https://clientadminwifi.netlify.app';
+    var cloudUrl = baseUrl + '/customer/' + orgId;
+
+    var html = '<!DOCTYPE html>\n';
+    html += '<html lang="en">\n';
+    html += '<head>\n';
+    html += '    <meta charset="UTF-8">\n';
+    html += '    <meta name="viewport" content="width=device-width, initial-scale=1.0">\n';
+    html += '    <title>' + bizName + ' - WiFi</title>\n';
+    html += '    <style>\n';
+    html += '        * { margin: 0; padding: 0; box-sizing: border-box; }\n';
+    html += '        body {\n';
+    html += '            font-family: \'Segoe UI\', Roboto, sans-serif;\n';
+    html += '            background: ' + accentColor + ';\n';
+    html += '            color: #ffffff;\n';
+    html += '            min-height: 100vh;\n';
+    html += '            display: flex;\n';
+    html += '            align-items: center;\n';
+    html += '            justify-content: center;\n';
+    html += '            padding: 20px;\n';
+    html += '        }\n';
+    html += '        .container {\n';
+    html += '            max-width: 480px;\n';
+    html += '            width: 100%;\n';
+    html += '            background: rgba(18, 18, 31, 0.95);\n';
+    html += '            border-radius: 20px;\n';
+    html += '            padding: 40px 30px;\n';
+    html += '            text-align: center;\n';
+    html += '            border: 1px solid rgba(255,255,255,0.04);\n';
+    html += '            box-shadow: 0 20px 60px rgba(0,0,0,0.5);\n';
+    html += '        }\n';
+    html += '        .logo { font-size: 48px; margin-bottom: 10px; }\n';
+    html += '        h1 { font-size: 28px; color: ' + primaryColor + '; margin-bottom: 4px; }\n';
+    html += '        .tagline { color: #888; font-size: 14px; margin-bottom: 24px; }\n';
+    html += '        .spinner {\n';
+    html += '            width: 50px;\n';
+    html += '            height: 50px;\n';
+    html += '            border: 4px solid rgba(255,255,255,0.1);\n';
+    html += '            border-top-color: ' + primaryColor + ';\n';
+    html += '            border-radius: 50%;\n';
+    html += '            animation: spin 1s linear infinite;\n';
+    html += '            margin: 20px auto;\n';
+    html += '        }\n';
+    html += '        @keyframes spin { to { transform: rotate(360deg); } }\n';
+    html += '        .status { color: #888; font-size: 14px; margin-top: 10px; }\n';
+    html += '        .footer { color: #444; font-size: 11px; margin-top: 30px; border-top: 1px solid rgba(255,255,255,0.03); padding-top: 16px; }\n';
+    html += '        .footer .brand { color: ' + primaryColor + '; font-weight: 600; }\n';
+    html += '    </style>\n';
+    html += '</head>\n';
+    html += '<body>\n';
+    html += '    <div class="container">\n';
+    html += '        <div class="logo">🌐</div>\n';
+    html += '        <h1>' + bizName + '</h1>\n';
+    html += '        <p class="tagline">Redirecting to secure billing portal...</p>\n';
+    html += '        <div class="spinner"></div>\n';
+    html += '        <p class="status">⏳ Please wait...</p>\n';
+    html += '        <div class="footer">\n';
+    html += '            Powered by <span class="brand">GICH WiFi</span> · Secure · Fast\n';
+    html += '        </div>\n';
+    html += '    </div>\n';
+    html += '    <script>\n';
+    html += '        var CLOUD_URL = "' + cloudUrl + '";\n';
+    html += '        window.location.href = CLOUD_URL;\n';
+    html += '    <\/script>\n';
     html += '</body>\n';
     html += '</html>';
 
@@ -1759,17 +1810,14 @@ var server = http.createServer(async function(req, res) {
         // GOOGLE OAUTH ROUTES
         // ============================================================
 
-        // Login with Google - redirect to Google
         if (req.method === 'GET' && url.pathname === '/auth/google') {
             return await handleGoogleAuth(req, res);
         }
 
-        // Google OAuth Callback
         if (req.method === 'GET' && url.pathname === '/auth/google/callback') {
             return await handleGoogleCallback(req, res);
         }
 
-        // Get current user info (requires auth)
         if (req.method === 'GET' && url.pathname === '/api/me') {
             var authHeader = req.headers.authorization;
             if (!authHeader) {
@@ -1783,7 +1831,6 @@ var server = http.createServer(async function(req, res) {
             return sendJson(res, 200, { success: true, user: decoded });
         }
 
-        // Logout
         if (req.method === 'POST' && url.pathname === '/api/logout') {
             return sendJson(res, 200, { success: true, message: 'Logged out successfully' });
         }
@@ -1936,7 +1983,6 @@ var server = http.createServer(async function(req, res) {
             var body = await readBody(req);
             var email = body.email || 'master@demo.com';
             
-            // Validate email format
             if (!isValidEmail(email) && email !== 'master@demo.com') {
                 return sendJson(res, 400, { 
                     success: false, 
