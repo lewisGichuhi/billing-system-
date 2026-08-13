@@ -814,8 +814,9 @@ async function handleGoogleCallback(req, res) {
                     .btn { background: #00c853; color: #000; padding: 12px 24px; border: none; border-radius: 8px; cursor: pointer; font-size: 16px; text-decoration: none; display: inline-block; margin-top: 10px; }
                 </style>
                 <script>
-                    localStorage.setItem('gich_auth_token', '${token}');
-                    localStorage.setItem('gich_user', '${JSON.stringify({ email: user.email, name: user.name, picture: user.picture })}');
+                    localStorage.setItem('clientToken', '${token}');
+                    localStorage.setItem('userEmail', '${user.email}');
+                    localStorage.setItem('userData', '${JSON.stringify({ email: user.email, name: user.name, picture: user.picture })}');
                     setTimeout(function() {
                         window.location.href = '/';
                     }, 2000);
@@ -996,11 +997,6 @@ function generateCustomerBillingPage(organization) {
     if (mpesaTill) {
         html += '        .brand .paybill { display: inline-block; background: rgba(255,193,7,0.12); color: #ffc107; padding: 2px 14px; border-radius: 20px; font-size: 11px; font-weight: 600; margin-top: 4px; margin-left: 6px; }\n';
     }
-    html += '        .google-btn { display: flex; align-items: center; justify-content: center; gap: 10px; background: #fff; color: #333; padding: 12px 20px; border-radius: 8px; border: none; cursor: pointer; font-size: 16px; font-weight: 500; width: 100%; margin-bottom: 16px; text-decoration: none; transition: all 0.3s; }\n';
-    html += '        .google-btn:hover { background: #f1f1f1; transform: scale(1.01); }\n';
-    html += '        .google-btn img { width: 20px; height: 20px; }\n';
-    html += '        .divider-text { display: flex; align-items: center; gap: 16px; margin: 16px 0; color: #666; font-size: 12px; }\n';
-    html += '        .divider-text::before, .divider-text::after { content: \'\'; flex: 1; height: 1px; background: rgba(255,255,255,0.06); }\n';
     html += '        .status-banner { padding: 10px 14px; border-radius: 10px; margin-bottom: 16px; text-align: center; font-size: 13px; display: none; }\n';
     html += '        .status-banner.show { display: block; }\n';
     html += '        .status-banner.success { background: rgba(0,200,83,0.1); border: 1px solid rgba(0,200,83,0.15); color: #00c853; }\n';
@@ -1124,11 +1120,16 @@ function generateCustomerBillingPage(organization) {
     html += '    <div class="status-banner" id="statusBanner"></div>\n';
 
     // Google Login Button
-    html += '    <a href="/auth/google" class="google-btn">\n';
-    html += '        <img src="https://fonts.gstatic.com/s/i/productlogos/googleg/v6/24px.svg" alt="Google">\n';
+    html += '    <a href="/auth/google" class="google-btn" style="width:100%; padding:14px; background:#fff; color:#333; border:none; border-radius:10px; font-size:16px; font-weight:600; cursor:pointer; transition:0.2s; display:flex; align-items:center; justify-content:center; gap:12px; text-decoration:none; margin-bottom:16px;">\n';
+    html += '        <svg viewBox="0 0 48 48" style="width:24px; height:24px; flex-shrink:0;">\n';
+    html += '            <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>\n';
+    html += '            <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>\n';
+    html += '            <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>\n';
+    html += '            <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>\n';
+    html += '        </svg>\n';
     html += '        Sign in with Google\n';
     html += '    </a>\n';
-    html += '    <div class="divider-text">or continue with M-Pesa</div>\n';
+    html += '    <div class="divider-text" style="display:flex; align-items:center; gap:16px; margin:16px 0; color:#666; font-size:12px;">or continue with M-Pesa</div>\n';
 
     html += '    <div class="section-title">📶 Choose Your Plan</div>\n';
     html += '    <div class="plan-grid" id="planGrid">\n';
