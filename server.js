@@ -33,7 +33,7 @@ const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || '';
 const GOOGLE_CALLBACK_URL = process.env.GOOGLE_CALLBACK_URL || 'https://billing-system-fm9a.onrender.com/auth/google/callback';
 
-// MongoDB Connection
+// MongoDB Connection - FIXED
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017';
 const DB_NAME = 'gich_wifi';
 
@@ -103,7 +103,7 @@ console.log('🗄️  Database: MongoDB Atlas');
 console.log('========================================\n');
 
 // ============================================================
-// DATABASE CONNECTION
+// DATABASE CONNECTION - FIXED
 // ============================================================
 
 async function connectDB() {
@@ -112,17 +112,22 @@ async function connectDB() {
         
         if (!MONGODB_URI || MONGODB_URI === 'mongodb://localhost:27017') {
             console.error('❌ MONGODB_URI not set!');
+            console.log('💡 Please set MONGODB_URI in your .env file or Render environment variables');
             process.exit(1);
         }
 
+        console.log('📡 Using connection string (hiding credentials)...');
+        const hiddenUri = MONGODB_URI.replace(/\/\/[^:]+:[^@]+@/, '//****:****@');
+        console.log('   ' + hiddenUri);
+
+        // Connection options
         const options = {
-            serverSelectionTimeoutMS: 60000,
+            serverSelectionTimeoutMS: 30000,
             socketTimeoutMS: 60000,
-            connectTimeoutMS: 60000,
+            connectTimeoutMS: 30000,
             maxPoolSize: 10,
             retryWrites: true,
             retryReads: true,
-            tls: true,
             tlsAllowInvalidCertificates: true,
             tlsAllowInvalidHostnames: true,
             useNewUrlParser: true,
@@ -160,6 +165,12 @@ async function connectDB() {
         return db;
     } catch (error) {
         console.error('❌ MongoDB connection error:', error);
+        console.log('\n💡 Troubleshooting:');
+        console.log('   1. Check your internet connection');
+        console.log('   2. Make sure MongoDB Atlas is running');
+        console.log('   3. Whitelist your IP in MongoDB Atlas (0.0.0.0/0)');
+        console.log('   4. Verify username and password are correct');
+        console.log('   5. Check your MONGODB_URI in environment variables');
         throw error;
     }
 }
@@ -575,7 +586,7 @@ async function stkPush(params) {
 }
 
 // ============================================================
-// REQUEST HELPER - UPDATED FOR GOOGLE OAUTH
+// REQUEST HELPER
 // ============================================================
 
 function simpleRequest(method, urlString, headers, jsonBody, formData) {
@@ -797,7 +808,7 @@ async function handleGoogleCallback(req, res) {
         });
         
         // Redirect to homepage with token
-        const frontendUrl = process.env.RENDER_URL || 'https://billing-system-fm9a.onrender.com';
+        const frontendUrl = process.env.RENDER_URL || 'https://clientadminwifi.netlify.app';
         sendHtml(res, 200, `
             <!DOCTYPE html>
             <html>
@@ -818,7 +829,7 @@ async function handleGoogleCallback(req, res) {
                     localStorage.setItem('userEmail', '${user.email}');
                     localStorage.setItem('userData', '${JSON.stringify({ email: user.email, name: user.name, picture: user.picture })}');
                     setTimeout(function() {
-                        window.location.href = '/';
+                        window.location.href = '${frontendUrl}';
                     }, 2000);
                 </script>
             </head>
@@ -829,7 +840,7 @@ async function handleGoogleCallback(req, res) {
                     <p>Welcome, ${user.name || user.email}!</p>
                     <div class="spinner"></div>
                     <p>Redirecting...</p>
-                    <a href="/" class="btn">Go to Dashboard</a>
+                    <a href="${frontendUrl}" class="btn">Go to Dashboard</a>
                 </div>
             </body>
             </html>
@@ -857,7 +868,7 @@ function generateRedirectHtml(organization) {
     var accentColor = escapeHtml(organization.accentColor || '#0f2027');
     var orgId = escapeHtml(organization.id);
     
-    var baseUrl = process.env.RENDER_URL || 'https://billing-system-fm9a.onrender.com';
+    var baseUrl = process.env.RENDER_URL || 'https://clientadminwifi.netlify.app';
     var cloudUrl = baseUrl + '/customer/' + orgId;
 
     var html = '<!DOCTYPE html>\n';
@@ -928,7 +939,7 @@ function generateRedirectHtml(organization) {
 }
 
 // ============================================================
-// GENERATE CUSTOMER BILLING PAGE - WITH DEVICE TRACKING & GOOGLE LOGIN
+// GENERATE CUSTOMER BILLING PAGE (Full Version)
 // ============================================================
 
 function generateCustomerBillingPage(organization) {
@@ -1198,7 +1209,7 @@ function generateCustomerBillingPage(organization) {
     html += '    <span id="toastMessage">Success!</span>\n';
     html += '</div>\n';
 
-    // JavaScript
+    // JavaScript (Full version)
     html += '<script>\n';
     html += '    var ORG_ID = "' + orgId + '";\n';
     html += '    var ORG_EMAIL = "' + orgEmail + '";\n';
@@ -1640,147 +1651,6 @@ function generateCustomerBillingPage(organization) {
     html += '                resultEl.className = "result-box show error";\n';
     html += '                resultEl.textContent = "❌ Network error";\n';
     html += '            });\n';
-    html += '    }\n';
-    html += '\n';
-    html += '    function subscribeToPlan(planType) {\n';
-    html += '        var phone = getEl("phoneInput").value.trim();\n';
-    html += '        if (!phone || phone.length < 10) {\n';
-    html += '            showToast("📱 Please enter your phone number to pay", "error");\n';
-    html += '            getEl("phoneInput").focus();\n';
-    html += '            return;\n';
-    html += '        }\n';
-    html += '        var prices = { starter: 500, pro: 1000, business: 2000 };\n';
-    html += '        var amount = prices[planType] || 500;\n';
-    html += '        var btn = document.querySelector(".upgrade-section .plan-options .btn");\n';
-    html += '        if (btn) { btn.disabled = true; btn.innerHTML = "<span class=\\"spinner\\"></span>"; }\n';
-    html += '        var resultEl = getEl("subscribeResult");\n';
-    html += '        resultEl.textContent = "⏳ Processing subscription payment...";\n';
-    html += '        resultEl.style.color = "#aaa";\n';
-    html += '        fetch(API_URL + "/payment/initiate", {\n';
-    html += '            method: "POST",\n';
-    html += '            headers: { "Content-Type": "application/json" },\n';
-    html += '            body: JSON.stringify({\n';
-    html += '                phoneNumber: phone,\n';
-    html += '                amount: amount,\n';
-    html += '                planId: "subscription_" + planType,\n';
-    html += '                organizationId: ORG_ID,\n';
-    html += '                isSubscription: true,\n';
-    html += '                subscriptionPlan: planType,\n';
-    html += '                deviceId: deviceId\n';
-    html += '            })\n';
-    html += '        })\n';
-    html += '        .then(function(r) { return r.json(); })\n';
-    html += '        .then(function(data) {\n';
-    html += '            if (data.success) {\n';
-    html += '                resultEl.textContent = "✅ M-Pesa prompt sent! Check your phone.";\n';
-    html += '                resultEl.style.color = "#00c853";\n';
-    html += '                showToast("📱 M-Pesa prompt sent!", "success");\n';
-    html += '                pollSubscriptionPayment(data.transactionId, planType);\n';
-    html += '            } else if (data.alreadyConnected) {\n';
-    html += '                resultEl.textContent = "🔌 You are already connected on this device!";\n';
-    html += '                resultEl.style.color = "#ff4444";\n';
-    html += '                showToast("🔌 Already connected!", "error");\n';
-    html += '                showAlreadyConnected(data.session, false);\n';
-    html += '                setTimeout(function() { window.close(); }, 5000);\n';
-    html += '            } else {\n';
-    html += '                resultEl.textContent = "❌ " + (data.message || "Payment failed");\n';
-    html += '                resultEl.style.color = "#ff4444";\n';
-    html += '                showToast("❌ Payment failed", "error");\n';
-    html += '                if (btn) { btn.disabled = false; btn.innerHTML = planType.charAt(0).toUpperCase() + planType.slice(1) + "<br><small>KSh " + amount + "</small>"; }\n';
-    html += '            }\n';
-    html += '        })\n';
-    html += '        .catch(function(err) {\n';
-    html += '            console.error("Subscription payment error:", err);\n';
-    html += '            resultEl.textContent = "❌ Network error";\n';
-    html += '            resultEl.style.color = "#ff4444";\n';
-    html += '            showToast("❌ Network error", "error");\n';
-    html += '            if (btn) { btn.disabled = false; btn.innerHTML = planType.charAt(0).toUpperCase() + planType.slice(1) + "<br><small>KSh " + amount + "</small>"; }\n';
-    html += '        });\n';
-    html += '    }\n';
-    html += '\n';
-    html += '    function pollSubscriptionPayment(transactionId, planType) {\n';
-    html += '        var attempts = 0;\n';
-    html += '        var maxAttempts = 30;\n';
-    html += '        var interval = setInterval(function() {\n';
-    html += '            attempts++;\n';
-    html += '            if (attempts > maxAttempts) {\n';
-    html += '                clearInterval(interval);\n';
-    html += '                showToast("⏱️ Payment confirmation timed out.", "error");\n';
-    html += '                getEl("subscribeResult").textContent = "⏱️ Payment confirmation timed out.";\n';
-    html += '                getEl("subscribeResult").style.color = "#ff4444";\n';
-    html += '                return;\n';
-    html += '            }\n';
-    html += '            fetch(API_URL + "/transaction/" + transactionId)\n';
-    html += '                .then(function(r) { return r.json(); })\n';
-    html += '                .then(function(data) {\n';
-    html += '                    if (data.success) {\n';
-    html += '                        var tx = data.data;\n';
-    html += '                        if (tx.status === "completed") {\n';
-    html += '                            clearInterval(interval);\n';
-    html += '                            showToast("✅ Subscription payment successful!", "success");\n';
-    html += '                            getEl("subscribeResult").textContent = "✅ Payment successful! Activating subscription...";\n';
-    html += '                            getEl("subscribeResult").style.color = "#00c853";\n';
-    html += '                            activateSubscription(planType);\n';
-    html += '                        } else if (tx.status === "cancelled" || tx.status === "failed") {\n';
-    html += '                            clearInterval(interval);\n';
-    html += '                            showToast("❌ Payment " + tx.status, "error");\n';
-    html += '                            getEl("subscribeResult").textContent = "❌ Payment " + tx.status;\n';
-    html += '                            getEl("subscribeResult").style.color = "#ff4444";\n';
-    html += '                            var btns = document.querySelectorAll(".upgrade-section .plan-options .btn");\n';
-    html += '                            for (var i = 0; i < btns.length; i++) {\n';
-    html += '                                btns[i].disabled = false;\n';
-    html += '                                btns[i].innerHTML = btns[i].textContent || "Subscribe";\n';
-    html += '                            }\n';
-    html += '                        }\n';
-    html += '                    }\n';
-    html += '                })\n';
-    html += '                .catch(function(err) { console.error("Polling error:", err); });\n';
-    html += '        }, 3000);\n';
-    html += '    }\n';
-    html += '\n';
-    html += '    function activateSubscription(planType) {\n';
-    html += '        fetch(API_URL + "/client/subscribe", {\n';
-    html += '            method: "POST",\n';
-    html += '            headers: { "Content-Type": "application/json" },\n';
-    html += '            body: JSON.stringify({\n';
-    html += '                clientId: ORG_ID,\n';
-    html += '                plan: planType\n';
-    html += '            })\n';
-    html += '        })\n';
-    html += '        .then(function(r) { return r.json(); })\n';
-    html += '        .then(function(data) {\n';
-    html += '            if (data.success) {\n';
-    html += '                showToast("✅ Subscription activated!", "success");\n';
-    html += '                getEl("subscribeResult").textContent = "✅ " + data.message;\n';
-    html += '                getEl("subscribeResult").style.color = "#00c853";\n';
-    html += '                getEl("upgradeSection").classList.remove("show");\n';
-    html += '                checkSubscriptionStatus();\n';
-    html += '                var btns = document.querySelectorAll(".upgrade-section .plan-options .btn");\n';
-    html += '                for (var i = 0; i < btns.length; i++) {\n';
-    html += '                    btns[i].disabled = false;\n';
-    html += '                    btns[i].innerHTML = btns[i].textContent || "Subscribe";\n';
-    html += '                }\n';
-    html += '            } else {\n';
-    html += '                showToast("❌ Failed to activate subscription", "error");\n';
-    html += '                getEl("subscribeResult").textContent = "❌ " + (data.message || "Failed to activate");\n';
-    html += '                getEl("subscribeResult").style.color = "#ff4444";\n';
-    html += '            }\n';
-    html += '        })\n';
-    html += '        .catch(function(err) {\n';
-    html += '            console.error("Activation error:", err);\n';
-    html += '            showToast("❌ Network error", "error");\n';
-    html += '        });\n';
-    html += '    }\n';
-    html += '\n';
-    html += '    function showToast(message, type) {\n';
-    html += '        type = type || "info";\n';
-    html += '        var toast = getEl("toast");\n';
-    html += '        var icons = { success: "✅", error: "❌", info: "ℹ️" };\n';
-    html += '        toast.className = "toast show " + type;\n';
-    html += '        getEl("toastIcon").textContent = icons[type] || "ℹ️";\n';
-    html += '        getEl("toastMessage").textContent = message;\n';
-    html += '        clearTimeout(toast._timeout);\n';
-    html += '        toast._timeout = setTimeout(function() { toast.classList.remove("show"); }, 4000);\n';
     html += '    }\n';
     html += '\n';
     html += '    document.addEventListener("DOMContentLoaded", function() {\n';
