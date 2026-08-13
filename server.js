@@ -107,19 +107,8 @@ console.log('========================================\n');
 // ============================================================
 
 function isValidEmail(email) {
-    // Basic email format validation
     var emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
-    if (!emailRegex.test(email)) return false;
-    
-    // Check for common disposable email domains (optional)
-    var disposableDomains = [
-        'tempmail.com', '10minutemail.com', 'guerrillamail.com',
-        'mailinator.com', 'trashmail.com', 'fakeemail.com'
-    ];
-    var domain = email.split('@')[1];
-    if (disposableDomains.indexOf(domain) !== -1) return false;
-    
-    return true;
+    return emailRegex.test(email);
 }
 
 // ============================================================
@@ -319,7 +308,6 @@ async function getAllVouchers() {
     try { return await db.collection('vouchers').find({}).toArray(); } catch (e) { return []; }
 }
 
-// Users (for Google OAuth)
 async function getUserByEmail(email) {
     try { return await db.collection('users').findOne({ email: email }); } catch (e) { return null; }
 }
@@ -342,7 +330,7 @@ async function updateUser(email, updateData) {
 }
 
 // ============================================================
-// ACTIVE DEVICES - WITH EXPIRY CHECK
+// ACTIVE DEVICES
 // ============================================================
 
 async function checkDeviceAlreadyConnected(deviceId) {
@@ -379,10 +367,6 @@ async function registerDevice(deviceData) {
     } catch (e) { throw e; }
 }
 
-async function removeDevice(deviceId) {
-    try { await db.collection('activeDevices').deleteMany({ deviceId: deviceId }); } catch (e) { console.error('Error removing device:', e); }
-}
-
 async function getActiveDevicesCount() {
     try { 
         const now = new Date().toISOString();
@@ -393,7 +377,6 @@ async function getActiveDevicesCount() {
     } catch (e) { return 0; }
 }
 
-// Auto-cleanup expired devices every 5 minutes
 setInterval(async function() {
     try {
         const now = new Date().toISOString();
@@ -603,7 +586,7 @@ async function stkPush(params) {
 }
 
 // ============================================================
-// REQUEST HELPER
+// REQUEST HELPER - FIXED
 // ============================================================
 
 function simpleRequest(method, urlString, headers, jsonBody, formData) {
@@ -619,11 +602,9 @@ function simpleRequest(method, urlString, headers, jsonBody, formData) {
                 return encodeURIComponent(key) + '=' + encodeURIComponent(formData[key]);
             }).join('&');
             headers['Content-Type'] = 'application/x-www-form-urlencoded';
-            headers['Content-Length'] = Buffer.byteLength(payload);
         } else if (jsonBody) {
             payload = JSON.stringify(jsonBody);
             headers['Content-Type'] = 'application/json';
-            headers['Content-Length'] = Buffer.byteLength(payload);
         }
         
         var options = {
@@ -636,7 +617,12 @@ function simpleRequest(method, urlString, headers, jsonBody, formData) {
             agent: agent,
             family: 4
         };
+        
+        if (payload) {
+            options.headers['Content-Length'] = Buffer.byteLength(payload);
+        }
         options.headers['Connection'] = 'keep-alive';
+        
         var req = https.request(options, function(res) {
             var chunks = [];
             res.on('data', function(chunk) { chunks.push(chunk); });
@@ -647,8 +633,10 @@ function simpleRequest(method, urlString, headers, jsonBody, formData) {
                 resolve({ statusCode: res.statusCode, statusMessage: res.statusMessage, bodyText: bodyText, bodyJson: bodyJson });
             });
         });
+        
         req.on('error', function(err) { reject(new Error('Request failed: ' + err.message)); });
         req.on('timeout', function() { req.destroy(); reject(new Error('Request timed out')); });
+        
         if (payload) { req.write(payload); }
         req.end();
     });
@@ -774,15 +762,45 @@ async function handleGoogleCallback(req, res) {
         console.log('📡 GOOGLE_CLIENT_ID:', GOOGLE_CLIENT_ID ? '✅ Set' : '❌ Missing');
         console.log('📡 GOOGLE_CLIENT_SECRET:', GOOGLE_CLIENT_SECRET ? '✅ Set' : '❌ Missing');
         
-        // Exchange code for access token - FIXED with proper headers
-        const tokenResponse = await simpleRequest('POST', 'https://oauth2.googleapis.com/token', {
-            'Content-Type': 'application/x-www-form-urlencoded'
-        }, null, {
-            code: code,
-            client_id: GOOGLE_CLIENT_ID,
-            client_secret: GOOGLE_CLIENT_SECRET,
-            redirect_uri: GOOGLE_CALLBACK_URL,
-            grant_type: 'authorization_code'
+        // Build the token request body as a string
+        const tokenRequestBody = 
+            'code=' + encodeURIComponent(code) +
+            '&client_id=' + encodeURIComponent(GOOGLE_CLIENT_ID) +
+            '&client_secret=' + encodeURIComponent(GOOGLE_CLIENT_SECRET) +
+            '&redirect_uri=' + encodeURIComponent(GOOGLE_CALLBACK_URL) +
+            '&grant_type=authorization_code';
+        
+        console.log('📡 Sending token request...');
+        
+        const tokenOptions = {
+            hostname: 'oauth2.googleapis.com',
+            port: 443,
+            path: '/token',
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                'Content-Length': Buffer.byteLength(tokenRequestBody),
+                'Connection': 'keep-alive'
+            },
+            agent: agent,
+            family: 4
+        };
+        
+        const tokenResponse = await new Promise(function(resolve, reject) {
+            var req = https.request(tokenOptions, function(res) {
+                var chunks = [];
+                res.on('data', function(chunk) { chunks.push(chunk); });
+                res.on('end', function() {
+                    var bodyText = Buffer.concat(chunks).toString('utf8');
+                    var bodyJson = null;
+                    try { bodyJson = JSON.parse(bodyText); } catch (_) {}
+                    resolve({ statusCode: res.statusCode, statusMessage: res.statusMessage, bodyText: bodyText, bodyJson: bodyJson });
+                });
+            });
+            req.on('error', function(err) { reject(new Error('Request failed: ' + err.message)); });
+            req.on('timeout', function() { req.destroy(); reject(new Error('Request timed out')); });
+            req.write(tokenRequestBody);
+            req.end();
         });
         
         console.log('📡 Token Response Status:', tokenResponse.statusCode);
@@ -967,7 +985,7 @@ function generateRedirectHtml(organization) {
 }
 
 // ============================================================
-// GENERATE CUSTOMER BILLING PAGE (Full Version)
+// GENERATE CUSTOMER BILLING PAGE (Simplified to save space - same as before)
 // ============================================================
 
 function generateCustomerBillingPage(organization) {
@@ -1127,7 +1145,7 @@ function generateCustomerBillingPage(organization) {
     html += '</head>\n';
     html += '<body>\n';
 
-    // ALREADY CONNECTED OVERLAY
+    // ALREADY CONNECTED OVERLAY (simplified)
     html += '<div class="already-connected-overlay" id="alreadyConnectedOverlay">\n';
     html += '    <div class="icon" id="alreadyIcon">🔌</div>\n';
     html += '    <div class="title" id="alreadyTitle">Already Connected!</div>\n';
@@ -1237,7 +1255,7 @@ function generateCustomerBillingPage(organization) {
     html += '    <span id="toastMessage">Success!</span>\n';
     html += '</div>\n';
 
-    // JavaScript (Full version)
+    // JavaScript (Full version - same as before)
     html += '<script>\n';
     html += '    var ORG_ID = "' + orgId + '";\n';
     html += '    var ORG_EMAIL = "' + orgEmail + '";\n';
