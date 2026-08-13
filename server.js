@@ -1,7 +1,7 @@
 /**
  * GICH WiFi - Complete Backend with MongoDB
  * Full M-Pesa STK Push with multi-tenant support
- * INCLUDES: Device Tracking, Google OAuth Login, Data NEVER lost
+ * INCLUDES: Device Tracking, Google OAuth Login, Email Validation
  */
 
 require('dotenv').config();
@@ -33,7 +33,7 @@ const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || '';
 const GOOGLE_CALLBACK_URL = process.env.GOOGLE_CALLBACK_URL || 'https://billing-system-fm9a.onrender.com/auth/google/callback';
 
-// MongoDB Connection - FIXED
+// MongoDB Connection
 const MONGODB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017';
 const DB_NAME = 'gich_wifi';
 
@@ -103,7 +103,27 @@ console.log('🗄️  Database: MongoDB Atlas');
 console.log('========================================\n');
 
 // ============================================================
-// DATABASE CONNECTION - FIXED
+// EMAIL VALIDATION FUNCTION
+// ============================================================
+
+function isValidEmail(email) {
+    // Basic email format validation
+    var emailRegex = /^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$/;
+    if (!emailRegex.test(email)) return false;
+    
+    // Check for common disposable email domains (optional)
+    var disposableDomains = [
+        'tempmail.com', '10minutemail.com', 'guerrillamail.com',
+        'mailinator.com', 'trashmail.com', 'fakeemail.com'
+    ];
+    var domain = email.split('@')[1];
+    if (disposableDomains.indexOf(domain) !== -1) return false;
+    
+    return true;
+}
+
+// ============================================================
+// DATABASE CONNECTION
 // ============================================================
 
 async function connectDB() {
@@ -112,7 +132,6 @@ async function connectDB() {
         
         if (!MONGODB_URI || MONGODB_URI === 'mongodb://localhost:27017') {
             console.error('❌ MONGODB_URI not set!');
-            console.log('💡 Please set MONGODB_URI in your .env file or Render environment variables');
             process.exit(1);
         }
 
@@ -120,7 +139,6 @@ async function connectDB() {
         const hiddenUri = MONGODB_URI.replace(/\/\/[^:]+:[^@]+@/, '//****:****@');
         console.log('   ' + hiddenUri);
 
-        // Connection options
         const options = {
             serverSelectionTimeoutMS: 30000,
             socketTimeoutMS: 60000,
@@ -170,7 +188,6 @@ async function connectDB() {
         console.log('   2. Make sure MongoDB Atlas is running');
         console.log('   3. Whitelist your IP in MongoDB Atlas (0.0.0.0/0)');
         console.log('   4. Verify username and password are correct');
-        console.log('   5. Check your MONGODB_URI in environment variables');
         throw error;
     }
 }
@@ -726,7 +743,7 @@ function isMasterAdmin(req) {
 }
 
 // ============================================================
-// GOOGLE OAUTH HANDLERS
+// GOOGLE OAUTH HANDLERS - FIXED
 // ============================================================
 
 async function handleGoogleAuth(req, res) {
@@ -753,8 +770,14 @@ async function handleGoogleCallback(req, res) {
             return sendHtml(res, 400, '<h1>Error: No authorization code received</h1>');
         }
         
-        // Exchange code for access token
-        const tokenResponse = await simpleRequest('POST', 'https://oauth2.googleapis.com/token', {}, null, {
+        console.log('🔑 Exchanging code for access token...');
+        console.log('📡 GOOGLE_CLIENT_ID:', GOOGLE_CLIENT_ID ? '✅ Set' : '❌ Missing');
+        console.log('📡 GOOGLE_CLIENT_SECRET:', GOOGLE_CLIENT_SECRET ? '✅ Set' : '❌ Missing');
+        
+        // Exchange code for access token - FIXED with proper headers
+        const tokenResponse = await simpleRequest('POST', 'https://oauth2.googleapis.com/token', {
+            'Content-Type': 'application/x-www-form-urlencoded'
+        }, null, {
             code: code,
             client_id: GOOGLE_CLIENT_ID,
             client_secret: GOOGLE_CLIENT_SECRET,
@@ -762,9 +785,14 @@ async function handleGoogleCallback(req, res) {
             grant_type: 'authorization_code'
         });
         
+        console.log('📡 Token Response Status:', tokenResponse.statusCode);
+        
         if (!tokenResponse.bodyJson || !tokenResponse.bodyJson.access_token) {
-            return sendHtml(res, 400, '<h1>Error: Failed to get access token</h1><pre>' + JSON.stringify(tokenResponse.bodyJson, null, 2) + '</pre>');
+            console.error('❌ Token exchange failed:', tokenResponse.bodyText);
+            return sendHtml(res, 400, '<h1>Error: Failed to get access token</h1><pre>' + tokenResponse.bodyText + '</pre>');
         }
+        
+        console.log('✅ Access token obtained!');
         
         // Get user info with the access token
         const userInfoResponse = await simpleRequest('GET', 'https://www.googleapis.com/oauth2/v2/userinfo', {
@@ -808,7 +836,7 @@ async function handleGoogleCallback(req, res) {
         });
         
         // Redirect to homepage with token
-        const frontendUrl = process.env.RENDER_URL || 'https://clientadminwifi.netlify.app';
+        const frontendUrl = 'https://clientadminwifi.netlify.app';
         sendHtml(res, 200, `
             <!DOCTYPE html>
             <html>
@@ -1131,7 +1159,7 @@ function generateCustomerBillingPage(organization) {
     html += '    <div class="status-banner" id="statusBanner"></div>\n';
 
     // Google Login Button
-    html += '    <a href="/auth/google" class="google-btn" style="width:100%; padding:14px; background:#fff; color:#333; border:none; border-radius:10px; font-size:16px; font-weight:600; cursor:pointer; transition:0.2s; display:flex; align-items:center; justify-content:center; gap:12px; text-decoration:none; margin-bottom:16px;">\n';
+    html += '    <a href="https://billing-system-fm9a.onrender.com/auth/google" class="google-btn" style="width:100%; padding:14px; background:#fff; color:#333; border:none; border-radius:10px; font-size:16px; font-weight:600; cursor:pointer; transition:0.2s; display:flex; align-items:center; justify-content:center; gap:12px; text-decoration:none; margin-bottom:16px;">\n';
     html += '        <svg viewBox="0 0 48 48" style="width:24px; height:24px; flex-shrink:0;">\n';
     html += '            <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>\n';
     html += '            <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>\n';
@@ -1213,7 +1241,7 @@ function generateCustomerBillingPage(organization) {
     html += '<script>\n';
     html += '    var ORG_ID = "' + orgId + '";\n';
     html += '    var ORG_EMAIL = "' + orgEmail + '";\n';
-    html += '    var API_URL = "' + (process.env.RENDER_URL || 'https://billing-system-fm9a.onrender.com') + '/api";\n';
+    html += '    var API_URL = "https://billing-system-fm9a.onrender.com/api";\n';
     html += '    var selectedPlan = null;\n';
     html += '    var selectedPlanPrice = 0;\n';
     html += '    var credentials = null;\n';
@@ -1889,6 +1917,14 @@ var server = http.createServer(async function(req, res) {
         if (req.method === 'POST' && url.pathname === '/api/client/organization') {
             var body = await readBody(req);
             var email = body.email || 'master@demo.com';
+            
+            // Validate email format
+            if (!isValidEmail(email) && email !== 'master@demo.com') {
+                return sendJson(res, 400, { 
+                    success: false, 
+                    message: 'Please enter a valid email address'
+                });
+            }
             
             var existingOrg = await getOrganizationByEmail(email);
             if (existingOrg) {
@@ -2637,6 +2673,7 @@ async function startServer() {
             console.log('🗄️  Database: MongoDB Atlas - CONNECTED');
             console.log('📱 Device Tracking: ✅ ENABLED (with expiry check)');
             console.log('🔑 Google OAuth: ' + (GOOGLE_CLIENT_ID ? '✅ Configured' : '⚠️ NOT SET'));
+            console.log('📧 Email Validation: ✅ ENABLED');
             console.log('========================================\n');
         });
     } catch (error) {
