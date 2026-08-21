@@ -1,6 +1,6 @@
 /**
  * GICH WiFi - Complete Billing System
- * Version 8.2.0 - FIXED: All billing system issues resolved
+ * Version 8.3.0 - FIXED: Billing systems display and redirect generation
  */
 
 require('dotenv').config();
@@ -88,7 +88,7 @@ let client = null;
 let plans = [];
 
 console.log('\n========================================');
-console.log('🌐 GICH WiFi API - v8.2.0 (FIXED)');
+console.log('🌐 GICH WiFi API - v8.3.0 (FIXED)');
 console.log('========================================');
 console.log('   Port: ' + PORT);
 console.log('   Master PIN: ' + (MASTER_PASSWORD ? '✅ Configured' : '⚠️ NOT SET'));
@@ -360,7 +360,9 @@ async function getAllOrganizations() {
 async function updateOrganization(clientId, updateData) {
     try {
         const result = await db.collection('organizations').findOneAndUpdate(
-            { id: clientId }, { $set: updateData }, { returnDocument: 'after' }
+            { id: clientId }, 
+            { $set: updateData }, 
+            { returnDocument: 'after' }
         );
         return result.value;
     } catch (e) { throw e; }
@@ -764,7 +766,7 @@ async function handleGoogleCallback(req, res) {
                 googleId: userInfo.id,
                 createdAt: new Date().toISOString(),
                 role: 'user',
-                organizationId: orgId, // Add organizationId to user
+                organizationId: orgId,
                 lastLogin: new Date().toISOString()
             };
             await createUser(newUser);
@@ -772,20 +774,19 @@ async function handleGoogleCallback(req, res) {
         } else {
             await updateUser(userInfo.email, { 
                 lastLogin: new Date().toISOString(),
-                organizationId: orgId // Update organizationId if changed
+                organizationId: orgId
             });
             user.lastLogin = new Date().toISOString();
             user.organizationId = orgId;
         }
         
-        // Include organizationId in the token payload
         const token = generateToken({ 
             email: user.email, 
             name: user.name, 
             role: user.role || 'user',
             picture: user.picture || '',
-            organizationId: orgId,  // CRITICAL: Include organization ID in token
-            exp: Date.now() + 86400000 // 24 hour expiry
+            organizationId: orgId,
+            exp: Date.now() + 86400000
         });
         
         const frontendUrl = 'https://clientadminwifi.netlify.app';
@@ -1067,22 +1068,30 @@ async function generateRedirectHtml(req, res, bsId) {
     console.log('🔄 Generating redirect HTML for:', bsId);
     
     try {
+        // Get billing system from database
         var billingSystem = await getBillingSystemById(bsId);
         if (!billingSystem) {
+            console.log('❌ Billing system not found:', bsId);
             return sendJson(res, 404, { success: false, message: 'Billing system not found' });
         }
         
+        console.log('📋 Found billing system:', billingSystem.name);
+        
+        // Get organization
         var org = await getOrganizationByClientId(billingSystem.organizationId);
         if (!org) {
+            console.log('❌ Organization not found for billing system:', billingSystem.organizationId);
             return sendJson(res, 404, { success: false, message: 'Organization not found' });
         }
+        
+        console.log('📋 Found organization:', org.businessName);
         
         // Check if billing system is locked
         if (billingSystem.locked) {
             return sendJson(res, 403, { success: false, message: 'Billing system is locked' });
         }
         
-        // Check subscription access (free trial or paid)
+        // Check subscription access
         var hasAccess = true;
         var now = new Date();
         var trialEnd = new Date(org.createdAt);
@@ -1104,32 +1113,63 @@ async function generateRedirectHtml(req, res, bsId) {
             });
         }
         
-        // Generate the redirect HTML
+        // Generate the customer URL
         var customerUrl = 'https://' + req.headers.host + '/customer/' + bsId + '/';
+        
+        // Create the redirect HTML
         var html = '<!DOCTYPE html>\n';
-        html += '<html>\n';
+        html += '<html lang="en">\n';
         html += '<head>\n';
         html += '    <meta charset="UTF-8">\n';
         html += '    <meta name="viewport" content="width=device-width, initial-scale=1.0">\n';
         html += '    <title>Redirecting to ' + (org.businessName || 'WiFi') + ' Billing</title>\n';
-        html += '    <meta http-equiv="refresh" content="0; url=' + customerUrl + '">\n';
+        html += '    <meta http-equiv="refresh" content="2; url=' + customerUrl + '">\n';
         html += '    <style>\n';
-        html += '        body { font-family: Arial, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background: #0f2027; color: #fff; }\n';
-        html += '        .container { text-align: center; }\n';
-        html += '        .spinner { border: 4px solid rgba(255,255,255,0.1); border-top-color: #00c853; border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; margin: 20px auto; }\n';
+        html += '        * { margin: 0; padding: 0; box-sizing: border-box; }\n';
+        html += '        body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; display: flex; justify-content: center; align-items: center; min-height: 100vh; margin: 0; background: ' + (org.accentColor || '#0f2027') + '; color: #fff; }\n';
+        html += '        .container { text-align: center; background: #121829; padding: 50px 40px; border-radius: 24px; max-width: 420px; border: 1px solid rgba(255,255,255,0.05); box-shadow: 0 20px 60px rgba(0,0,0,0.5); }\n';
+        html += '        .logo { font-size: 64px; margin-bottom: 10px; }\n';
+        if (org.logo) {
+            html += '        .logo-img { max-width: 80px; max-height: 80px; margin-bottom: 10px; }\n';
+        }
+        html += '        h1 { font-size: 24px; color: ' + (billingSystem.primaryColor || '#00c853') + '; margin-bottom: 8px; }\n';
+        html += '        p { color: #aaa; font-size: 15px; margin-bottom: 20px; }\n';
+        html += '        .spinner { border: 4px solid rgba(255,255,255,0.1); border-top-color: ' + (billingSystem.primaryColor || '#00c853') + '; border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; margin: 20px auto; }\n';
         html += '        @keyframes spin { to { transform: rotate(360deg); } }\n';
-        html += '        .btn { background: #00c853; color: #000; padding: 12px 24px; border: none; border-radius: 8px; cursor: pointer; font-size: 16px; text-decoration: none; display: inline-block; margin-top: 10px; }\n';
+        html += '        .btn { background: ' + (billingSystem.primaryColor || '#00c853') + '; color: #000; padding: 12px 30px; border: none; border-radius: 10px; cursor: pointer; font-size: 15px; font-weight: 600; text-decoration: none; display: inline-block; transition: all 0.25s ease; }\n';
+        html += '        .btn:hover { transform: scale(1.05); opacity: 0.9; }\n';
+        html += '        .tagline { color: #666; font-size: 13px; margin-top: 15px; }\n';
         html += '    </style>\n';
         html += '    <script>\n';
-        html += '        setTimeout(function() { window.location.href = "' + customerUrl + '"; }, 500);\n';
+        html += '        var redirectUrl = "' + customerUrl + '";\n';
+        html += '        var countdown = 2;\n';
+        html += '        function updateCountdown() {\n';
+        html += '            if (countdown <= 0) {\n';
+        html += '                window.location.href = redirectUrl;\n';
+        html += '                return;\n';
+        html += '            }\n';
+        html += '            document.getElementById("countdown").textContent = countdown;\n';
+        html += '            countdown--;\n';
+        html += '            setTimeout(updateCountdown, 1000);\n';
+        html += '        }\n';
+        html += '        setTimeout(function() { window.location.href = redirectUrl; }, 2000);\n';
+        html += '        updateCountdown();\n';
         html += '    <\/script>\n';
         html += '</head>\n';
         html += '<body>\n';
         html += '    <div class="container">\n';
-        html += '        <h1>🔄 Redirecting...</h1>\n';
+        if (org.logo) {
+            html += '        <img src="' + org.logo + '" alt="Logo" class="logo-img" />\n';
+        } else {
+            html += '        <div class="logo">🌐</div>\n';
+        }
+        html += '        <h1>' + (org.businessName || 'WiFi Business') + '</h1>\n';
+        html += '        <p>You are being redirected to our secure billing page.</p>\n';
         html += '        <div class="spinner"></div>\n';
-        html += '        <p>You are being redirected to <strong>' + (org.businessName || 'WiFi') + '</strong> billing page.</p>\n';
+        html += '        <p>Redirecting in <strong id="countdown">2</strong> seconds...</p>\n';
+        html += '        <br>\n';
         html += '        <a href="' + customerUrl + '" class="btn">Click here if not redirected</a>\n';
+        html += '        <div class="tagline">' + (billingSystem.tagline || 'Fast • Secure • Reliable') + '</div>\n';
         html += '    </div>\n';
         html += '</body>\n';
         html += '</html>';
@@ -1138,21 +1178,25 @@ async function generateRedirectHtml(req, res, bsId) {
         var redirectDir = path.join(__dirname, 'redirects');
         if (!fs.existsSync(redirectDir)) {
             fs.mkdirSync(redirectDir, { recursive: true });
+            console.log('📁 Created redirects directory');
         }
+        
         var filePath = path.join(redirectDir, bsId + '.html');
-        fs.writeFileSync(filePath, html);
+        fs.writeFileSync(filePath, html, 'utf8');
         console.log('✅ Redirect HTML saved to:', filePath);
         
+        // Also return the HTML directly
         return sendJson(res, 200, { 
             success: true, 
             message: 'Redirect HTML generated successfully',
             redirectUrl: customerUrl,
-            html: html
+            html: html,
+            filePath: filePath
         });
         
     } catch (error) {
         console.error('❌ Redirect generation error:', error);
-        return sendJson(res, 500, { success: false, message: error.message });
+        return sendJson(res, 500, { success: false, message: error.message, stack: error.stack });
     }
 }
 
@@ -1196,7 +1240,7 @@ var server = http.createServer(async function(req, res) {
             return sendJson(res, 200, { 
                 status: 'ok', 
                 timestamp: new Date().toISOString(),
-                version: '8.2.0',
+                version: '8.3.0',
                 database: dbStatus,
                 organizations: orgCount,
                 billingSystems: bsCount,
@@ -1264,7 +1308,7 @@ var server = http.createServer(async function(req, res) {
         }
 
         // ============================================================
-        // ADMIN CLIENT ENDPOINT - FIXED (Added missing endpoint)
+        // ADMIN CLIENT ENDPOINT
         // ============================================================
 
         if (req.method === 'GET' && url.pathname === '/api/admin/client') {
@@ -1317,7 +1361,7 @@ var server = http.createServer(async function(req, res) {
         }
 
         // ============================================================
-        // ADMIN DASHBOARD - NEW
+        // ADMIN DASHBOARD
         // ============================================================
 
         if (req.method === 'GET' && url.pathname === '/api/admin/dashboard') {
@@ -1337,18 +1381,34 @@ var server = http.createServer(async function(req, res) {
                 // Get recent transactions (last 10)
                 var recentTx = allTx.slice(0, 10);
                 
+                // Get organizations with their billing systems
+                var orgsWithSystems = [];
+                for (var i = 0; i < allOrgs.length; i++) {
+                    var org = allOrgs[i];
+                    var systems = allBillingSystems.filter(function(bs) { 
+                        return bs.organizationId === org.id; 
+                    });
+                    orgsWithSystems.push({
+                        ...org,
+                        billingSystems: systems,
+                        billingSystemsCount: systems.length
+                    });
+                }
+                
                 return sendJson(res, 200, { 
                     success: true, 
                     data: {
                         organizations: {
                             total: allOrgs.length,
                             active: allOrgs.filter(function(o) { return o.status === 'active'; }).length,
-                            suspended: allOrgs.filter(function(o) { return o.status === 'suspended'; }).length
+                            suspended: allOrgs.filter(function(o) { return o.status === 'suspended'; }).length,
+                            list: orgsWithSystems
                         },
                         billingSystems: {
                             total: allBillingSystems.length,
                             active: allBillingSystems.filter(function(bs) { return bs.status === 'active'; }).length,
-                            locked: allBillingSystems.filter(function(bs) { return bs.locked === true; }).length
+                            locked: allBillingSystems.filter(function(bs) { return bs.locked === true; }).length,
+                            list: allBillingSystems
                         },
                         transactions: {
                             total: allTx.length,
@@ -1367,7 +1427,7 @@ var server = http.createServer(async function(req, res) {
         }
 
         // ============================================================
-        // ADMIN PRODUCTS - NEW
+        // ADMIN PRODUCTS
         // ============================================================
 
         if (req.method === 'GET' && url.pathname === '/api/admin/products') {
@@ -1408,7 +1468,7 @@ var server = http.createServer(async function(req, res) {
         }
 
         // ============================================================
-        // ADMIN CLIENTS - NEW
+        // ADMIN CLIENTS
         // ============================================================
 
         if (req.method === 'GET' && url.pathname === '/api/admin/clients') {
@@ -1520,13 +1580,12 @@ var server = http.createServer(async function(req, res) {
         }
 
         // ============================================================
-        // CREATE BILLING SYSTEM - FIXED (Allows clients)
+        // CREATE BILLING SYSTEM - FIXED
         // ============================================================
 
         if (req.method === 'POST' && url.pathname === '/api/master/billing-systems') {
             console.log('👑 Create billing system request');
             
-            // Get the token
             var auth = req.headers.authorization;
             if (!auth) {
                 return sendJson(res, 401, { success: false, message: 'Authorization required' });
@@ -1543,7 +1602,6 @@ var server = http.createServer(async function(req, res) {
                 return sendJson(res, 401, { success: false, message: 'Invalid token' });
             }
             
-            // Check authorization - master, admin, or regular user
             var isMaster = isMasterAdmin(req);
             var isAdminUser = isAdmin(req);
             var isRegularUser = decoded && decoded.role === 'user';
@@ -1567,19 +1625,16 @@ var server = http.createServer(async function(req, res) {
                 return sendJson(res, 400, { success: false, message: 'Business name required' });
             }
             
-            // If user is not master/admin, verify they own this organization
+            // Verify ownership
             if (!isMaster && !isAdminUser) {
-                // Check token organizationId
                 var tokenOrgId = decoded.organizationId;
                 var userEmail = decoded.email;
                 
-                // First, check if the token has organizationId and it matches
                 if (tokenOrgId && tokenOrgId !== organizationId) {
                     console.log('❌ User tried to create billing system for different org:', tokenOrgId, '!=', organizationId);
                     return sendJson(res, 403, { success: false, message: 'You can only create billing systems for your own organization' });
                 }
                 
-                // If token doesn't have organizationId, verify through email
                 if (!tokenOrgId) {
                     var orgCheck = await getOrganizationByClientId(organizationId);
                     if (!orgCheck) {
@@ -1589,7 +1644,6 @@ var server = http.createServer(async function(req, res) {
                         console.log('❌ User email mismatch:', orgCheck.email, '!=', userEmail);
                         return sendJson(res, 403, { success: false, message: 'You can only create billing systems for your own organization' });
                     }
-                    // Update user with organizationId
                     await updateUser(userEmail, { organizationId: organizationId });
                 }
             }
@@ -1599,15 +1653,11 @@ var server = http.createServer(async function(req, res) {
                 return sendJson(res, 404, { success: false, message: 'Organization not found' });
             }
             
-            // Check if organization is active
             if (org.status === 'suspended' || org.status === 'inactive') {
                 return sendJson(res, 403, { success: false, message: 'Organization is suspended' });
             }
             
-            // Check subscription limits - default 3 for free trial
             var maxSystems = 3;
-            // TODO: Check if organization has a paid subscription
-            
             var existingSystems = await getBillingSystemsByOrganization(organizationId);
             if (existingSystems.length >= maxSystems) {
                 return sendJson(res, 403, { 
@@ -1638,17 +1688,29 @@ var server = http.createServer(async function(req, res) {
             
             await createBillingSystem(billingSystem);
             
-            // Update organization's billing systems list
+            // Update organization's billing systems list - CRITICAL FIX
             var orgBillingSystems = org.billingSystems || [];
-            orgBillingSystems.push({ id: bsId, name: name });
-            await updateOrganization(organizationId, { billingSystems: orgBillingSystems });
+            orgBillingSystems.push({ 
+                id: bsId, 
+                name: name,
+                status: 'active'
+            });
+            
+            // Update the organization document
+            var updatedOrg = await updateOrganization(organizationId, { 
+                billingSystems: orgBillingSystems,
+                updatedAt: new Date().toISOString()
+            });
             
             console.log('✅ Billing system created:', bsId);
+            console.log('📊 Organization now has', orgBillingSystems.length, 'billing systems');
+            console.log('📊 Updated org data:', updatedOrg);
             
             return sendJson(res, 200, { 
                 success: true, 
                 message: 'Billing system created successfully',
-                data: billingSystem
+                data: billingSystem,
+                organizationUpdated: updatedOrg
             });
         }
 
@@ -1673,11 +1735,6 @@ var server = http.createServer(async function(req, res) {
             var billingSystem = await getBillingSystemById(bsId);
             if (!billingSystem) {
                 return sendJson(res, 404, { success: false, message: 'Billing system not found' });
-            }
-            
-            var org = await getOrganizationByClientId(billingSystem.organizationId);
-            if (!org) {
-                return sendJson(res, 404, { success: false, message: 'Organization not found for this billing system' });
             }
             
             var updated = await updateBillingSystem(bsId, { 
@@ -2025,7 +2082,6 @@ var server = http.createServer(async function(req, res) {
                 var planName = getPlanName(planId);
                 var duration = getPlanDuration(planId);
                 
-                // For demo purposes, simulate successful payment
                 var tx = {
                     id: transactionId,
                     phoneNumber: phoneNumber,
@@ -2040,7 +2096,6 @@ var server = http.createServer(async function(req, res) {
                 };
                 await createTransaction(tx);
                 
-                // Simulate callback success after 5 seconds
                 setTimeout(async function() {
                     tx.status = 'completed';
                     tx.mpesaCode = 'MPESA' + Date.now().toString(36).toUpperCase();
@@ -2108,7 +2163,7 @@ var server = http.createServer(async function(req, res) {
         }
 
         // ============================================================
-        // GET TRANSACTIONS (Admin) - UPDATED
+        // GET TRANSACTIONS (Admin)
         // ============================================================
 
         if (req.method === 'GET' && url.pathname === '/api/admin/transactions') {
@@ -2120,7 +2175,6 @@ var server = http.createServer(async function(req, res) {
             var completedTx = allTx.filter(function(t) { return t.status === 'completed'; });
             var totalRevenue = completedTx.reduce(function(sum, t) { return sum + (t.amount || 0); }, 0);
             
-            // Get organization details for each transaction
             var enhancedTx = [];
             for (var i = 0; i < allTx.length; i++) {
                 var t = allTx[i];
@@ -2337,7 +2391,6 @@ var server = http.createServer(async function(req, res) {
             
             if (!orgId) { return sendHtml(res, 404, '<h1>Organization not found</h1>'); }
             
-            // Check if this is a billing system ID or organization ID
             var billingSystem = await getBillingSystemById(orgId);
             var org = null;
             
@@ -2414,7 +2467,7 @@ var server = http.createServer(async function(req, res) {
             
             return sendJson(res, 200, {
                 name: 'GICH WiFi API',
-                version: '8.2.0',
+                version: '8.3.0',
                 status: 'Running',
                 database: 'MongoDB Atlas',
                 freeTrialDays: FREE_TRIAL_DAYS,
@@ -2458,7 +2511,7 @@ async function startServer() {
         
         server.listen(PORT, '0.0.0.0', function() {
             console.log('\n========================================');
-            console.log('🌐 GICH WiFi API - v8.2.0 (FIXED)');
+            console.log('🌐 GICH WiFi API - v8.3.0 (FIXED)');
             console.log('========================================');
             console.log('✅ Server running on port: ' + PORT);
             console.log('📍 http://localhost:' + PORT + '/');
@@ -2477,7 +2530,7 @@ async function startServer() {
             console.log('   DELETE /api/master/billing-systems/:id - Delete');
             console.log('   PUT  /api/master/organizations/:id/status - Toggle status');
             console.log('   GET  /api/master/organizations/:id/details - Get details');
-            console.log('   GET  /api/master/generate-redirect/:id - Generate redirect HTML');
+            console.log('   GET  /api/master/generate-redirect/:id - Generate redirect HTML ✅ FIXED');
             console.log('========================================');
             console.log('📋 ADMIN ENDPOINTS:');
             console.log('   GET  /api/admin/client - Get client data');
