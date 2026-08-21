@@ -1,6 +1,6 @@
 /**
  * GICH WiFi - Complete Billing System
- * Version 8.1.0 - FIXED: Client can create billing systems
+ * Version 8.2.0 - FIXED: All billing system issues resolved
  */
 
 require('dotenv').config();
@@ -88,7 +88,7 @@ let client = null;
 let plans = [];
 
 console.log('\n========================================');
-console.log('🌐 GICH WiFi API - v8.1.0 (FIXED)');
+console.log('🌐 GICH WiFi API - v8.2.0 (FIXED)');
 console.log('========================================');
 console.log('   Port: ' + PORT);
 console.log('   Master PIN: ' + (MASTER_PASSWORD ? '✅ Configured' : '⚠️ NOT SET'));
@@ -752,6 +752,10 @@ async function handleGoogleCallback(req, res) {
         const userInfo = userInfoResponse.bodyJson;
         let user = await getUserByEmail(userInfo.email);
         
+        // Get the user's organization
+        var org = await getOrganizationByEmail(userInfo.email);
+        var orgId = org ? org.id : null;
+        
         if (!user) {
             const newUser = {
                 email: userInfo.email,
@@ -760,29 +764,32 @@ async function handleGoogleCallback(req, res) {
                 googleId: userInfo.id,
                 createdAt: new Date().toISOString(),
                 role: 'user',
+                organizationId: orgId, // Add organizationId to user
                 lastLogin: new Date().toISOString()
             };
             await createUser(newUser);
             user = newUser;
         } else {
-            await updateUser(userInfo.email, { lastLogin: new Date().toISOString() });
+            await updateUser(userInfo.email, { 
+                lastLogin: new Date().toISOString(),
+                organizationId: orgId // Update organizationId if changed
+            });
             user.lastLogin = new Date().toISOString();
+            user.organizationId = orgId;
         }
         
-        // Get the user's organization
-        var org = await getOrganizationByEmail(userInfo.email);
-        var orgId = org ? org.id : null;
-        
+        // Include organizationId in the token payload
         const token = generateToken({ 
             email: user.email, 
             name: user.name, 
             role: user.role || 'user',
             picture: user.picture || '',
-            organizationId: orgId  // Include organization ID in token
+            organizationId: orgId,  // CRITICAL: Include organization ID in token
+            exp: Date.now() + 86400000 // 24 hour expiry
         });
         
         const frontendUrl = 'https://clientadminwifi.netlify.app';
-        const redirectUrl = frontendUrl + '?token=' + encodeURIComponent(token) + '&email=' + encodeURIComponent(user.email) + '&name=' + encodeURIComponent(user.name);
+        const redirectUrl = frontendUrl + '?token=' + encodeURIComponent(token) + '&email=' + encodeURIComponent(user.email) + '&name=' + encodeURIComponent(user.name) + '&orgId=' + encodeURIComponent(orgId || '');
         
         sendHtml(res, 200, `
             <!DOCTYPE html>
@@ -1053,6 +1060,103 @@ function generateCustomerBillingPage(organization) {
 }
 
 // ============================================================
+// GENERATE REDIRECT HTML - FIXED
+// ============================================================
+
+async function generateRedirectHtml(req, res, bsId) {
+    console.log('🔄 Generating redirect HTML for:', bsId);
+    
+    try {
+        var billingSystem = await getBillingSystemById(bsId);
+        if (!billingSystem) {
+            return sendJson(res, 404, { success: false, message: 'Billing system not found' });
+        }
+        
+        var org = await getOrganizationByClientId(billingSystem.organizationId);
+        if (!org) {
+            return sendJson(res, 404, { success: false, message: 'Organization not found' });
+        }
+        
+        // Check if billing system is locked
+        if (billingSystem.locked) {
+            return sendJson(res, 403, { success: false, message: 'Billing system is locked' });
+        }
+        
+        // Check subscription access (free trial or paid)
+        var hasAccess = true;
+        var now = new Date();
+        var trialEnd = new Date(org.createdAt);
+        trialEnd.setDate(trialEnd.getDate() + FREE_TRIAL_DAYS);
+        
+        if (org.subscription && org.subscription.status === 'expired') {
+            hasAccess = false;
+        }
+        
+        if (org.status === 'suspended' || org.status === 'inactive') {
+            hasAccess = false;
+        }
+        
+        if (!hasAccess) {
+            return sendJson(res, 403, { 
+                success: false, 
+                message: 'Subscription expired or suspended. Please contact your administrator.',
+                code: 'ACCESS_DENIED'
+            });
+        }
+        
+        // Generate the redirect HTML
+        var customerUrl = 'https://' + req.headers.host + '/customer/' + bsId + '/';
+        var html = '<!DOCTYPE html>\n';
+        html += '<html>\n';
+        html += '<head>\n';
+        html += '    <meta charset="UTF-8">\n';
+        html += '    <meta name="viewport" content="width=device-width, initial-scale=1.0">\n';
+        html += '    <title>Redirecting to ' + (org.businessName || 'WiFi') + ' Billing</title>\n';
+        html += '    <meta http-equiv="refresh" content="0; url=' + customerUrl + '">\n';
+        html += '    <style>\n';
+        html += '        body { font-family: Arial, sans-serif; display: flex; justify-content: center; align-items: center; height: 100vh; margin: 0; background: #0f2027; color: #fff; }\n';
+        html += '        .container { text-align: center; }\n';
+        html += '        .spinner { border: 4px solid rgba(255,255,255,0.1); border-top-color: #00c853; border-radius: 50%; width: 50px; height: 50px; animation: spin 1s linear infinite; margin: 20px auto; }\n';
+        html += '        @keyframes spin { to { transform: rotate(360deg); } }\n';
+        html += '        .btn { background: #00c853; color: #000; padding: 12px 24px; border: none; border-radius: 8px; cursor: pointer; font-size: 16px; text-decoration: none; display: inline-block; margin-top: 10px; }\n';
+        html += '    </style>\n';
+        html += '    <script>\n';
+        html += '        setTimeout(function() { window.location.href = "' + customerUrl + '"; }, 500);\n';
+        html += '    <\/script>\n';
+        html += '</head>\n';
+        html += '<body>\n';
+        html += '    <div class="container">\n';
+        html += '        <h1>🔄 Redirecting...</h1>\n';
+        html += '        <div class="spinner"></div>\n';
+        html += '        <p>You are being redirected to <strong>' + (org.businessName || 'WiFi') + '</strong> billing page.</p>\n';
+        html += '        <a href="' + customerUrl + '" class="btn">Click here if not redirected</a>\n';
+        html += '    </div>\n';
+        html += '</body>\n';
+        html += '</html>';
+        
+        // Save to file system for static serving
+        var redirectDir = path.join(__dirname, 'redirects');
+        if (!fs.existsSync(redirectDir)) {
+            fs.mkdirSync(redirectDir, { recursive: true });
+        }
+        var filePath = path.join(redirectDir, bsId + '.html');
+        fs.writeFileSync(filePath, html);
+        console.log('✅ Redirect HTML saved to:', filePath);
+        
+        return sendJson(res, 200, { 
+            success: true, 
+            message: 'Redirect HTML generated successfully',
+            redirectUrl: customerUrl,
+            html: html
+        });
+        
+    } catch (error) {
+        console.error('❌ Redirect generation error:', error);
+        return sendJson(res, 500, { success: false, message: error.message });
+    }
+}
+
+// ============================================================
 // CREATE SERVER
 // ============================================================
 
@@ -1092,7 +1196,7 @@ var server = http.createServer(async function(req, res) {
             return sendJson(res, 200, { 
                 status: 'ok', 
                 timestamp: new Date().toISOString(),
-                version: '8.1.0',
+                version: '8.2.0',
                 database: dbStatus,
                 organizations: orgCount,
                 billingSystems: bsCount,
@@ -1121,7 +1225,12 @@ var server = http.createServer(async function(req, res) {
             console.log('🔐 Master verification with PIN:', body.pin);
             
             if (body.pin === MASTER_PASSWORD) {
-                var token = generateToken({ username: 'master', role: 'master', exp: Date.now() + 86400000 });
+                var token = generateToken({ 
+                    username: 'master', 
+                    role: 'master',
+                    organizationId: null,
+                    exp: Date.now() + 86400000 
+                });
                 console.log('✅ Master verified successfully');
                 return sendJson(res, 200, { 
                     success: true, 
@@ -1142,10 +1251,200 @@ var server = http.createServer(async function(req, res) {
         if (req.method === 'POST' && url.pathname === '/api/admin/verify') {
             var body = await readBody(req);
             if (body.pin === ADMIN_PASSWORD) {
-                var token = generateToken({ username: 'admin', role: 'admin', exp: Date.now() + 86400000 });
+                var token = generateToken({ 
+                    username: 'admin', 
+                    role: 'admin',
+                    organizationId: null,
+                    exp: Date.now() + 86400000 
+                });
                 return sendJson(res, 200, { success: true, message: 'Admin verified', token: token });
             } else {
                 return sendJson(res, 401, { success: false, message: 'Invalid PIN' });
+            }
+        }
+
+        // ============================================================
+        // ADMIN CLIENT ENDPOINT - FIXED (Added missing endpoint)
+        // ============================================================
+
+        if (req.method === 'GET' && url.pathname === '/api/admin/client') {
+            console.log('👑 Admin client data request');
+            
+            if (!isAdmin(req) && !isMasterAdmin(req)) {
+                return sendJson(res, 401, { success: false, message: 'Unauthorized' });
+            }
+            
+            try {
+                var allOrgs = await getAllOrganizations();
+                var allBillingSystems = await getAllBillingSystems();
+                var allTx = await getAllTransactions();
+                var completedTx = allTx.filter(function(t) { return t.status === 'completed'; });
+                var totalRevenue = completedTx.reduce(function(sum, t) { return sum + (t.amount || 0); }, 0);
+                
+                // Get organization with its billing systems
+                var orgsWithSystems = [];
+                for (var i = 0; i < allOrgs.length; i++) {
+                    var org = allOrgs[i];
+                    var systems = allBillingSystems.filter(function(bs) { 
+                        return bs.organizationId === org.id; 
+                    });
+                    orgsWithSystems.push({
+                        ...org,
+                        billingSystems: systems,
+                        billingSystemsCount: systems.length
+                    });
+                }
+                
+                return sendJson(res, 200, { 
+                    success: true, 
+                    data: {
+                        organizations: orgsWithSystems,
+                        billingSystems: allBillingSystems,
+                        transactions: allTx,
+                        summary: {
+                            totalOrganizations: allOrgs.length,
+                            totalBillingSystems: allBillingSystems.length,
+                            totalTransactions: allTx.length,
+                            completedTransactions: completedTx.length,
+                            totalRevenue: totalRevenue
+                        }
+                    }
+                });
+            } catch (error) {
+                console.error('❌ Error:', error);
+                return sendJson(res, 500, { success: false, message: error.message });
+            }
+        }
+
+        // ============================================================
+        // ADMIN DASHBOARD - NEW
+        // ============================================================
+
+        if (req.method === 'GET' && url.pathname === '/api/admin/dashboard') {
+            console.log('👑 Admin dashboard request');
+            
+            if (!isAdmin(req) && !isMasterAdmin(req)) {
+                return sendJson(res, 401, { success: false, message: 'Unauthorized' });
+            }
+            
+            try {
+                var allOrgs = await getAllOrganizations();
+                var allBillingSystems = await getAllBillingSystems();
+                var allTx = await getAllTransactions();
+                var completedTx = allTx.filter(function(t) { return t.status === 'completed'; });
+                var totalRevenue = completedTx.reduce(function(sum, t) { return sum + (t.amount || 0); }, 0);
+                
+                // Get recent transactions (last 10)
+                var recentTx = allTx.slice(0, 10);
+                
+                return sendJson(res, 200, { 
+                    success: true, 
+                    data: {
+                        organizations: {
+                            total: allOrgs.length,
+                            active: allOrgs.filter(function(o) { return o.status === 'active'; }).length,
+                            suspended: allOrgs.filter(function(o) { return o.status === 'suspended'; }).length
+                        },
+                        billingSystems: {
+                            total: allBillingSystems.length,
+                            active: allBillingSystems.filter(function(bs) { return bs.status === 'active'; }).length,
+                            locked: allBillingSystems.filter(function(bs) { return bs.locked === true; }).length
+                        },
+                        transactions: {
+                            total: allTx.length,
+                            completed: completedTx.length,
+                            pending: allTx.filter(function(t) { return t.status === 'pending'; }).length,
+                            failed: allTx.filter(function(t) { return t.status === 'failed'; }).length,
+                            totalRevenue: totalRevenue
+                        },
+                        recentTransactions: recentTx
+                    }
+                });
+            } catch (error) {
+                console.error('❌ Error:', error);
+                return sendJson(res, 500, { success: false, message: error.message });
+            }
+        }
+
+        // ============================================================
+        // ADMIN PRODUCTS - NEW
+        // ============================================================
+
+        if (req.method === 'GET' && url.pathname === '/api/admin/products') {
+            console.log('👑 Admin products request');
+            
+            if (!isAdmin(req) && !isMasterAdmin(req)) {
+                return sendJson(res, 401, { success: false, message: 'Unauthorized' });
+            }
+            
+            try {
+                var allPlans = await db.collection('plans').find({}).toArray();
+                var allBillingSystems = await getAllBillingSystems();
+                
+                // Count products across all billing systems
+                var totalProducts = 0;
+                for (var i = 0; i < allBillingSystems.length; i++) {
+                    var bs = allBillingSystems[i];
+                    if (bs.plans) {
+                        totalProducts += bs.plans.length;
+                    }
+                }
+                
+                return sendJson(res, 200, { 
+                    success: true, 
+                    data: {
+                        products: allPlans,
+                        totalProducts: allPlans.length,
+                        billingSystemsWithProducts: allBillingSystems.filter(function(bs) { 
+                            return bs.plans && bs.plans.length > 0; 
+                        }).length,
+                        totalPlansAcrossAllSystems: totalProducts
+                    }
+                });
+            } catch (error) {
+                console.error('❌ Error:', error);
+                return sendJson(res, 500, { success: false, message: error.message });
+            }
+        }
+
+        // ============================================================
+        // ADMIN CLIENTS - NEW
+        // ============================================================
+
+        if (req.method === 'GET' && url.pathname === '/api/admin/clients') {
+            console.log('👑 Admin clients request');
+            
+            if (!isAdmin(req) && !isMasterAdmin(req)) {
+                return sendJson(res, 401, { success: false, message: 'Unauthorized' });
+            }
+            
+            try {
+                var allOrgs = await getAllOrganizations();
+                var allBillingSystems = await getAllBillingSystems();
+                
+                var clients = allOrgs.map(function(org) {
+                    var systems = allBillingSystems.filter(function(bs) { 
+                        return bs.organizationId === org.id; 
+                    });
+                    return {
+                        ...org,
+                        billingSystemCount: systems.length,
+                        billingSystems: systems
+                    };
+                });
+                
+                return sendJson(res, 200, { 
+                    success: true, 
+                    data: {
+                        clients: clients,
+                        total: clients.length,
+                        active: clients.filter(function(c) { return c.status === 'active'; }).length,
+                        suspended: clients.filter(function(c) { return c.status === 'suspended'; }).length
+                    }
+                });
+            } catch (error) {
+                console.error('❌ Error:', error);
+                return sendJson(res, 500, { success: false, message: error.message });
             }
         }
 
@@ -1270,16 +1569,28 @@ var server = http.createServer(async function(req, res) {
             
             // If user is not master/admin, verify they own this organization
             if (!isMaster && !isAdminUser) {
-                if (decoded.organizationId && decoded.organizationId !== organizationId) {
-                    console.log('❌ User tried to create billing system for different org:', decoded.organizationId, '!=', organizationId);
+                // Check token organizationId
+                var tokenOrgId = decoded.organizationId;
+                var userEmail = decoded.email;
+                
+                // First, check if the token has organizationId and it matches
+                if (tokenOrgId && tokenOrgId !== organizationId) {
+                    console.log('❌ User tried to create billing system for different org:', tokenOrgId, '!=', organizationId);
                     return sendJson(res, 403, { success: false, message: 'You can only create billing systems for your own organization' });
                 }
-                // If token doesn't have organizationId, check if user's email matches org email
-                if (!decoded.organizationId) {
-                    var org = await getOrganizationByClientId(organizationId);
-                    if (!org || org.email !== decoded.email) {
+                
+                // If token doesn't have organizationId, verify through email
+                if (!tokenOrgId) {
+                    var orgCheck = await getOrganizationByClientId(organizationId);
+                    if (!orgCheck) {
+                        return sendJson(res, 404, { success: false, message: 'Organization not found' });
+                    }
+                    if (orgCheck.email !== userEmail) {
+                        console.log('❌ User email mismatch:', orgCheck.email, '!=', userEmail);
                         return sendJson(res, 403, { success: false, message: 'You can only create billing systems for your own organization' });
                     }
+                    // Update user with organizationId
+                    await updateUser(userEmail, { organizationId: organizationId });
                 }
             }
             
@@ -1316,13 +1627,13 @@ var server = http.createServer(async function(req, res) {
                 tagline: body.tagline || 'Fast • Secure • Reliable',
                 primaryColor: body.primaryColor || '#00c853',
                 secondaryColor: body.secondaryColor || '#00e676',
-                logo: org.logo || '',
+                logo: body.logo || org.logo || '',
                 status: 'active',
                 locked: false,
                 createdAt: new Date().toISOString(),
                 updatedAt: new Date().toISOString(),
                 customerUrl: customerUrl,
-                plans: org.plans || []
+                plans: body.plans || org.plans || []
             };
             
             await createBillingSystem(billingSystem);
@@ -1797,7 +2108,7 @@ var server = http.createServer(async function(req, res) {
         }
 
         // ============================================================
-        // GET TRANSACTIONS (Admin)
+        // GET TRANSACTIONS (Admin) - UPDATED
         // ============================================================
 
         if (req.method === 'GET' && url.pathname === '/api/admin/transactions') {
@@ -1809,9 +2120,20 @@ var server = http.createServer(async function(req, res) {
             var completedTx = allTx.filter(function(t) { return t.status === 'completed'; });
             var totalRevenue = completedTx.reduce(function(sum, t) { return sum + (t.amount || 0); }, 0);
             
+            // Get organization details for each transaction
+            var enhancedTx = [];
+            for (var i = 0; i < allTx.length; i++) {
+                var t = allTx[i];
+                var org = t.organizationId ? await getOrganizationByClientId(t.organizationId) : null;
+                enhancedTx.push({
+                    ...t,
+                    organizationName: org ? org.businessName : 'Unknown'
+                });
+            }
+            
             return sendJson(res, 200, {
                 success: true,
-                data: allTx,
+                data: enhancedTx,
                 count: allTx.length,
                 summary: {
                     total: allTx.length,
@@ -2041,6 +2363,43 @@ var server = http.createServer(async function(req, res) {
         }
 
         // ============================================================
+        // GENERATE REDIRECT HTML - FIXED
+        // ============================================================
+
+        if (req.method === 'GET' && url.pathname.match(/^\/api\/master\/generate-redirect\/[^\/]+$/)) {
+            console.log('🔄 Generate redirect HTML request');
+            
+            if (!isMasterAdmin(req)) {
+                return sendJson(res, 401, { success: false, message: 'Unauthorized' });
+            }
+            
+            var parts = url.pathname.split('/');
+            var bsId = parts[parts.length - 1];
+            
+            return await generateRedirectHtml(req, res, bsId);
+        }
+
+        // ============================================================
+        // SERVE REDIRECT HTML FILES
+        // ============================================================
+
+        if (req.method === 'GET' && url.pathname.match(/^\/redirects\/[^\/]+\.html$/)) {
+            var fileName = url.pathname.split('/').pop();
+            var filePath = path.join(__dirname, 'redirects', fileName);
+            
+            try {
+                if (fs.existsSync(filePath)) {
+                    var html = fs.readFileSync(filePath, 'utf8');
+                    return sendHtml(res, 200, html);
+                } else {
+                    return sendJson(res, 404, { success: false, message: 'Redirect file not found' });
+                }
+            } catch (error) {
+                return sendJson(res, 500, { success: false, message: error.message });
+            }
+        }
+
+        // ============================================================
         // API INFO
         // ============================================================
 
@@ -2055,7 +2414,7 @@ var server = http.createServer(async function(req, res) {
             
             return sendJson(res, 200, {
                 name: 'GICH WiFi API',
-                version: '8.1.0',
+                version: '8.2.0',
                 status: 'Running',
                 database: 'MongoDB Atlas',
                 freeTrialDays: FREE_TRIAL_DAYS,
@@ -2090,9 +2449,16 @@ async function startServer() {
     try {
         await connectDB();
         
+        // Create redirects directory
+        var redirectDir = path.join(__dirname, 'redirects');
+        if (!fs.existsSync(redirectDir)) {
+            fs.mkdirSync(redirectDir, { recursive: true });
+            console.log('📁 Created redirects directory');
+        }
+        
         server.listen(PORT, '0.0.0.0', function() {
             console.log('\n========================================');
-            console.log('🌐 GICH WiFi API - v8.1.0 (FIXED)');
+            console.log('🌐 GICH WiFi API - v8.2.0 (FIXED)');
             console.log('========================================');
             console.log('✅ Server running on port: ' + PORT);
             console.log('📍 http://localhost:' + PORT + '/');
@@ -2111,6 +2477,14 @@ async function startServer() {
             console.log('   DELETE /api/master/billing-systems/:id - Delete');
             console.log('   PUT  /api/master/organizations/:id/status - Toggle status');
             console.log('   GET  /api/master/organizations/:id/details - Get details');
+            console.log('   GET  /api/master/generate-redirect/:id - Generate redirect HTML');
+            console.log('========================================');
+            console.log('📋 ADMIN ENDPOINTS:');
+            console.log('   GET  /api/admin/client - Get client data');
+            console.log('   GET  /api/admin/dashboard - Dashboard stats');
+            console.log('   GET  /api/admin/products - Get products');
+            console.log('   GET  /api/admin/clients - Get clients');
+            console.log('   GET  /api/admin/transactions - Get transactions');
             console.log('========================================');
             console.log('📋 CLIENT ENDPOINTS:');
             console.log('   POST /api/client/organization - Create organization');
