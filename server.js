@@ -1,7 +1,6 @@
 /**
  * GICH WiFi - Complete Billing System
- * Version 8.0.0 - FULL PRODUCTION READY
- * Features: Client Portal, Master Dashboard, Billing Systems, M-Pesa, Vouchers
+ * Version 8.1.0 - FIXED: Client can create billing systems
  */
 
 require('dotenv').config();
@@ -89,7 +88,7 @@ let client = null;
 let plans = [];
 
 console.log('\n========================================');
-console.log('🌐 GICH WiFi API - v8.0.0 (PRODUCTION)');
+console.log('🌐 GICH WiFi API - v8.1.0 (FIXED)');
 console.log('========================================');
 console.log('   Port: ' + PORT);
 console.log('   Master PIN: ' + (MASTER_PASSWORD ? '✅ Configured' : '⚠️ NOT SET'));
@@ -770,11 +769,16 @@ async function handleGoogleCallback(req, res) {
             user.lastLogin = new Date().toISOString();
         }
         
+        // Get the user's organization
+        var org = await getOrganizationByEmail(userInfo.email);
+        var orgId = org ? org.id : null;
+        
         const token = generateToken({ 
             email: user.email, 
             name: user.name, 
             role: user.role || 'user',
-            picture: user.picture || ''
+            picture: user.picture || '',
+            organizationId: orgId  // Include organization ID in token
         });
         
         const frontendUrl = 'https://clientadminwifi.netlify.app';
@@ -798,7 +802,7 @@ async function handleGoogleCallback(req, res) {
                 <script>
                     localStorage.setItem('clientToken', '${token}');
                     localStorage.setItem('userEmail', '${user.email}');
-                    localStorage.setItem('userData', '${JSON.stringify({ email: user.email, name: user.name, picture: user.picture })}');
+                    localStorage.setItem('userData', '${JSON.stringify({ email: user.email, name: user.name, picture: user.picture, organizationId: "${orgId || ''}" })}');
                     setTimeout(function() { window.location.href = '${redirectUrl}'; }, 1000);
                 </script>
             </head>
@@ -1088,7 +1092,7 @@ var server = http.createServer(async function(req, res) {
             return sendJson(res, 200, { 
                 status: 'ok', 
                 timestamp: new Date().toISOString(),
-                version: '8.0.0',
+                version: '8.1.0',
                 database: dbStatus,
                 organizations: orgCount,
                 billingSystems: bsCount,
@@ -1217,13 +1221,37 @@ var server = http.createServer(async function(req, res) {
         }
 
         // ============================================================
-        // CREATE BILLING SYSTEM (Client Portal)
+        // CREATE BILLING SYSTEM - FIXED (Allows clients)
         // ============================================================
 
         if (req.method === 'POST' && url.pathname === '/api/master/billing-systems') {
             console.log('👑 Create billing system request');
             
-            if (!isMasterAdmin(req) && !isAdmin(req)) {
+            // Get the token
+            var auth = req.headers.authorization;
+            if (!auth) {
+                return sendJson(res, 401, { success: false, message: 'Authorization required' });
+            }
+            
+            var token = auth.replace('Bearer ', '').trim();
+            var decoded = null;
+            
+            try {
+                decoded = verifyToken(token);
+                console.log('🔑 Decoded token:', decoded ? { email: decoded.email, role: decoded.role, orgId: decoded.organizationId } : 'null');
+            } catch (e) {
+                console.log('❌ Invalid token:', e.message);
+                return sendJson(res, 401, { success: false, message: 'Invalid token' });
+            }
+            
+            // Check authorization - master, admin, or regular user
+            var isMaster = isMasterAdmin(req);
+            var isAdminUser = isAdmin(req);
+            var isRegularUser = decoded && decoded.role === 'user';
+            
+            console.log('🔐 Auth check - Master:', isMaster, 'Admin:', isAdminUser, 'User:', isRegularUser);
+            
+            if (!isMaster && !isAdminUser && !isRegularUser) {
                 return sendJson(res, 401, { success: false, message: 'Unauthorized' });
             }
             
@@ -1240,6 +1268,21 @@ var server = http.createServer(async function(req, res) {
                 return sendJson(res, 400, { success: false, message: 'Business name required' });
             }
             
+            // If user is not master/admin, verify they own this organization
+            if (!isMaster && !isAdminUser) {
+                if (decoded.organizationId && decoded.organizationId !== organizationId) {
+                    console.log('❌ User tried to create billing system for different org:', decoded.organizationId, '!=', organizationId);
+                    return sendJson(res, 403, { success: false, message: 'You can only create billing systems for your own organization' });
+                }
+                // If token doesn't have organizationId, check if user's email matches org email
+                if (!decoded.organizationId) {
+                    var org = await getOrganizationByClientId(organizationId);
+                    if (!org || org.email !== decoded.email) {
+                        return sendJson(res, 403, { success: false, message: 'You can only create billing systems for your own organization' });
+                    }
+                }
+            }
+            
             var org = await getOrganizationByClientId(organizationId);
             if (!org) {
                 return sendJson(res, 404, { success: false, message: 'Organization not found' });
@@ -1248,6 +1291,19 @@ var server = http.createServer(async function(req, res) {
             // Check if organization is active
             if (org.status === 'suspended' || org.status === 'inactive') {
                 return sendJson(res, 403, { success: false, message: 'Organization is suspended' });
+            }
+            
+            // Check subscription limits - default 3 for free trial
+            var maxSystems = 3;
+            // TODO: Check if organization has a paid subscription
+            
+            var existingSystems = await getBillingSystemsByOrganization(organizationId);
+            if (existingSystems.length >= maxSystems) {
+                return sendJson(res, 403, { 
+                    success: false, 
+                    message: 'You have reached the maximum number of billing systems (' + maxSystems + '). Please upgrade your plan.',
+                    code: 'LIMIT_REACHED'
+                });
             }
             
             var bsId = generateBillingSystemId();
@@ -1604,6 +1660,17 @@ var server = http.createServer(async function(req, res) {
                     billingSystems: billingSystems
                 }
             });
+        }
+
+        // ============================================================
+        // CHECK ORGANIZATION EXISTS (Client)
+        // ============================================================
+
+        if (req.method === 'GET' && url.pathname === '/api/client/check-org') {
+            var email = url.searchParams.get('email');
+            if (!email) { return sendJson(res, 400, { success: false, message: 'Email required' }); }
+            var org = await getOrganizationByEmail(email);
+            return sendJson(res, 200, { success: true, hasOrganization: !!org, email: email });
         }
 
         // ============================================================
@@ -1988,7 +2055,7 @@ var server = http.createServer(async function(req, res) {
             
             return sendJson(res, 200, {
                 name: 'GICH WiFi API',
-                version: '8.0.0',
+                version: '8.1.0',
                 status: 'Running',
                 database: 'MongoDB Atlas',
                 freeTrialDays: FREE_TRIAL_DAYS,
@@ -2025,7 +2092,7 @@ async function startServer() {
         
         server.listen(PORT, '0.0.0.0', function() {
             console.log('\n========================================');
-            console.log('🌐 GICH WiFi API - v8.0.0 (PRODUCTION)');
+            console.log('🌐 GICH WiFi API - v8.1.0 (FIXED)');
             console.log('========================================');
             console.log('✅ Server running on port: ' + PORT);
             console.log('📍 http://localhost:' + PORT + '/');
@@ -2048,6 +2115,7 @@ async function startServer() {
             console.log('📋 CLIENT ENDPOINTS:');
             console.log('   POST /api/client/organization - Create organization');
             console.log('   GET  /api/organization/by-email - Get organization');
+            console.log('   GET  /api/client/check-org - Check organization exists');
             console.log('   GET  /customer/:id - Customer billing page');
             console.log('   POST /api/payment/initiate - Initiate payment');
             console.log('   POST /api/voucher/redeem - Redeem voucher');
