@@ -1,8 +1,8 @@
 /**
  * GICH WiFi - Complete Billing System
- * Version 7.2.0 - Multi-Billing System with Subscription Plans
+ * Version 7.3.0 - Master Dashboard & Multi-Billing System
  * Features: Auto Router Setup, M-Pesa Integration, Device Tracking, 
- *           Multi-Billing System Subscription, Daraja Config
+ *           Multi-Billing System Subscription, Daraja Config, Master Dashboard
  */
 
 require('dotenv').config();
@@ -45,7 +45,7 @@ const FREE_TRIAL_DAYS = 60;
 const DEVICE_SESSION_MAX_DAYS = 30;
 
 // ============================================================
-// BILLING SYSTEM PLANS (NEW)
+// BILLING SYSTEM PLANS
 // ============================================================
 const BILLING_PLANS = {
     starter: {
@@ -136,7 +136,7 @@ let db = null;
 let client = null;
 
 console.log('\n========================================');
-console.log('🌐 GICH WiFi API - v7.2.0');
+console.log('🌐 GICH WiFi API - v7.3.0');
 console.log('========================================');
 console.log('   Port: ' + PORT);
 console.log('   Admin PIN: ' + (ADMIN_PASSWORD ? '✅ Configured' : '⚠️ NOT SET'));
@@ -145,8 +145,8 @@ console.log('   Free Trial: ' + FREE_TRIAL_DAYS + ' days');
 console.log('📱 Device Tracking: ✅ ENABLED (Session Persistence)');
 console.log('🔑 Google OAuth: ' + (GOOGLE_CLIENT_ID ? '✅ Configured' : '⚠️ NOT SET'));
 console.log('🗄️  Database: MongoDB Atlas');
-console.log('📱 Device Session Max: ' + DEVICE_SESSION_MAX_DAYS + ' days');
 console.log('🏢 Billing Plans: Starter(500/3), Pro(1000/10), Business(1700/20)');
+console.log('👑 Master Dashboard: ✅ ENABLED');
 console.log('========================================\n');
 
 // ============================================================
@@ -210,6 +210,8 @@ async function connectDB() {
             await db.collection('subscriptions').createIndex({ clientId: 1 }, { unique: true });
             await db.collection('billingSubscriptions').createIndex({ clientId: 1 }, { unique: true });
             await db.collection('darajaConfigs').createIndex({ clientId: 1 }, { unique: true });
+            await db.collection('billingSystems').createIndex({ id: 1 }, { unique: true });
+            await db.collection('billingSystems').createIndex({ organizationId: 1 });
             await db.collection('users').createIndex({ email: 1 }, { unique: true });
             await db.collection('users').createIndex({ googleId: 1 });
             await db.collection('routers').createIndex({ mac: 1 }, { unique: true });
@@ -291,6 +293,43 @@ async function getAllOrganizations() {
     try { return await db.collection('organizations').find({}).toArray(); } catch (e) { return []; }
 }
 
+// ============================================================
+// BILLING SYSTEMS OPERATIONS (NEW)
+// ============================================================
+
+async function getBillingSystemById(id) {
+    try { return await db.collection('billingSystems').findOne({ id: id }); } catch (e) { return null; }
+}
+
+async function getBillingSystemsByOrganization(organizationId) {
+    try { return await db.collection('billingSystems').find({ organizationId: organizationId }).toArray(); } catch (e) { return []; }
+}
+
+async function getAllBillingSystems() {
+    try { return await db.collection('billingSystems').find({}).toArray(); } catch (e) { return []; }
+}
+
+async function createBillingSystem(bsData) {
+    try { await db.collection('billingSystems').insertOne(bsData); return bsData; } catch (e) { throw e; }
+}
+
+async function updateBillingSystem(id, updateData) {
+    try {
+        const result = await db.collection('billingSystems').findOneAndUpdate(
+            { id: id }, { $set: updateData }, { returnDocument: 'after' }
+        );
+        return result.value;
+    } catch (e) { throw e; }
+}
+
+async function deleteBillingSystem(id) {
+    try { return await db.collection('billingSystems').deleteOne({ id: id }); } catch (e) { throw e; }
+}
+
+// ============================================================
+// TRANSACTION OPERATIONS
+// ============================================================
+
 async function createTransaction(txData) {
     try { await db.collection('transactions').insertOne(txData); return txData; } catch (e) { throw e; }
 }
@@ -346,7 +385,7 @@ async function getAllSubscriptions() {
 }
 
 // ============================================================
-// BILLING SUBSCRIPTION OPERATIONS (NEW)
+// BILLING SUBSCRIPTION OPERATIONS
 // ============================================================
 
 async function getBillingSubscription(clientId) {
@@ -371,7 +410,7 @@ async function getAllBillingSubscriptions() {
 }
 
 // ============================================================
-// DARAJA CONFIG OPERATIONS (NEW)
+// DARAJA CONFIG OPERATIONS
 // ============================================================
 
 async function getDarajaConfig(clientId) {
@@ -708,6 +747,15 @@ function generateOrgId() {
     return 'CLIENT_' + code;
 }
 
+function generateBillingSystemId() {
+    var chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    var code = '';
+    for (var i = 0; i < 8; i++) {
+        code += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return 'BS_' + code;
+}
+
 function normalizePhone(rawPhone) {
     if (!rawPhone) return null;
     var digits = String(rawPhone).trim().replace(/[^0-9+]/g, '');
@@ -796,7 +844,7 @@ async function activateSubscription(clientId, plan) {
 }
 
 // ============================================================
-// BILLING SUBSCRIPTION SYSTEM (NEW)
+// BILLING SUBSCRIPTION SYSTEM
 // ============================================================
 
 async function getBillingSubscriptionStatus(clientId) {
@@ -827,7 +875,6 @@ async function getBillingSubscriptionStatus(clientId) {
 async function checkBillingSubscriptionAccess(clientId) {
     var sub = await getBillingSubscriptionStatus(clientId);
     if (!sub) {
-        // Check if legacy subscription exists (for backward compatibility)
         var legacySub = await getClientSubscriptionStatus(clientId);
         if (legacySub) {
             return { 
@@ -902,7 +949,7 @@ async function activateBillingSubscription(clientId, planKey) {
 }
 
 // ============================================================
-// DARAJA STK PUSH (Using client-specific config)
+// DARAJA STK PUSH
 // ============================================================
 
 async function stkPushWithClientConfig(params) {
@@ -921,7 +968,6 @@ async function stkPushWithClientConfig(params) {
     var formattedPhone = normalizePhone(phone);
     if (!formattedPhone || formattedPhone.length < 10) { throw new Error('Invalid phone: ' + phone); }
     
-    // Get client's Daraja config if available
     var consumerKey = CONSUMER_KEY;
     var consumerSecret = CONSUMER_SECRET;
     var shortcode = SHORTCODE;
@@ -942,7 +988,6 @@ async function stkPushWithClientConfig(params) {
         throw new Error('Consumer Key or Secret not configured.');
     }
     
-    // Get access token with client credentials
     var auth = Buffer.from(consumerKey.trim() + ':' + consumerSecret.trim()).toString('base64');
     var tokenRes = await simpleRequest('GET', 'https://sandbox.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials', { 
         'Authorization': 'Basic ' + auth, 
@@ -2423,7 +2468,7 @@ var server = http.createServer(async function(req, res) {
         // ===== SERVE HTML FILES =====
         if (req.method === 'GET' && url.pathname === '/') {
             if (serveHtmlFile(res, 'GICH_wifi.html')) return;
-            sendHtml(res, 200, '<h1>🌐 GICH WiFi Server</h1><p>✅ Server is running with MongoDB and Google OAuth!</p><p>📱 Device Recognition: ✅ ENABLED</p><p>🏢 Multi-Billing System: ✅ ENABLED</p>');
+            sendHtml(res, 200, '<h1>🌐 GICH WiFi Server</h1><p>✅ Server is running with MongoDB and Google OAuth!</p><p>📱 Device Recognition: ✅ ENABLED</p><p>🏢 Multi-Billing System: ✅ ENABLED</p><p>👑 Master Dashboard: ✅ ENABLED</p>');
             return;
         }
 
@@ -2464,17 +2509,20 @@ var server = http.createServer(async function(req, res) {
             var activeSessions = await getAllActiveSessions();
             var activeDevices = await getActiveDevicesCount();
             var billingSubs = await getAllBillingSubscriptions();
+            var allBillingSystems = await getAllBillingSystems();
             return sendJson(res, 200, { 
                 status: 'ok', 
                 timestamp: new Date().toISOString(),
                 database: 'connected',
                 googleOAuth: !!GOOGLE_CLIENT_ID,
-                version: '7.2.0',
+                version: '7.3.0',
                 deviceRecognition: true,
                 multiBilling: true,
+                masterDashboard: true,
                 activeSessions: activeSessions.length,
                 activeDevices: activeDevices,
-                activeSubscriptions: billingSubs.length
+                activeSubscriptions: billingSubs.length,
+                billingSystems: allBillingSystems.length
             });
         }
 
@@ -2485,10 +2533,6 @@ var server = http.createServer(async function(req, res) {
         if (req.method === 'GET' && url.pathname === '/api/settings') {
             return sendJson(res, 200, { success: true, data: settings });
         }
-
-        // ============================================================
-        // BILLING PLANS API (NEW)
-        // ============================================================
 
         if (req.method === 'GET' && url.pathname === '/api/billing-plans') {
             return sendJson(res, 200, { success: true, data: BILLING_PLANS });
@@ -2857,7 +2901,10 @@ var server = http.createServer(async function(req, res) {
                     businessTagline: org.businessTagline,
                     plans: org.plans || [],
                     status: org.status,
-                    mpesaTill: org.mpesaTill || ''
+                    mpesaTill: org.mpesaTill || '',
+                    billingSystems: org.billingSystems || [],
+                    subscriptionPlan: org.subscriptionPlan || org.billingPlan || 'free_trial',
+                    subscriptionStatus: org.subscriptionStatus || org.billingStatus || 'trial'
                 }
             });
         }
@@ -2881,7 +2928,11 @@ var server = http.createServer(async function(req, res) {
                     businessTagline: org.businessTagline,
                     plans: org.plans || [],
                     status: org.status,
-                    mpesaTill: org.mpesaTill || ''
+                    mpesaTill: org.mpesaTill || '',
+                    billingSystems: org.billingSystems || [],
+                    subscriptionPlan: org.subscriptionPlan || org.billingPlan || 'free_trial',
+                    subscriptionStatus: org.subscriptionStatus || org.billingStatus || 'trial',
+                    totalRevenue: org.totalRevenue || 0
                 }
             });
         }
@@ -2931,7 +2982,11 @@ var server = http.createServer(async function(req, res) {
                 status: 'active',
                 createdAt: new Date().toISOString(),
                 updatedAt: new Date().toISOString(),
-                plans: body.plans || DEFAULT_PLANS
+                plans: body.plans || DEFAULT_PLANS,
+                billingSystems: [],
+                subscriptionPlan: 'free_trial',
+                subscriptionStatus: 'trial',
+                totalRevenue: 0
             };
             
             await createOrganization(newOrganization);
@@ -2968,7 +3023,7 @@ var server = http.createServer(async function(req, res) {
         }
 
         // ============================================================
-        // UPDATE ORGANIZATION
+        // UPDATE ORGANIZATION (For Client Portal)
         // ============================================================
 
         if (req.method === 'PUT' && url.pathname.startsWith('/api/master/organizations/')) {
@@ -3000,242 +3055,286 @@ var server = http.createServer(async function(req, res) {
         }
 
         // ============================================================
-        // GET BILLING SUBSCRIPTION STATUS (NEW)
+        // TOGGLE ORGANIZATION STATUS (NEW)
         // ============================================================
 
-        if (req.method === 'GET' && url.pathname === '/api/client/billing-subscription') {
-            var clientId = url.searchParams.get('clientId');
-            if (!clientId) {
-                return sendJson(res, 400, { success: false, message: 'Client ID required' });
-            }
+        if (req.method === 'PUT' && url.pathname.match(/^\/api\/master\/organizations\/[^\/]+\/status$/)) {
+            if (!isMasterAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
             
-            var sub = await getBillingSubscription(clientId);
-            if (!sub) {
-                // Check if legacy subscription exists
-                var legacySub = await getClientSubscription(clientId);
-                if (legacySub) {
-                    return sendJson(res, 200, {
-                        success: true,
-                        data: {
-                            clientId: clientId,
-                            plan: 'free_trial',
-                            status: legacySub.status,
-                            trialEnds: legacySub.trialEnds,
-                            expiresAt: legacySub.expiresAt
-                        }
-                    });
-                }
-                return sendJson(res, 200, { success: true, data: null });
-            }
-            
-            return sendJson(res, 200, {
-                success: true,
-                data: {
-                    clientId: sub.clientId,
-                    plan: sub.plan,
-                    planName: sub.planName,
-                    status: sub.status,
-                    maxSystems: sub.maxSystems,
-                    maxPlans: sub.maxPlans,
-                    maxTransactions: sub.maxTransactions,
-                    hasVouchers: sub.hasVouchers,
-                    hasAnalytics: sub.hasAnalytics,
-                    expiresAt: sub.expiresAt,
-                    trialEnds: sub.trialEnds
-                }
-            });
-        }
-
-        // ============================================================
-        // PAYMENT FOR BILLING SUBSCRIPTION (NEW)
-        // ============================================================
-
-        if (req.method === 'POST' && url.pathname === '/api/payment/billing-subscribe') {
+            var parts = url.pathname.split('/');
+            var orgId = parts[parts.length - 2];
             var body = await readBody(req);
-            var clientId = body.clientId;
-            var phoneNumber = body.phoneNumber;
-            var plan = body.plan;
-            var price = body.price;
+            var newStatus = body.status;
             
-            if (!clientId) { return sendJson(res, 400, { success: false, message: 'Client ID required' }); }
-            if (!phoneNumber || phoneNumber.length < 10) { return sendJson(res, 400, { success: false, message: 'Invalid phone number' }); }
-            if (!plan || !BILLING_PLANS[plan]) { return sendJson(res, 400, { success: false, message: 'Invalid plan' }); }
-            
-            var planData = BILLING_PLANS[plan];
-            var numericAmount = Math.round(Number(price || planData.price));
-            if (isNaN(numericAmount) || numericAmount < 1) {
-                return sendJson(res, 400, { success: false, message: 'Invalid amount' });
+            if (!newStatus || !['active', 'inactive', 'suspended'].includes(newStatus)) {
+                return sendJson(res, 400, { success: false, message: 'Invalid status' });
             }
             
-            var org = await getOrganizationByClientId(clientId);
+            var org = await getOrganizationByClientId(orgId);
             if (!org) { return sendJson(res, 404, { success: false, message: 'Organization not found' }); }
             
-            try {
-                var transactionId = 'BILL_' + Date.now() + Math.random().toString(36).substring(7);
-                
-                var result = await stkPushWithClientConfig({
-                    phone: phoneNumber,
-                    amount: numericAmount,
-                    accountReference: 'BILLING_' + plan,
-                    clientId: clientId
-                });
-                
-                if (result.success) {
-                    var transaction = {
-                        id: transactionId,
-                        phoneNumber: phoneNumber,
-                        amount: numericAmount,
-                        planId: 'billing_' + plan,
-                        planName: 'Billing: ' + planData.name,
-                        status: 'pending',
-                        timestamp: new Date().toISOString(),
-                        mpesaCode: null,
-                        checkoutId: result.checkoutId,
-                        expiresAt: new Date(Date.now() + 3600000).toISOString(),
-                        username: null,
-                        password: null,
-                        isSubscription: true,
-                        subscriptionPlan: plan,
-                        organizationId: clientId,
-                        isBillingSubscription: true,
-                        deviceId: null
-                    };
-                    await createTransaction(transaction);
-                    
-                    return sendJson(res, 200, {
-                        success: true,
-                        message: 'STK Push sent! Check your phone for M-Pesa prompt.',
-                        transactionId: transactionId,
-                        checkoutId: result.checkoutId
-                    });
-                } else {
-                    throw new Error('STK Push failed');
-                }
-            } catch (error) {
-                console.error('Billing subscription payment error:', error);
-                return sendJson(res, 502, { success: false, message: 'Payment failed: ' + error.message });
-            }
-        }
-
-        // ============================================================
-        // DARAJA CONFIG ENDPOINTS (NEW)
-        // ============================================================
-
-        if (req.method === 'GET' && url.pathname === '/api/client/daraja-config') {
-            var clientId = url.searchParams.get('clientId');
-            if (!clientId) {
-                return sendJson(res, 400, { success: false, message: 'Client ID required' });
-            }
-            
-            var config = await getDarajaConfig(clientId);
-            if (!config) {
-                return sendJson(res, 200, { success: true, data: null });
-            }
-            
-            // Don't send full secrets back, just status
-            return sendJson(res, 200, {
-                success: true,
-                data: {
-                    consumerKey: config.consumerKey ? '****' + config.consumerKey.slice(-4) : null,
-                    consumerSecret: config.consumerSecret ? '****' + config.consumerSecret.slice(-4) : null,
-                    paybill: config.paybill,
-                    passkey: config.passkey ? '****' + config.passkey.slice(-4) : null,
-                    hasConfig: !!(config.consumerKey && config.consumerSecret && config.paybill)
-                }
-            });
-        }
-
-        if (req.method === 'POST' && url.pathname === '/api/client/daraja-config') {
-            var body = await readBody(req);
-            var clientId = body.clientId;
-            var consumerKey = body.consumerKey;
-            var consumerSecret = body.consumerSecret;
-            var paybill = body.paybill;
-            var passkey = body.passkey;
-            
-            if (!clientId) { return sendJson(res, 400, { success: false, message: 'Client ID required' }); }
-            if (!consumerKey || !consumerSecret || !paybill || !passkey) {
-                return sendJson(res, 400, { success: false, message: 'All fields are required' });
-            }
-            
-            var org = await getOrganizationByClientId(clientId);
-            if (!org) { return sendJson(res, 404, { success: false, message: 'Organization not found' }); }
-            
-            var config = await getDarajaConfig(clientId);
-            var configData = {
-                clientId: clientId,
-                consumerKey: consumerKey,
-                consumerSecret: consumerSecret,
-                paybill: paybill,
-                passkey: passkey,
+            var updated = await updateOrganization(orgId, { 
+                status: newStatus,
                 updatedAt: new Date().toISOString()
+            });
+            
+            console.log('🔄 Organization status updated:', orgId, '->', newStatus);
+            
+            return sendJson(res, 200, { 
+                success: true, 
+                message: 'Organization status updated to ' + newStatus,
+                data: updated 
+            });
+        }
+
+        // ============================================================
+        // BILLING SYSTEMS ENDPOINTS (NEW)
+        // ============================================================
+
+        // GET all billing systems or filter by organization
+        if (req.method === 'GET' && url.pathname === '/api/master/billing-systems') {
+            if (!isMasterAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
+            
+            var orgId = url.searchParams.get('organizationId');
+            var billingSystems = orgId ? 
+                await getBillingSystemsByOrganization(orgId) : 
+                await getAllBillingSystems();
+            
+            return sendJson(res, 200, { 
+                success: true, 
+                data: billingSystems,
+                count: billingSystems.length
+            });
+        }
+
+        // GET billing systems for a specific organization
+        if (req.method === 'GET' && url.pathname.match(/^\/api\/organization\/[^\/]+\/billing-systems$/)) {
+            var parts = url.pathname.split('/');
+            var orgId = parts[parts.length - 2];
+            
+            var billingSystems = await getBillingSystemsByOrganization(orgId);
+            return sendJson(res, 200, { 
+                success: true, 
+                data: billingSystems,
+                count: billingSystems.length
+            });
+        }
+
+        // POST - Create a new billing system
+        if (req.method === 'POST' && url.pathname === '/api/master/billing-systems') {
+            if (!isMasterAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
+            
+            var body = await readBody(req);
+            var organizationId = body.organizationId;
+            var name = body.name;
+            var tagline = body.tagline || 'Fast • Secure • Reliable';
+            var primaryColor = body.primaryColor || '#00c853';
+            var secondaryColor = body.secondaryColor || '#00e676';
+            
+            if (!organizationId) {
+                return sendJson(res, 400, { success: false, message: 'Organization ID required' });
+            }
+            if (!name) {
+                return sendJson(res, 400, { success: false, message: 'Business name required' });
+            }
+            
+            var org = await getOrganizationByClientId(organizationId);
+            if (!org) {
+                return sendJson(res, 404, { success: false, message: 'Organization not found' });
+            }
+            
+            // Check subscription limits
+            var sub = await getBillingSubscription(organizationId);
+            var maxSystems = sub ? sub.maxSystems || 3 : 3;
+            var existingSystems = await getBillingSystemsByOrganization(organizationId);
+            
+            if (existingSystems.length >= maxSystems) {
+                return sendJson(res, 403, { 
+                    success: false, 
+                    message: 'You have reached the maximum number of billing systems (' + maxSystems + '). Please upgrade your plan.',
+                    code: 'LIMIT_REACHED'
+                });
+            }
+            
+            var bsId = generateBillingSystemId();
+            var customerUrl = 'https://' + req.headers.host + '/customer/' + bsId + '/';
+            
+            var billingSystem = {
+                id: bsId,
+                organizationId: organizationId,
+                name: name,
+                tagline: tagline,
+                primaryColor: primaryColor,
+                secondaryColor: secondaryColor,
+                logo: org.logo || '',
+                status: 'active',
+                locked: false,
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+                customerUrl: customerUrl,
+                plans: org.plans || []
             };
             
-            if (config) {
-                await updateDarajaConfig(clientId, configData);
-            } else {
-                configData.createdAt = new Date().toISOString();
-                await createDarajaConfig(configData);
+            await createBillingSystem(billingSystem);
+            
+            // Update organization with billing system reference
+            var orgBillingSystems = org.billingSystems || [];
+            orgBillingSystems.push({ id: bsId, name: name });
+            await updateOrganization(organizationId, { billingSystems: orgBillingSystems });
+            
+            console.log('✅ Billing system created:', bsId, 'for organization:', organizationId);
+            
+            return sendJson(res, 200, { 
+                success: true, 
+                message: 'Billing system created successfully',
+                data: billingSystem
+            });
+        }
+
+        // PUT - Lock/Unlock a billing system
+        if (req.method === 'PUT' && url.pathname.match(/^\/api\/master\/billing-systems\/[^\/]+\/lock$/)) {
+            if (!isMasterAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
+            
+            var parts = url.pathname.split('/');
+            var bsId = parts[parts.length - 2];
+            var body = await readBody(req);
+            var locked = body.locked === true;
+            
+            var billingSystem = await getBillingSystemById(bsId);
+            if (!billingSystem) {
+                return sendJson(res, 404, { success: false, message: 'Billing system not found' });
             }
             
-            console.log('✅ Daraja config saved for client:', clientId);
+            var updated = await updateBillingSystem(bsId, { 
+                locked: locked,
+                updatedAt: new Date().toISOString()
+            });
             
-            return sendJson(res, 200, {
-                success: true,
-                message: 'Daraja configuration saved successfully!',
+            console.log('🔒 Billing system lock status updated:', bsId, 'locked:', locked);
+            
+            return sendJson(res, 200, { 
+                success: true, 
+                message: 'Billing system ' + (locked ? 'locked' : 'unlocked'),
+                data: updated
+            });
+        }
+
+        // DELETE - Delete a billing system
+        if (req.method === 'DELETE' && url.pathname.match(/^\/api\/master\/billing-systems\/[^\/]+$/)) {
+            if (!isMasterAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
+            
+            var parts = url.pathname.split('/');
+            var bsId = parts[parts.length - 1];
+            
+            var billingSystem = await getBillingSystemById(bsId);
+            if (!billingSystem) {
+                return sendJson(res, 404, { success: false, message: 'Billing system not found' });
+            }
+            
+            // Remove from organization's billing systems list
+            var org = await getOrganizationByClientId(billingSystem.organizationId);
+            if (org && org.billingSystems) {
+                var updatedList = org.billingSystems.filter(function(bs) { return bs.id !== bsId; });
+                await updateOrganization(billingSystem.organizationId, { billingSystems: updatedList });
+            }
+            
+            await deleteBillingSystem(bsId);
+            
+            console.log('🗑️ Billing system deleted:', bsId);
+            
+            return sendJson(res, 200, { 
+                success: true, 
+                message: 'Billing system deleted successfully'
+            });
+        }
+
+        // ============================================================
+        // MASTER ADMIN ENDPOINTS (Enhanced)
+        // ============================================================
+
+        // GET all organizations (with enhanced data)
+        if (req.method === 'GET' && url.pathname === '/api/master/organizations') {
+            if (!isMasterAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
+            
+            var allOrgs = await getAllOrganizations();
+            
+            // Enhance each organization with billing systems and subscription info
+            var enhancedOrgs = await Promise.all(allOrgs.map(async function(org) {
+                var billingSystems = await getBillingSystemsByOrganization(org.id);
+                var subscription = await getBillingSubscription(org.id);
+                
+                return {
+                    ...org,
+                    billingSystems: billingSystems,
+                    subscriptionPlan: subscription ? subscription.plan : 'free_trial',
+                    subscriptionStatus: subscription ? subscription.status : 'trial',
+                    billingSystemsCount: billingSystems.length
+                };
+            }));
+            
+            return sendJson(res, 200, { 
+                success: true, 
+                data: enhancedOrgs,
+                count: enhancedOrgs.length
+            });
+        }
+
+        // GET organization details with billing systems
+        if (req.method === 'GET' && url.pathname.match(/^\/api\/master\/organizations\/[^\/]+\/details$/)) {
+            if (!isMasterAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
+            
+            var parts = url.pathname.split('/');
+            var orgId = parts[parts.length - 2];
+            
+            var org = await getOrganizationByClientId(orgId);
+            if (!org) { return sendJson(res, 404, { success: false, message: 'Organization not found' }); }
+            
+            var billingSystems = await getBillingSystemsByOrganization(orgId);
+            var subscription = await getBillingSubscription(orgId);
+            var transactions = await getAllTransactions();
+            var orgTransactions = transactions.filter(function(t) { return t.organizationId === orgId; });
+            var totalRevenue = orgTransactions.reduce(function(sum, t) { return sum + (t.amount || 0); }, 0);
+            
+            return sendJson(res, 200, { 
+                success: true, 
                 data: {
-                    consumerKey: '****' + consumerKey.slice(-4),
-                    consumerSecret: '****' + consumerSecret.slice(-4),
-                    paybill: paybill,
-                    passkey: '****' + passkey.slice(-4)
+                    ...org,
+                    billingSystems: billingSystems,
+                    subscription: subscription,
+                    subscriptionPlan: subscription ? subscription.plan : 'free_trial',
+                    subscriptionStatus: subscription ? subscription.status : 'trial',
+                    totalRevenue: totalRevenue,
+                    transactionCount: orgTransactions.length
                 }
             });
         }
 
-        if (req.method === 'GET' && url.pathname === '/api/client/daraja-test') {
-            var clientId = url.searchParams.get('clientId');
-            if (!clientId) {
-                return sendJson(res, 400, { success: false, message: 'Client ID required' });
-            }
-            
-            var config = await getDarajaConfig(clientId);
-            if (!config || !config.consumerKey || !config.consumerSecret) {
-                return sendJson(res, 400, { 
-                    success: false, 
-                    message: 'Daraja not configured. Please add your credentials first.' 
-                });
-            }
+        // GET clients count
+        if (req.method === 'GET' && url.pathname === '/api/admin/clients') {
+            if (!isAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
             
             try {
-                // Test the credentials by getting an access token
-                var auth = Buffer.from(config.consumerKey.trim() + ':' + config.consumerSecret.trim()).toString('base64');
-                var tokenRes = await simpleRequest('GET', 'https://sandbox.safaricom.co.ke/oauth/v1/generate?grant_type=client_credentials', { 
-                    'Authorization': 'Basic ' + auth, 
-                    'Accept': 'application/json' 
-                });
-                
-                if (tokenRes.statusCode === 200 && tokenRes.bodyJson && tokenRes.bodyJson.access_token) {
-                    return sendJson(res, 200, { 
-                        success: true, 
-                        message: '✅ Daraja connection successful! Your credentials are valid.' 
-                    });
-                } else {
-                    return sendJson(res, 400, { 
-                        success: false, 
-                        message: '❌ Daraja connection failed: ' + (tokenRes.bodyText || 'Invalid credentials') 
-                    });
-                }
-            } catch (error) {
-                console.error('Daraja test error:', error);
-                return sendJson(res, 500, { 
-                    success: false, 
-                    message: 'Error testing Daraja: ' + error.message 
-                });
+                var count = await db.collection('clients').countDocuments();
+                return sendJson(res, 200, { success: true, count: count });
+            } catch (e) {
+                return sendJson(res, 200, { success: true, count: 0 });
+            }
+        }
+
+        // GET products count
+        if (req.method === 'GET' && url.pathname === '/api/admin/products') {
+            if (!isAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
+            
+            try {
+                var count = await db.collection('plans').countDocuments();
+                return sendJson(res, 200, { success: true, count: count });
+            } catch (e) {
+                return sendJson(res, 200, { success: true, count: 0 });
             }
         }
 
         // ============================================================
-        // SUBSCRIPTION STATUS (Legacy)
+        // SUBSCRIPTION STATUS (Billing)
         // ============================================================
 
         if (req.method === 'GET' && url.pathname === '/api/client/subscription-status') {
@@ -3297,11 +3396,15 @@ var server = http.createServer(async function(req, res) {
             
             var sub = await activateSubscription(org.id, plan);
             
+            // Also update billing subscription
+            var billingSub = await activateBillingSubscription(org.id, plan);
+            
             return sendJson(res, 200, {
                 success: true,
                 message: 'Subscribed to ' + planData.name + ' plan successfully!',
                 plan: plan,
-                expiresAt: sub.expiresAt
+                expiresAt: sub.expiresAt,
+                billingSubscription: billingSub
             });
         }
 
@@ -3663,7 +3766,33 @@ var server = http.createServer(async function(req, res) {
         }
 
         // ============================================================
-        // GET TRANSACTIONS
+        // GET TRANSACTIONS (Admin)
+        // ============================================================
+
+        if (req.method === 'GET' && url.pathname === '/api/admin/transactions') {
+            if (!isAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
+            
+            var allTx = await getAllTransactions();
+            var completedTx = allTx.filter(function(t) { return t.status === 'completed'; });
+            var totalRevenue = completedTx.reduce(function(sum, t) { return sum + (t.amount || 0); }, 0);
+            
+            return sendJson(res, 200, {
+                success: true,
+                data: allTx,
+                count: allTx.length,
+                summary: {
+                    total: allTx.length,
+                    completed: completedTx.length,
+                    pending: allTx.filter(function(t) { return t.status === 'pending'; }).length,
+                    failed: allTx.filter(function(t) { return t.status === 'failed'; }).length,
+                    cancelled: allTx.filter(function(t) { return t.status === 'cancelled'; }).length,
+                    totalRevenue: totalRevenue
+                }
+            });
+        }
+
+        // ============================================================
+        // GET TRANSACTIONS (Public)
         // ============================================================
 
         if (req.method === 'GET' && url.pathname === '/api/transactions') {
@@ -3898,23 +4027,57 @@ var server = http.createServer(async function(req, res) {
         }
 
         // ============================================================
-        // GET ALL ORGANIZATIONS (Master)
+        // MASTER SETTINGS
         // ============================================================
 
-        if (req.method === 'GET' && url.pathname === '/api/master/organizations') {
+        if (req.method === 'GET' && url.pathname === '/api/master/settings') {
             if (!isMasterAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
-            var allOrgs = await getAllOrganizations();
-            return sendJson(res, 200, { success: true, data: allOrgs, count: allOrgs.length });
+            
+            var masterSettings = await db.collection('masterSettings').findOne({ _id: 'masterSettings' });
+            if (!masterSettings) {
+                masterSettings = {
+                    _id: 'masterSettings',
+                    masterBusinessName: 'GICH WiFi Master',
+                    masterEmail: 'master@gichwifi.co.ke',
+                    masterPhone: '0796587763',
+                    commissionRate: 5,
+                    defaultPrimaryColor: '#00c853',
+                    defaultBgGradient: 'linear-gradient(135deg, #0f2027, #203a43, #2c5364)'
+                };
+                await db.collection('masterSettings').insertOne(masterSettings);
+            }
+            delete masterSettings._id;
+            
+            return sendJson(res, 200, { success: true, data: masterSettings });
         }
 
-        // ============================================================
-        // GET ALL ROUTERS (Master)
-        // ============================================================
-
-        if (req.method === 'GET' && url.pathname === '/api/master/routers') {
+        if (req.method === 'POST' && url.pathname === '/api/master/settings') {
             if (!isMasterAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
-            var allRouters = await getAllRouters();
-            return sendJson(res, 200, { success: true, data: allRouters, count: allRouters.length });
+            
+            var body = await readBody(req);
+            var updateData = {
+                masterBusinessName: body.masterBusinessName || 'GICH WiFi Master',
+                masterEmail: body.masterEmail || 'master@gichwifi.co.ke',
+                masterPhone: body.masterPhone || '0796587763',
+                commissionRate: body.commissionRate || 5,
+                defaultPrimaryColor: body.defaultPrimaryColor || '#00c853',
+                defaultBgGradient: body.defaultBgGradient || 'linear-gradient(135deg, #0f2027, #203a43, #2c5364)',
+                updatedAt: new Date().toISOString()
+            };
+            
+            await db.collection('masterSettings').updateOne(
+                { _id: 'masterSettings' },
+                { $set: updateData },
+                { upsert: true }
+            );
+            
+            console.log('✅ Master settings updated');
+            
+            return sendJson(res, 200, { 
+                success: true, 
+                message: 'Master settings saved successfully',
+                data: updateData
+            });
         }
 
         // ============================================================
@@ -3953,6 +4116,27 @@ var server = http.createServer(async function(req, res) {
         }
 
         // ============================================================
+        // GENERATE CLIENT PAGE (NEW)
+        // ============================================================
+
+        if (req.method === 'GET' && url.pathname.startsWith('/api/master/generate-client-page/')) {
+            if (!isMasterAdmin(req)) return sendJson(res, 401, { success: false, message: 'Unauthorized' });
+            
+            var orgId = url.pathname.split('/').pop();
+            var org = await getOrganizationByClientId(orgId);
+            if (!org) { return sendJson(res, 404, { success: false, message: 'Organization not found' }); }
+            
+            var html = generateCustomerBillingPage(org);
+            
+            return sendJson(res, 200, {
+                success: true,
+                html: html,
+                filename: 'client.html',
+                instructions: '📋 Upload this file to your MikroTik router\'s hotspot directory. The page will redirect users to your cloud billing page.'
+            });
+        }
+
+        // ============================================================
         // GENERATE SETUP COMMAND (One Liner)
         // ============================================================
 
@@ -3982,13 +4166,37 @@ var server = http.createServer(async function(req, res) {
         // SERVE CUSTOMER BILLING PAGE
         // ============================================================
 
-        if (req.method === 'GET' && url.pathname.match(/^\/customer\/CLIENT_[A-Z0-9]+\/?$/)) {
+        if (req.method === 'GET' && url.pathname.match(/^\/customer\/[A-Za-z0-9_]+\/?$/)) {
             var pathParts = url.pathname.split('/');
             var orgId = pathParts[2] || '';
             
             if (!orgId) { return sendHtml(res, 404, '<h1>Organization not found</h1>'); }
             
-            var org = await getOrganizationByClientId(orgId);
+            // Check if this is a billing system ID or organization ID
+            var billingSystem = await getBillingSystemById(orgId);
+            var org = null;
+            
+            if (billingSystem) {
+                // It's a billing system - use its organization
+                org = await getOrganizationByClientId(billingSystem.organizationId);
+                if (org) {
+                    // Merge billing system branding with organization
+                    org.businessName = billingSystem.name || org.businessName;
+                    org.primaryColor = billingSystem.primaryColor || org.primaryColor;
+                    org.secondaryColor = billingSystem.secondaryColor || org.secondaryColor;
+                    org.logo = billingSystem.logo || org.logo;
+                    org.id = billingSystem.id;
+                    
+                    // Check if locked
+                    if (billingSystem.locked) {
+                        return sendHtml(res, 403, '<h1>⛔ This billing system is locked</h1><p>Please contact the administrator.</p>');
+                    }
+                }
+            } else {
+                // Try as organization ID
+                org = await getOrganizationByClientId(orgId);
+            }
+            
             if (!org) { return sendHtml(res, 404, '<h1>Organization not found</h1>'); }
             
             var html = generateCustomerBillingPage(org);
@@ -4012,10 +4220,11 @@ var server = http.createServer(async function(req, res) {
             var allRouters = await getAllRouters();
             var activeSessions = await getAllActiveSessions();
             var billingSubs = await getAllBillingSubscriptions();
+            var allBillingSystems = await getAllBillingSystems();
             
             return sendJson(res, 200, {
                 name: 'GICH WiFi API',
-                version: '7.2.0',
+                version: '7.3.0',
                 status: 'Running',
                 database: 'MongoDB Atlas',
                 googleOAuth: !!GOOGLE_CLIENT_ID,
@@ -4023,6 +4232,7 @@ var server = http.createServer(async function(req, res) {
                 deviceRecognition: true,
                 sessionManagement: true,
                 multiBilling: true,
+                masterDashboard: true,
                 billingPlans: BILLING_PLANS,
                 statistics: {
                     totalTransactions: allTx.length,
@@ -4033,7 +4243,8 @@ var server = http.createServer(async function(req, res) {
                     activeDevices: activeDevicesCount,
                     activeSessions: activeSessions.length,
                     activeBillingSubscriptions: billingSubs.filter(function(s) { return s.status === 'active'; }).length,
-                    totalRouters: allRouters.length
+                    totalRouters: allRouters.length,
+                    billingSystems: allBillingSystems.length
                 }
             });
         }
@@ -4056,7 +4267,7 @@ async function startServer() {
         
         server.listen(PORT, '0.0.0.0', function() {
             console.log('\n========================================');
-            console.log('🌐 GICH WiFi API - v7.2.0');
+            console.log('🌐 GICH WiFi API - v7.3.0');
             console.log('========================================');
             console.log('✅ Server running on port: ' + PORT);
             console.log('📍 http://localhost:' + PORT + '/');
@@ -4070,6 +4281,7 @@ async function startServer() {
             console.log('📧 Email Validation: ✅ ENABLED');
             console.log('🚀 Auto Router Setup: ✅ ENABLED');
             console.log('📅 Free Trial: ' + FREE_TRIAL_DAYS + ' days');
+            console.log('👑 Master Dashboard: ✅ ENABLED');
             console.log('🏢 Billing Plans:');
             console.log('   🌱 Starter: KES 500 - Up to 3 billing systems');
             console.log('   🚀 Pro: KES 1000 - Up to 10 billing systems');
