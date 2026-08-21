@@ -1,6 +1,6 @@
 /**
- * GICH WiFi - Complete Billing System (WORKING)
- * Version 7.8.0 - All Features Working
+ * GICH WiFi - Complete Billing System (FULLY WORKING)
+ * Version 7.9.0 - Auto-creates billing systems
  */
 
 require('dotenv').config();
@@ -88,7 +88,7 @@ let client = null;
 let plans = [];
 
 console.log('\n========================================');
-console.log('🌐 GICH WiFi API - v7.8.0 (WORKING)');
+console.log('🌐 GICH WiFi API - v7.9.0 (AUTO-CREATE)');
 console.log('========================================');
 console.log('   Port: ' + PORT);
 console.log('   Master PIN: ' + (MASTER_PASSWORD ? '✅ Configured' : '⚠️ NOT SET'));
@@ -124,7 +124,7 @@ async function connectDB() {
         
         console.log('✅ Connected to MongoDB Atlas successfully!');
         
-        // Create collections if they don't exist
+        // Create indexes
         try {
             await db.collection('organizations').createIndex({ id: 1 }, { unique: true });
             await db.collection('organizations').createIndex({ email: 1 }, { unique: true });
@@ -150,8 +150,51 @@ async function connectDB() {
         
         // Check existing data
         const orgCount = await db.collection('organizations').countDocuments();
-        const bsCount = await db.collection('billingSystems').countDocuments();
+        let bsCount = await db.collection('billingSystems').countDocuments();
         console.log('📊 Organizations: ' + orgCount + ', Billing Systems: ' + bsCount);
+        
+        // ============================================================
+        // AUTO-CREATE BILLING SYSTEMS FOR ORGANIZATIONS WITHOUT THEM
+        // ============================================================
+        if (orgCount > 0 && bsCount === 0) {
+            console.log('🔄 Auto-creating billing systems for existing organizations...');
+            const allOrgs = await db.collection('organizations').find({}).toArray();
+            
+            for (var i = 0; i < allOrgs.length; i++) {
+                var org = allOrgs[i];
+                var bsId = 'BS_' + Date.now().toString(36) + Math.random().toString(36).substring(2, 6);
+                var customerUrl = 'https://billing-system-fm9a.onrender.com/customer/' + bsId + '/';
+                
+                var billingSystem = {
+                    id: bsId,
+                    organizationId: org.id,
+                    name: org.businessName || org.name || 'Main Business',
+                    tagline: org.businessTagline || 'Fast • Secure • Reliable',
+                    primaryColor: org.primaryColor || '#00c853',
+                    secondaryColor: org.secondaryColor || '#00e676',
+                    logo: org.logo || '',
+                    status: 'active',
+                    locked: false,
+                    createdAt: new Date().toISOString(),
+                    updatedAt: new Date().toISOString(),
+                    customerUrl: customerUrl,
+                    plans: org.plans || DEFAULT_PLANS
+                };
+                
+                await db.collection('billingSystems').insertOne(billingSystem);
+                
+                // Update organization with billing system reference
+                await db.collection('organizations').updateOne(
+                    { id: org.id },
+                    { $set: { billingSystems: [{ id: bsId, name: billingSystem.name }] } }
+                );
+                
+                console.log('✅ Created billing system for: ' + org.businessName + ' (ID: ' + bsId + ')');
+            }
+            
+            bsCount = await db.collection('billingSystems').countDocuments();
+            console.log('📊 Updated: Organizations: ' + orgCount + ', Billing Systems: ' + bsCount);
+        }
         
         return db;
     } catch (error) {
@@ -360,7 +403,7 @@ async function getAllVouchers() {
 }
 
 // ============================================================
-// GENERATE HTML PAGES
+// GENERATE CUSTOMER BILLING PAGE
 // ============================================================
 
 function generateCustomerBillingPage(organization) {
@@ -566,19 +609,17 @@ function generateCustomerBillingPage(organization) {
     html += '        showToast("🔍 Checking...", "info");\n';
     html += '    }\n';
     html += '    function showToast(message, type) {\n';
-    html += '        var container = document.querySelector(".toast") || document.createElement("div");\n';
-    html += '        if (!container.classList) {\n';
-    html += '            var toast = document.createElement("div");\n';
-    html += '            toast.className = "toast toast-" + type;\n';
-    html += '            toast.innerHTML = message;\n';
+    html += '        var toast = document.getElementById("toast");\n';
+    html += '        if (!toast) {\n';
+    html += '            toast = document.createElement("div");\n';
+    html += '            toast.id = "toast";\n';
+    html += '            toast.className = "toast";\n';
     html += '            document.body.appendChild(toast);\n';
-    html += '            setTimeout(function() { toast.classList.add("show"); }, 10);\n';
-    html += '            setTimeout(function() { toast.classList.remove("show"); }, 3000);\n';
-    html += '        } else {\n';
-    html += '            container.textContent = message;\n';
-    html += '            container.className = "toast toast-" + type + " show";\n';
-    html += '            setTimeout(function() { container.classList.remove("show"); }, 3000);\n';
     html += '        }\n';
+    html += '        toast.textContent = message;\n';
+    html += '        toast.className = "toast toast-" + type + " show";\n';
+    html += '        clearTimeout(toast._timer);\n';
+    html += '        toast._timer = setTimeout(function() { toast.classList.remove("show"); }, 3000);\n';
     html += '    }\n';
     html += '    document.querySelector(".plan-card")?.click();\n';
     html += '<\/script>\n';
@@ -627,7 +668,7 @@ var server = http.createServer(async function(req, res) {
             return sendJson(res, 200, { 
                 status: 'ok', 
                 timestamp: new Date().toISOString(),
-                version: '7.8.0',
+                version: '7.9.0',
                 database: dbStatus,
                 organizations: orgCount,
                 billingSystems: bsCount
@@ -1153,7 +1194,7 @@ async function startServer() {
         
         server.listen(PORT, '0.0.0.0', function() {
             console.log('\n========================================');
-            console.log('🌐 GICH WiFi API - v7.8.0 (WORKING)');
+            console.log('🌐 GICH WiFi API - v7.9.0 (AUTO-CREATE)');
             console.log('========================================');
             console.log('✅ Server running on port: ' + PORT);
             console.log('📍 http://localhost:' + PORT + '/');
